@@ -61,8 +61,10 @@ src/
   - `connect()`: Discovers devices via `adb devices`
   - `startScrcpy()`: Starts server with config-based args
   - `handleScrcpyStream()`: Parses video protocol
+  - `handleControlSocketData()`: Parses device messages (clipboard, ACKs)
   - `sendTouch()`: Sends touch control messages (32 bytes)
   - `sendKeyDown()` / `sendKeyUp()`: Sends separate key down/up events (14 bytes each)
+  - Clipboard sync: Polls host clipboard every 1s, listens for device clipboard messages
 
 - **VideoRenderer.ts**: H.264 decoding
   - Uses WebCodecs API in Annex B mode (no description)
@@ -81,12 +83,17 @@ src/
 ### Control Messages (to scrcpy server)
 - Touch events: 32 bytes (type=2, action, pointer_id, x, y, dimensions, pressure, buttons)
 - Key events: 14 bytes (type=0, action, keycode, repeat, metastate)
+- Set clipboard: variable (type=9, sequence 8 bytes, paste flag 1 byte, length 4 bytes, UTF-8 text)
+
+### Device Messages (from scrcpy server via control socket)
+- Clipboard: variable (type=0, length 4 bytes, UTF-8 text)
+- ACK clipboard: 9 bytes (type=1, sequence 8 bytes)
 
 ### Connection Setup
 1. `adb reverse localabstract:scrcpy_XXXX tcp:PORT`
 2. Start server via `adb shell app_process`
 3. Accept 2 connections: video first, then control
-4. Video socket receives stream, control socket receives touch commands
+4. Video socket receives stream, control socket is bidirectional (sends touch/keys, receives clipboard)
 
 ## Reference: scrcpy Source
 
@@ -148,3 +155,7 @@ No automated tests yet. Manual testing:
    - Verify device picker shows available devices
    - Switch between tabs and verify only active tab renders video
    - Close tabs with "×" button and verify cleanup
+8. Test clipboard sync:
+   - Copy text on host (VS Code) and verify it appears on device (paste in an app)
+   - Copy text on device and verify it appears on host clipboard
+   - Toggle `scrcpy.clipboardSync` setting and verify sync stops/starts

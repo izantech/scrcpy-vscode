@@ -81,6 +81,11 @@
           "type": "boolean",
           "default": false,
           "description": "Show FPS and frame count statistics"
+        },
+        "scrcpy.clipboardSync": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically sync clipboard between host and device"
         }
       }
     },

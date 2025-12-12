@@ -8,6 +8,7 @@ Display and control your Android device screen directly within VS Code, similar 
 - View Android device screen in real-time
 - Touch input support (tap, drag)
 - **Device control buttons** with long press support (Volume, Back, Home, Recent Apps, Power)
+- **Clipboard sync** - bidirectional clipboard synchronization between host and device
 - Hardware-accelerated video decoding (WebCodecs API)
 - Configurable video quality, resolution, and FPS
 - Turn device screen off while mirroring (saves battery)
@@ -68,6 +69,7 @@ Click the **gear icon** in the scrcpy view toolbar to access settings. Changes a
 | `scrcpy.bitRate` | `8` | Video bitrate in Mbps (2/4/8/16/32) |
 | `scrcpy.maxFps` | `60` | Maximum frames per second (15/30/60) |
 | `scrcpy.showTouches` | `false` | Show visual touch feedback on device screen |
+| `scrcpy.clipboardSync` | `true` | Automatically sync clipboard between host and device |
 
 ## Architecture
 
@@ -118,16 +120,19 @@ Android Device                    VS Code Extension
 ### Protocol Details
 
 **Video Stream Format:**
+
 1. Device name (64 bytes, null-padded UTF-8)
 2. Codec metadata (12 bytes): codec_id (4) + width (4) + height (4)
 3. Video packets: pts_flags (8) + size (4) + data
 
 **PTS Flags (8 bytes):**
+
 - Bit 63: Config packet (SPS/PPS)
 - Bit 62: Keyframe
 - Bits 0-61: PTS value
 
 **Control Messages (Touch) - 32 bytes:**
+
 ```
 Offset  Size  Field
 0       1     Type (2 = INJECT_TOUCH_EVENT)
@@ -143,6 +148,7 @@ Offset  Size  Field
 ```
 
 **Control Messages (Key Event) - 14 bytes:**
+
 ```
 Offset  Size  Field
 0       1     Type (0 = INJECT_KEYCODE)
@@ -153,12 +159,33 @@ Offset  Size  Field
 ```
 
 **Android Keycodes used:**
+
 - `AKEYCODE_HOME` (3) - Home button
 - `AKEYCODE_BACK` (4) - Back button
 - `AKEYCODE_VOLUME_UP` (24) - Volume Up
 - `AKEYCODE_VOLUME_DOWN` (25) - Volume Down
 - `AKEYCODE_POWER` (26) - Power button
 - `AKEYCODE_APP_SWITCH` (187) - Recent Apps
+
+**Control Messages (Set Clipboard) - Variable length:**
+
+```
+Offset  Size  Field
+0       1     Type (9 = SET_CLIPBOARD)
+1       8     Sequence number
+9       1     Paste flag (0=no, 1=yes)
+10      4     Text length (big-endian)
+14      n     UTF-8 text data
+```
+
+**Device Messages (Clipboard) - Variable length:**
+
+```
+Offset  Size  Field
+0       1     Type (0 = CLIPBOARD)
+1       4     Text length (big-endian)
+5       n     UTF-8 text data
+```
 
 ### Video Decoding
 
@@ -201,26 +228,31 @@ npm run watch
 ## Troubleshooting
 
 ### "No Android devices found"
+
 - Ensure device is connected via USB
 - Check `adb devices` shows your device as "device" (not "unauthorized")
 - Accept the USB debugging prompt on your device
 
 ### "Failed to get scrcpy version"
+
 - Ensure scrcpy is installed: `scrcpy --version`
 - Ensure scrcpy is in your PATH, or set `scrcpy.path` in settings
 - Click the "Settings" button in the error screen to configure the path
 
 ### "Timeout waiting for device connection"
+
 - Check device screen for any permission prompts
 - Try running `scrcpy` directly to verify it works
 - Check `adb logcat | grep scrcpy` for server errors
 
 ### Video not displaying
+
 - Open DevTools in the Extension Development Host
 - Check console for WebCodecs errors
 - Ensure your VS Code version supports WebCodecs
 
 ### Touch not working
+
 - Verify video is displaying first
 - Check that control socket is connected (console logs)
 - Ensure device has touch permissions for scrcpy
@@ -230,17 +262,16 @@ npm run watch
 - Video only (audio forwarding not implemented)
 - Text/keyboard input not implemented (only hardware buttons)
 - No rotation handling
-- No clipboard sync
 
 ## Future Improvements
 
 - [x] ~~Multi-device support~~ ✅ Implemented (tab bar with device switching)
+- [x] ~~Clipboard synchronization~~ ✅ Implemented (bidirectional sync)
+- [x] ~~Hardware button controls~~ ✅ Implemented (with long press support)
 - [ ] Text/keyboard input support
 - [ ] Audio forwarding
 - [ ] Screen rotation handling
-- [ ] Clipboard synchronization
 - [ ] Wireless ADB support
-- [x] ~~Hardware button controls~~ ✅ Implemented (with long press support)
 
 ## Requirements
 

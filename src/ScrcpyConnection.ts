@@ -23,6 +23,16 @@ export interface ScrcpyConfig {
   bitRate: number;
   maxFps: number;
   showTouches: boolean;
+  clipboardSync: boolean;
+}
+
+// Type for clipboard callback
+type ClipboardCallback = (text: string) => void;
+
+// VS Code clipboard interface (subset of vscode.env.clipboard)
+export interface ClipboardAPI {
+  readText(): Thenable<string>;
+  writeText(text: string): Thenable<void>;
 }
 
 /**
@@ -42,11 +52,20 @@ export class ScrcpyConnection {
   private isConnected = false;
   private scid: string | null = null;
 
+  // Clipboard sync state
+  private clipboardPollInterval: NodeJS.Timeout | null = null;
+  private lastHostClipboard = '';
+  private lastDeviceClipboard = '';
+  private clipboardSequence = 0n;
+  private deviceMsgBuffer = Buffer.alloc(0);
+
   constructor(
     private onVideoFrame: VideoFrameCallback,
     private onStatus: StatusCallback,
     private config: ScrcpyConfig,
-    targetDeviceSerial?: string
+    targetDeviceSerial?: string,
+    private onClipboard?: ClipboardCallback,
+    private clipboardAPI?: ClipboardAPI
   ) {
     this.targetSerial = targetDeviceSerial ?? null;
   }
@@ -232,6 +251,14 @@ export class ScrcpyConnection {
 
       // Handle the scrcpy protocol on video socket
       this.handleScrcpyStream(videoSocket);
+
+      // Handle device messages on control socket (clipboard, etc.)
+      this.handleControlSocketData(controlSocket);
+
+      // Start clipboard sync if enabled
+      if (this.config.clipboardSync && this.clipboardAPI) {
+        this.startClipboardSync();
+      }
 
     } catch (error) {
       server.close();
@@ -554,10 +581,167 @@ export class ScrcpyConnection {
   }
 
   /**
+   * Handle device messages from control socket (clipboard, ACKs, etc.)
+   */
+  private handleControlSocketData(socket: net.Socket): void {
+    socket.on('data', (chunk: Buffer) => {
+      this.deviceMsgBuffer = Buffer.concat([this.deviceMsgBuffer, chunk]);
+      this.parseDeviceMessages();
+    });
+  }
+
+  /**
+   * Parse device messages from buffer
+   */
+  private parseDeviceMessages(): void {
+    while (this.deviceMsgBuffer.length > 0) {
+      if (this.deviceMsgBuffer.length < 1) break;
+
+      const msgType = this.deviceMsgBuffer.readUInt8(0);
+
+      switch (msgType) {
+        case 0: { // DEVICE_MSG_TYPE_CLIPBOARD
+          if (this.deviceMsgBuffer.length < 5) return; // Need type + length
+          const textLength = this.deviceMsgBuffer.readUInt32BE(1);
+          if (this.deviceMsgBuffer.length < 5 + textLength) return; // Need full message
+
+          const text = this.deviceMsgBuffer.subarray(5, 5 + textLength).toString('utf8');
+          this.deviceMsgBuffer = this.deviceMsgBuffer.subarray(5 + textLength);
+
+          this.handleDeviceClipboard(text);
+          break;
+        }
+
+        case 1: { // DEVICE_MSG_TYPE_ACK_CLIPBOARD
+          if (this.deviceMsgBuffer.length < 9) return; // Need type + sequence
+          this.deviceMsgBuffer = this.deviceMsgBuffer.subarray(9);
+          // ACK received, clipboard set successfully
+          break;
+        }
+
+        case 2: { // DEVICE_MSG_TYPE_UHID_OUTPUT
+          if (this.deviceMsgBuffer.length < 5) return; // Need type + id + length
+          const dataLength = this.deviceMsgBuffer.readUInt16BE(3);
+          if (this.deviceMsgBuffer.length < 5 + dataLength) return;
+          this.deviceMsgBuffer = this.deviceMsgBuffer.subarray(5 + dataLength);
+          // Ignore UHID messages
+          break;
+        }
+
+        default:
+          // Unknown message type, skip one byte and continue
+          console.warn(`Unknown device message type: ${msgType}`);
+          this.deviceMsgBuffer = this.deviceMsgBuffer.subarray(1);
+      }
+    }
+  }
+
+  /**
+   * Handle clipboard update from device
+   */
+  private handleDeviceClipboard(text: string): void {
+    // Avoid sync loop - don't sync back if we just sent this
+    if (text === this.lastHostClipboard) return;
+
+    this.lastDeviceClipboard = text;
+    // Update lastHostClipboard synchronously to prevent race condition with polling
+    this.lastHostClipboard = text;
+
+    // Notify callback
+    if (this.onClipboard) {
+      this.onClipboard(text);
+    }
+
+    // Update host clipboard if API available
+    if (this.clipboardAPI && this.config.clipboardSync) {
+      this.clipboardAPI.writeText(text).then(
+        () => { /* already updated synchronously */ },
+        (err) => { console.error('Failed to write to host clipboard:', err); }
+      );
+    }
+  }
+
+  /**
+   * Start clipboard sync polling (host → device)
+   */
+  private startClipboardSync(): void {
+    if (!this.clipboardAPI) return;
+
+    this.clipboardPollInterval = setInterval(() => {
+      if (!this.isConnected || !this.clipboardAPI || !this.config.clipboardSync) return;
+
+      this.clipboardAPI.readText().then(
+        (text) => {
+          // Only sync if changed and not from device
+          // Allow empty string to sync for consistency with device→host direction
+          if (text !== this.lastHostClipboard && text !== this.lastDeviceClipboard) {
+            this.lastHostClipboard = text;
+            this.sendSetClipboard(text);
+          }
+        },
+        (err) => { console.error('Failed to read host clipboard:', err); }
+      );
+    }, 1000); // Poll every 1 second
+  }
+
+  /**
+   * Send SET_CLIPBOARD message to device
+   */
+  private sendSetClipboard(text: string): void {
+    if (!this.controlSocket || !this.isConnected) return;
+
+    const textBuffer = Buffer.from(text, 'utf8');
+    // Max clipboard size: 256KB - 14 bytes header
+    const maxTextLength = (256 * 1024) - 14;
+
+    // Log warning if clipboard is truncated
+    if (textBuffer.length > maxTextLength) {
+      console.warn(`Clipboard text truncated: ${textBuffer.length} bytes → ${maxTextLength} bytes`);
+    }
+
+    const textLength = Math.min(textBuffer.length, maxTextLength);
+
+    // Message format: type(1) + sequence(8) + paste(1) + length(4) + text
+    const msg = Buffer.alloc(14 + textLength);
+    msg.writeUInt8(9, 0); // SC_CONTROL_MSG_TYPE_SET_CLIPBOARD = 9
+    msg.writeBigUInt64BE(this.clipboardSequence++, 1);
+    msg.writeUInt8(0, 9); // paste = false (don't auto-paste)
+    msg.writeUInt32BE(textLength, 10);
+    textBuffer.copy(msg, 14, 0, textLength);
+
+    try {
+      this.controlSocket.write(msg);
+      // Mark as synced to device to prevent immediate bounce-back
+      this.lastDeviceClipboard = text;
+    } catch (error) {
+      console.error('Failed to send clipboard:', error);
+      // Reset to allow retry on next poll
+      this.lastHostClipboard = '';
+    }
+  }
+
+  /**
+   * Stop clipboard sync
+   */
+  private stopClipboardSync(): void {
+    if (this.clipboardPollInterval) {
+      clearInterval(this.clipboardPollInterval);
+      this.clipboardPollInterval = null;
+    }
+  }
+
+  /**
    * Disconnect from device
    */
   async disconnect(): Promise<void> {
     this.isConnected = false;
+
+    // Stop clipboard sync and reset state
+    this.stopClipboardSync();
+    this.lastHostClipboard = '';
+    this.lastDeviceClipboard = '';
+    this.clipboardSequence = 0n;
+    this.deviceMsgBuffer = Buffer.alloc(0);
 
     // Close sockets
     if (this.videoSocket) {

@@ -1,4 +1,4 @@
-import { ScrcpyConnection, ScrcpyConfig } from './ScrcpyConnection';
+import { ScrcpyConnection, ScrcpyConfig, ClipboardAPI } from './ScrcpyConnection';
 import { exec } from 'child_process';
 
 /**
@@ -50,7 +50,8 @@ class DeviceSession {
     private videoFrameCallback: VideoFrameCallback,
     private statusCallback: StatusCallback,
     private errorCallback: ErrorCallback,
-    private config: ScrcpyConfig
+    private config: ScrcpyConfig,
+    private clipboardAPI?: ClipboardAPI
   ) {
     this.deviceId = `device_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
     this.deviceInfo = deviceInfo;
@@ -66,7 +67,9 @@ class DeviceSession {
       },
       (status) => this.statusCallback(this.deviceId, status),
       this.config,
-      this.deviceInfo.serial
+      this.deviceInfo.serial,
+      undefined, // onClipboard callback (handled internally by ScrcpyConnection)
+      this.clipboardAPI
     );
 
     try {
@@ -125,7 +128,8 @@ export class DeviceManager {
     private statusCallback: StatusCallback,
     private sessionListCallback: SessionListCallback,
     private errorCallback: ErrorCallback,
-    private config: ScrcpyConfig
+    private config: ScrcpyConfig,
+    private clipboardAPI?: ClipboardAPI
   ) {}
 
   /**
@@ -174,7 +178,8 @@ export class DeviceManager {
       this.videoFrameCallback,
       this.statusCallback,
       this.errorCallback,
-      this.config
+      this.config,
+      this.clipboardAPI
     );
 
     this.sessions.set(session.deviceId, session);
