@@ -66,12 +66,19 @@ type TextCallback = (text: string) => void;
 type KeycodeCallback = (keycode: number, metastate: number, action: 'down' | 'up') => void;
 
 /**
+ * Callback for clipboard operations
+ */
+type ClipboardCallback = () => void;
+
+/**
  * Handles keyboard input on the canvas and forwards to extension
  */
 export class KeyboardHandler {
   private canvas: HTMLCanvasElement;
   private onText: TextCallback;
   private onKeycode: KeycodeCallback;
+  private onPaste: ClipboardCallback;
+  private onCopy: ClipboardCallback;
   private focused = false;
   private boundHandlers: Map<string, (e: Event) => void> = new Map();
 
@@ -87,11 +94,15 @@ export class KeyboardHandler {
   constructor(
     canvas: HTMLCanvasElement,
     onText: TextCallback,
-    onKeycode: KeycodeCallback
+    onKeycode: KeycodeCallback,
+    onPaste?: ClipboardCallback,
+    onCopy?: ClipboardCallback
   ) {
     this.canvas = canvas;
     this.onText = onText;
     this.onKeycode = onKeycode;
+    this.onPaste = onPaste || (() => {});
+    this.onCopy = onCopy || (() => {});
     this.attachEventListeners();
   }
 
@@ -180,6 +191,20 @@ export class KeyboardHandler {
     // Check if this is a special key or has modifiers
     const specialKeycode = KEY_TO_KEYCODE[event.key];
     const hasModifier = this.hasPrimaryModifier(event) || event.altKey;
+
+    // Intercept Ctrl+V / Cmd+V for paste (sync PC clipboard to device)
+    if (this.hasPrimaryModifier(event) && event.key.toLowerCase() === 'v') {
+      this.flushTextBuffer();
+      this.onPaste();
+      return;
+    }
+
+    // Intercept Ctrl+C / Cmd+C for copy (sync device clipboard to PC)
+    if (this.hasPrimaryModifier(event) && event.key.toLowerCase() === 'c') {
+      this.flushTextBuffer();
+      this.onCopy();
+      return;
+    }
 
     if (specialKeycode !== undefined) {
       // Special keys always use INJECT_KEYCODE

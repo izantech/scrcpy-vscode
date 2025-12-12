@@ -38,7 +38,12 @@
             "type": "number",
             "default": 1920,
             "order": 0,
-            "enum": [720, 1080, 1440, 1920],
+            "enum": [
+              720,
+              1080,
+              1440,
+              1920
+            ],
             "enumDescriptions": [
               "720 max - Lower resolution, best performance",
               "1080 max - HD resolution",
@@ -51,7 +56,13 @@
             "type": "number",
             "default": 8,
             "order": 1,
-            "enum": [2, 4, 8, 16, 32],
+            "enum": [
+              2,
+              4,
+              8,
+              16,
+              32
+            ],
             "enumDescriptions": [
               "2 Mbps - Low quality, minimal bandwidth",
               "4 Mbps - Medium quality",
@@ -65,7 +76,11 @@
             "type": "number",
             "default": 60,
             "order": 2,
-            "enum": [15, 30, 60],
+            "enum": [
+              15,
+              30,
+              60
+            ],
             "enumDescriptions": [
               "15 FPS - Low frame rate, saves bandwidth",
               "30 FPS - Standard frame rate",
@@ -100,8 +115,20 @@
         }
       },
       {
-        "title": "Display",
+        "title": "Audio",
         "order": 3,
+        "properties": {
+          "scrcpy.audio": {
+            "type": "boolean",
+            "default": true,
+            "order": 0,
+            "markdownDescription": "Enable audio streaming from device (requires scrcpy 2.0+)"
+          }
+        }
+      },
+      {
+        "title": "Display",
+        "order": 4,
         "properties": {
           "scrcpy.showStats": {
             "type": "boolean",
@@ -112,7 +139,7 @@
       },
       {
         "title": "Clipboard",
-        "order": 4,
+        "order": 5,
         "properties": {
           "scrcpy.clipboardSync": {
             "type": "boolean",
@@ -124,7 +151,13 @@
             "type": "number",
             "default": 1000,
             "order": 1,
-            "enum": [500, 1000, 2000, 3000, 5000],
+            "enum": [
+              500,
+              1000,
+              2000,
+              3000,
+              5000
+            ],
             "enumDescriptions": [
               "500ms - Fastest, slightly higher CPU usage",
               "1000ms - Balanced (default)",
@@ -138,7 +171,7 @@
       },
       {
         "title": "Connection",
-        "order": 5,
+        "order": 6,
         "properties": {
           "scrcpy.autoConnect": {
             "type": "boolean",
@@ -156,7 +189,12 @@
             "type": "number",
             "default": 2,
             "order": 2,
-            "enum": [1, 2, 3, 5],
+            "enum": [
+              1,
+              2,
+              3,
+              5
+            ],
             "enumDescriptions": [
               "1 retry",
               "2 retries (default)",
@@ -220,7 +258,9 @@
     "package": "webpack --mode production --devtool hidden-source-map",
     "lint": "eslint src --ext ts"
   },
-  "dependencies": {},
+  "dependencies": {
+    "opus-decoder": "^0.7.11"
+  },
   "devDependencies": {
     "@types/node": "^20.x",
     "@types/vscode": "^1.85.0",

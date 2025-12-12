@@ -4,7 +4,7 @@ This file provides guidance to AI coding assistants when working with this repos
 
 ## Project Overview
 
-scrcpy-vscode is a VS Code extension that mirrors Android device screens directly in the editor. It uses the scrcpy server component running on the Android device and implements a custom client using WebCodecs for H.264 video decoding.
+scrcpy-vscode is a VS Code extension that mirrors Android device screens directly in the editor. It uses the scrcpy server component running on the Android device and implements a custom client using WebCodecs for H.264 video decoding and Opus audio playback.
 
 ## Build Commands
 
@@ -32,6 +32,7 @@ src/
 └── webview/
     ├── main.ts           # WebView entry, message handling, tab management
     ├── VideoRenderer.ts  # WebCodecs H.264 decoder (with pause/resume)
+    ├── AudioRenderer.ts  # WebCodecs Opus decoder (with pause/resume/mute)
     ├── InputHandler.ts   # Pointer event handling
     └── KeyboardHandler.ts # Keyboard input (text injection + keycodes)
 ```
@@ -65,10 +66,11 @@ src/
   - `connect()`: Discovers devices via `adb devices`
   - `startScrcpy()`: Starts server with config-based args
   - `handleScrcpyStream()`: Parses video protocol
+  - `handleAudioStream()`: Parses audio protocol (Opus codec)
   - `handleControlSocketData()`: Parses device messages (clipboard, ACKs)
   - `sendTouch()`: Sends touch control messages (32 bytes)
   - `sendKeyDown()` / `sendKeyUp()`: Sends separate key down/up events (14 bytes each)
-  - Clipboard sync: Polls host clipboard (configurable interval), listens for device clipboard messages
+  - Clipboard sync: On-demand via `pasteFromHost()` (Ctrl+V) and `copyToHost()` (Ctrl+C), listens for device clipboard messages
   - Error handling: Reports unexpected disconnects via `onError` callback (shows reconnect UI)
 
 - **VideoRenderer.ts**: H.264 decoding
@@ -78,12 +80,23 @@ src/
   - `pause()`: Stops rendering and clears frame queue (for inactive tabs)
   - `resume()`: Resumes rendering
 
+- **AudioRenderer.ts**: Opus audio decoding and playback
+  - Uses `opus-decoder` WASM library (WebCodecs Opus not supported in VS Code webviews)
+  - Uses Web Audio API for scheduled playback
+  - `pause()`: Stops playback (for inactive tabs)
+  - `resume()`: Resumes playback
+  - `setMuted()`: Toggles audio mute (for user control via toolbar button)
+
 ## Protocol Notes
 
 ### Video Stream (from scrcpy server)
 1. Device name: 64 bytes (UTF-8, null-padded)
 2. Codec metadata: 12 bytes (codec_id + width + height)
 3. Packets: 12-byte header (pts_flags + size) + data
+
+### Audio Stream (from scrcpy server, when audio=true)
+1. Codec ID: 4 bytes (0x6f707573 = "opus")
+2. Packets: 12-byte header (pts_flags + size) + Opus data
 
 ### Control Messages (to scrcpy server)
 - Touch events: 32 bytes (type=2, action, pointer_id, x, y, dimensions, pressure, buttons)
@@ -97,8 +110,9 @@ src/
 ### Connection Setup
 1. `adb reverse localabstract:scrcpy_XXXX tcp:PORT`
 2. Start server via `adb shell app_process`
-3. Accept 2 connections: video first, then control
-4. Video socket receives stream, control socket is bidirectional (sends touch/keys, receives clipboard)
+3. Accept 2 connections (audio=false) or 3 connections (audio=true): video, [audio], control
+4. Video socket receives stream, audio socket receives Opus stream (if enabled)
+5. Control socket is bidirectional (sends touch/keys, receives clipboard)
 
 ## Reference: scrcpy Source
 
@@ -136,10 +150,15 @@ Text/keyboard input is implemented via `KeyboardHandler.ts`:
 - Modifier combos (Ctrl+C, etc.) use INJECT_KEYCODE with metastate
 - Unfocusing the canvas releases any pressed keys
 
-### Adding audio support
-1. Set `audio=true` in server args
-2. Accept 3rd socket connection (audio)
-3. Implement audio decoding (Opus codec)
+### Audio Implementation Notes
+
+Audio support is implemented using:
+1. `audio=true` and `audio_codec=opus` in server args (configured via `scrcpy.audio` setting)
+2. 3rd socket connection for audio stream
+3. `opus-decoder` WASM library for decoding (WebCodecs Opus is not supported in VS Code webviews)
+4. Web Audio API for playback with scheduled buffer queueing
+5. CSP includes `'wasm-unsafe-eval'` to allow WebAssembly compilation
+6. Mute button in toolbar for user control
 
 ## Debugging
 
@@ -164,9 +183,10 @@ No automated tests yet. Manual testing:
    - Switch between tabs and verify only active tab renders video
    - Close tabs with "×" button and verify cleanup
 8. Test clipboard sync:
-   - Copy text on host (VS Code) and verify it appears on device (paste in an app)
-   - Copy text on device and verify it appears on host clipboard
-   - Toggle `scrcpy.clipboardSync` setting and verify sync stops/starts
+   - Enable keyboard input by clicking on canvas
+   - Press Ctrl+V (or Cmd+V on Mac) to paste from PC to device
+   - Press Ctrl+C (or Cmd+C on Mac) to copy from device to PC
+   - Toggle `scrcpy.clipboardSync` setting and verify sync is disabled
 9. Test auto-connect:
    - Start with no devices connected (should show "No devices connected" with phone icon)
    - Plug in a device via USB
@@ -188,3 +208,10 @@ No automated tests yet. Manual testing:
     - Test modifier combos: Ctrl+A (select all), Ctrl+C (copy), Ctrl+V (paste)
     - Click outside canvas and verify keyboard is disabled (outline disappears)
     - Switch between device tabs and verify keyboard is disabled on switch
+12. Test audio:
+    - Play audio on device (music, video, etc.)
+    - Verify audio is heard through PC speakers
+    - Click mute button in toolbar and verify audio stops
+    - Click mute button again to unmute
+    - Switch device tabs and verify only active tab plays audio
+    - Toggle `scrcpy.audio` setting and reconnect to verify audio is disabled

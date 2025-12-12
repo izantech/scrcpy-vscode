@@ -1,4 +1,5 @@
 import { VideoRenderer } from './VideoRenderer';
+import { AudioRenderer } from './AudioRenderer';
 import { InputHandler } from './InputHandler';
 import { KeyboardHandler } from './KeyboardHandler';
 
@@ -31,6 +32,7 @@ interface DeviceSessionUI {
   deviceInfo: { serial: string; name: string };
   canvas: HTMLCanvasElement;
   videoRenderer: VideoRenderer;
+  audioRenderer: AudioRenderer;
   inputHandler: InputHandler;
   keyboardHandler: KeyboardHandler;
   tabElement: HTMLElement;
@@ -50,6 +52,8 @@ let addDeviceBtn: HTMLElement;
 const sessions = new Map<string, DeviceSessionUI>();
 let activeDeviceId: string | null = null;
 let showStats = false;
+let isMuted = false;
+let muteBtn: HTMLElement | null = null;
 
 /**
  * Initialize the WebView
@@ -152,8 +156,34 @@ function initialize() {
     });
   }
 
+  // Mute button
+  muteBtn = document.getElementById('mute-btn');
+  if (muteBtn) {
+    muteBtn.addEventListener('click', () => {
+      toggleMute();
+    });
+  }
+
   vscode.postMessage({ type: 'ready' });
   console.log('WebView initialized');
+}
+
+/**
+ * Toggle audio mute state
+ */
+function toggleMute(): void {
+  isMuted = !isMuted;
+
+  // Update all audio renderers
+  sessions.forEach(session => {
+    session.audioRenderer.setMuted(isMuted);
+  });
+
+  // Update button icon
+  if (muteBtn) {
+    muteBtn.innerHTML = isMuted ? '&#x1F507;' : '&#x1F50A;'; // 🔇 : 🔊
+    muteBtn.title = isMuted ? 'Unmute' : 'Mute';
+  }
 }
 
 /**
@@ -165,6 +195,10 @@ function handleMessage(event: MessageEvent) {
   switch (message.type) {
     case 'videoFrame':
       handleVideoFrame(message);
+      break;
+
+    case 'audioFrame':
+      handleAudioFrame(message);
       break;
 
     case 'status':
@@ -219,6 +253,34 @@ function handleVideoFrame(message: {
   if (message.data && message.data.length > 0) {
     const frameData = new Uint8Array(message.data);
     session.videoRenderer.pushFrame(frameData, message.isConfig);
+  }
+}
+
+/**
+ * Handle audio frame from extension
+ */
+function handleAudioFrame(message: {
+  deviceId: string;
+  data: number[];
+  isConfig: boolean;
+}) {
+  const session = sessions.get(message.deviceId);
+  if (!session) {
+    console.warn('AudioFrame: no session found for device', message.deviceId);
+    return;
+  }
+
+  // Initialize audio renderer on first frame (config signal)
+  if (message.isConfig && message.data.length === 0) {
+    console.log('AudioFrame: initializing audio renderer for', message.deviceId);
+    session.audioRenderer.initialize();
+    return;
+  }
+
+  // Push frame data
+  if (message.data && message.data.length > 0) {
+    const frameData = new Uint8Array(message.data);
+    session.audioRenderer.pushFrame(frameData, message.isConfig);
   }
 }
 
@@ -315,6 +377,10 @@ function createDeviceSession(
   });
   videoRenderer.setStatsEnabled(showStats);
 
+  // Create audio renderer
+  const audioRenderer = new AudioRenderer();
+  audioRenderer.setMuted(isMuted);
+
   // Create input handler
   const inputHandler = new InputHandler(canvas, (x, y, action) => {
     if (deviceId === activeDeviceId) {
@@ -354,6 +420,18 @@ function createDeviceSession(
           action
         });
       }
+    },
+    // Paste callback (PC clipboard -> device)
+    () => {
+      if (deviceId === activeDeviceId) {
+        vscode.postMessage({ type: 'pasteFromHost', deviceId });
+      }
+    },
+    // Copy callback (device -> PC clipboard)
+    () => {
+      if (deviceId === activeDeviceId) {
+        vscode.postMessage({ type: 'copyToHost', deviceId });
+      }
     }
   );
 
@@ -387,6 +465,7 @@ function createDeviceSession(
     deviceInfo,
     canvas,
     videoRenderer,
+    audioRenderer,
     inputHandler,
     keyboardHandler,
     tabElement: tab
@@ -405,6 +484,7 @@ function removeDeviceSession(deviceId: string) {
 
   // Cleanup
   session.videoRenderer.dispose();
+  session.audioRenderer.dispose();
   session.inputHandler.dispose();
   session.keyboardHandler.dispose();
   session.canvas.remove();
@@ -440,6 +520,7 @@ function switchToDevice(deviceId: string) {
       oldSession.canvas.classList.add('hidden');
       oldSession.tabElement.classList.remove('active');
       oldSession.videoRenderer.pause();
+      oldSession.audioRenderer.pause();
       oldSession.keyboardHandler.setFocused(false);
     }
   }
@@ -448,6 +529,7 @@ function switchToDevice(deviceId: string) {
   activeDeviceId = deviceId;
   newSession.tabElement.classList.add('active');
   newSession.videoRenderer.resume();
+  newSession.audioRenderer.resume();
 
   // Only show canvas if it has received video (has dimensions)
   if (newSession.canvas.width > 0 && newSession.canvas.height > 0) {

@@ -62,7 +62,7 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
 
         // Reconnect for scrcpy options that affect the stream
         const reconnectSettings = ['scrcpy.path', 'scrcpy.screenOff', 'scrcpy.stayAwake',
-          'scrcpy.maxSize', 'scrcpy.bitRate', 'scrcpy.maxFps', 'scrcpy.showTouches'];
+          'scrcpy.maxSize', 'scrcpy.bitRate', 'scrcpy.maxFps', 'scrcpy.showTouches', 'scrcpy.audio'];
         const needsReconnect = reconnectSettings.some(s => e.affectsConfiguration(s));
 
         if (needsReconnect && this._deviceManager) {
@@ -93,6 +93,7 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
       bitRate: config.get<number>('bitRate', 8),
       maxFps: config.get<number>('maxFps', 60),
       showTouches: config.get<boolean>('showTouches', false),
+      audio: config.get<boolean>('audio', true),
       clipboardSync: config.get<boolean>('clipboardSync', true),
       clipboardPollInterval: config.get<number>('clipboardPollInterval', 1000),
       autoConnect: config.get<boolean>('autoConnect', true),
@@ -126,6 +127,16 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
           isConfig,
           width,
           height
+        });
+      },
+      // Audio frame callback
+      (deviceId, frameData, isConfig) => {
+        if (this._isDisposed || !this._view) return;
+        this._view.webview.postMessage({
+          type: 'audioFrame',
+          deviceId,
+          data: Array.from(frameData),
+          isConfig
         });
       },
       // Status callback
@@ -240,6 +251,18 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
             message.action,
             message.metastate
           );
+        }
+        break;
+
+      case 'pasteFromHost':
+        if (this._deviceManager) {
+          await this._deviceManager.pasteFromHost();
+        }
+        break;
+
+      case 'copyToHost':
+        if (this._deviceManager) {
+          await this._deviceManager.copyToHost();
         }
         break;
 
@@ -390,7 +413,7 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
   <meta charset="UTF-8">
   <meta http-equiv="Content-Security-Policy"
         content="default-src 'none';
-                 script-src 'nonce-${nonce}';
+                 script-src 'nonce-${nonce}' 'wasm-unsafe-eval';
                  style-src ${webview.cspSource} 'unsafe-inline';
                  img-src ${webview.cspSource} data:;">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -702,6 +725,7 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
     <!-- Control toolbar - fixed at bottom -->
     <div id="control-toolbar" class="control-toolbar hidden">
       <div class="toolbar-group toolbar-left">
+        <button class="control-btn" id="mute-btn" title="Mute">&#x1F50A;</button>
         <button class="control-btn" data-keycode="25" title="Volume Down">Vol-</button>
         <button class="control-btn" data-keycode="24" title="Volume Up">Vol+</button>
       </div>

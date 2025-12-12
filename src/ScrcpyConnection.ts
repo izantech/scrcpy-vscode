@@ -11,6 +11,12 @@ type VideoFrameCallback = (
   height?: number
 ) => void;
 
+// Type for audio frame callback
+type AudioFrameCallback = (
+  data: Uint8Array,
+  isConfig: boolean
+) => void;
+
 // Type for status callback
 type StatusCallback = (status: string) => void;
 
@@ -26,6 +32,7 @@ export interface ScrcpyConfig {
   bitRate: number;
   maxFps: number;
   showTouches: boolean;
+  audio: boolean;
   clipboardSync: boolean;
   clipboardPollInterval: number;
   autoConnect: boolean;
@@ -53,11 +60,13 @@ export class ScrcpyConnection {
   private targetSerial: string | null = null;
   private videoSocket: net.Socket | null = null;
   private controlSocket: net.Socket | null = null;
+  private audioSocket: net.Socket | null = null;
   private adbProcess: ChildProcess | null = null;
   private deviceWidth = 0;
   private deviceHeight = 0;
   private isConnected = false;
   private scid: string | null = null;
+  private _audioPacketCount = 0;
 
   // Clipboard sync state
   private clipboardPollInterval: NodeJS.Timeout | null = null;
@@ -73,7 +82,8 @@ export class ScrcpyConnection {
     targetDeviceSerial?: string,
     private onClipboard?: ClipboardCallback,
     private clipboardAPI?: ClipboardAPI,
-    private onError?: ErrorCallback
+    private onError?: ErrorCallback,
+    private onAudioFrame?: AudioFrameCallback
   ) {
     this.targetSerial = targetDeviceSerial ?? null;
   }
@@ -167,7 +177,10 @@ export class ScrcpyConnection {
     // The server connects separately for video and control sockets
     const server = net.createServer();
 
-    const connectionPromise = new Promise<{ videoSocket: net.Socket; controlSocket: net.Socket }>((resolve, reject) => {
+    // Number of sockets: video + control (+ audio if enabled)
+    const expectedSockets = this.config.audio ? 3 : 2;
+
+    const connectionPromise = new Promise<{ videoSocket: net.Socket; controlSocket: net.Socket; audioSocket: net.Socket | null }>((resolve, reject) => {
       const timeout = setTimeout(() => {
         server.close();
         reject(new Error('Timeout waiting for device connection. The server may have failed to start.'));
@@ -177,11 +190,15 @@ export class ScrcpyConnection {
 
       server.on('connection', (socket: net.Socket) => {
         sockets.push(socket);
-        // We need 2 connections: video + control
-        if (sockets.length === 2) {
+        // We need 2 or 3 connections depending on audio
+        if (sockets.length === expectedSockets) {
           clearTimeout(timeout);
-          // First connection is video, second is control
-          resolve({ videoSocket: sockets[0], controlSocket: sockets[1] });
+          // Order: video, audio (if enabled), control (control is always last)
+          if (this.config.audio) {
+            resolve({ videoSocket: sockets[0], audioSocket: sockets[1], controlSocket: sockets[2] });
+          } else {
+            resolve({ videoSocket: sockets[0], audioSocket: null, controlSocket: sockets[1] });
+          }
         }
       });
 
@@ -205,7 +222,8 @@ export class ScrcpyConnection {
       `scid=${this.scid}`,
       'log_level=info',
       'video=true',
-      'audio=false',
+      `audio=${this.config.audio}`,
+      ...(this.config.audio ? ['audio_codec=opus'] : []),
       'control=true',
       'video_codec=h264',
       `max_size=${this.config.maxSize}`,
@@ -250,7 +268,7 @@ export class ScrcpyConnection {
     this.onStatus('Waiting for device to connect...');
 
     try {
-      const { videoSocket, controlSocket } = await connectionPromise;
+      const { videoSocket, controlSocket, audioSocket } = await connectionPromise;
       server.close();
 
       this.isConnected = true;
@@ -265,13 +283,18 @@ export class ScrcpyConnection {
       // Handle the scrcpy protocol on video socket
       this.handleScrcpyStream(videoSocket);
 
+      // Handle audio stream if enabled
+      if (audioSocket) {
+        console.log('Audio socket connected, handling audio stream');
+        this.handleAudioStream(audioSocket);
+      } else if (this.config.audio) {
+        console.warn('Audio enabled but no audio socket received');
+      }
+
       // Handle device messages on control socket (clipboard, etc.)
       this.handleControlSocketData(controlSocket);
 
-      // Start clipboard sync if enabled
-      if (this.config.clipboardSync && this.clipboardAPI) {
-        this.startClipboardSync();
-      }
+      // Clipboard sync is now on-demand (paste/copy), no polling needed
 
     } catch (error) {
       server.close();
@@ -471,6 +494,70 @@ export class ScrcpyConnection {
     socket.on('error', (err: Error) => {
       console.error('Socket error:', err);
       this.isConnected = false;
+    });
+  }
+
+  /**
+   * Handle scrcpy audio stream
+   */
+  private handleAudioStream(socket: net.Socket): void {
+    this.audioSocket = socket;
+
+    let buffer = Buffer.alloc(0);
+    let codecReceived = false;
+
+    socket.on('data', (chunk: Buffer) => {
+      buffer = Buffer.concat([buffer, chunk]);
+
+      // Parse audio protocol
+      while (buffer.length > 0) {
+        if (!codecReceived) {
+          // Audio codec metadata: codec_id (4 bytes only)
+          if (buffer.length < 4) break;
+
+          const codecId = buffer.readUInt32BE(0);
+          console.log(`Audio: codec=0x${codecId.toString(16)} (opus=0x6f707573)`);
+          buffer = buffer.subarray(4);
+          codecReceived = true;
+
+          // Notify webview to initialize audio decoder
+          if (this.onAudioFrame) {
+            this.onAudioFrame(new Uint8Array(0), true);
+          }
+          continue;
+        }
+
+        // Audio packets: pts_flags (8) + packet_size (4) + data
+        if (buffer.length < 12) break;
+
+        const ptsFlags = buffer.readBigUInt64BE(0);
+        const packetSize = buffer.readUInt32BE(8);
+
+        if (buffer.length < 12 + packetSize) break;
+
+        const isConfig = (ptsFlags & (1n << 63n)) !== 0n;
+        const packetData = buffer.subarray(12, 12 + packetSize);
+        buffer = buffer.subarray(12 + packetSize);
+
+        // Log first few audio packets for debugging
+        this._audioPacketCount++;
+        if (this._audioPacketCount <= 5) {
+          console.log(`Audio packet #${this._audioPacketCount}: size=${packetSize}, isConfig=${isConfig}`);
+        }
+
+        // Send to webview
+        if (this.onAudioFrame) {
+          this.onAudioFrame(new Uint8Array(packetData), isConfig);
+        }
+      }
+    });
+
+    socket.on('close', () => {
+      console.log('Audio socket closed');
+    });
+
+    socket.on('error', (err: Error) => {
+      console.error('Audio socket error:', err);
     });
   }
 
@@ -715,42 +802,44 @@ export class ScrcpyConnection {
   }
 
   /**
-   * Start clipboard sync polling (host → device)
+   * Sync PC clipboard to device and optionally paste
+   * Called when user wants to paste on the device
    */
-  private startClipboardSync(): void {
-    if (!this.clipboardAPI) return;
+  async pasteFromHost(): Promise<void> {
+    if (!this.clipboardAPI || !this.isConnected || !this.config.clipboardSync) return;
 
-    this.clipboardPollInterval = setInterval(() => {
-      if (!this.isConnected || !this.clipboardAPI || !this.config.clipboardSync) return;
+    try {
+      const text = await this.clipboardAPI.readText();
+      if (text) {
+        this.sendSetClipboard(text, true); // paste=true to paste immediately
+      }
+    } catch (err) {
+      console.error('Failed to read host clipboard:', err);
+    }
+  }
 
-      this.clipboardAPI.readText().then(
-        (text) => {
-          // Only sync if changed and not from device
-          // Allow empty string to sync for consistency with device→host direction
-          if (text !== this.lastHostClipboard && text !== this.lastDeviceClipboard) {
-            this.lastHostClipboard = text;
-            this.sendSetClipboard(text);
-          }
-        },
-        (err) => { console.error('Failed to read host clipboard:', err); }
-      );
-    }, this.config.clipboardPollInterval);
+  /**
+   * Copy selected text from device to PC clipboard
+   * Called when user wants to copy on the device
+   */
+  async copyToHost(): Promise<void> {
+    if (!this.clipboardAPI || !this.isConnected || !this.config.clipboardSync) return;
+
+    // Send Ctrl+C to device to trigger copy, then device will send clipboard update
+    // The handleDeviceClipboard will update the host clipboard when device sends it
+    this.sendKeyWithMeta(46, 'down', 0x1000); // KEYCODE_C with CTRL
+    this.sendKeyWithMeta(46, 'up', 0x1000);
   }
 
   /**
    * Send SET_CLIPBOARD message to device
    */
-  private sendSetClipboard(text: string): void {
+  private sendSetClipboard(text: string, paste: boolean = false): void {
     if (!this.controlSocket || !this.isConnected) return;
 
     const textBuffer = Buffer.from(text, 'utf8');
     // Max clipboard size: 256KB - 14 bytes header
     const maxTextLength = (256 * 1024) - 14;
-
-    // Log warning if clipboard is truncated
-    if (textBuffer.length > maxTextLength) {
-      console.warn(`Clipboard text truncated: ${textBuffer.length} bytes → ${maxTextLength} bytes`);
-    }
 
     const textLength = Math.min(textBuffer.length, maxTextLength);
 
@@ -758,23 +847,20 @@ export class ScrcpyConnection {
     const msg = Buffer.alloc(14 + textLength);
     msg.writeUInt8(9, 0); // SC_CONTROL_MSG_TYPE_SET_CLIPBOARD = 9
     msg.writeBigUInt64BE(this.clipboardSequence++, 1);
-    msg.writeUInt8(0, 9); // paste = false (don't auto-paste)
+    msg.writeUInt8(paste ? 1 : 0, 9); // paste flag
     msg.writeUInt32BE(textLength, 10);
     textBuffer.copy(msg, 14, 0, textLength);
 
     try {
       this.controlSocket.write(msg);
-      // Mark as synced to device to prevent immediate bounce-back
-      this.lastDeviceClipboard = text;
+      this.lastHostClipboard = text;
     } catch (error) {
       console.error('Failed to send clipboard:', error);
-      // Reset to allow retry on next poll
-      this.lastHostClipboard = '';
     }
   }
 
   /**
-   * Stop clipboard sync
+   * Stop clipboard sync (legacy - now a no-op)
    */
   private stopClipboardSync(): void {
     if (this.clipboardPollInterval) {
@@ -800,6 +886,14 @@ export class ScrcpyConnection {
     if (this.videoSocket) {
       this.videoSocket.destroy();
       this.videoSocket = null;
+    }
+    if (this.audioSocket) {
+      try {
+        this.audioSocket.destroy();
+      } catch {
+        // Ignore destroy errors
+      }
+      this.audioSocket = null;
     }
     if (this.controlSocket) {
       this.controlSocket.destroy();

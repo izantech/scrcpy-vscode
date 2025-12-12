@@ -30,6 +30,12 @@ type VideoFrameCallback = (
   height?: number
 ) => void;
 
+type AudioFrameCallback = (
+  deviceId: string,
+  data: Uint8Array,
+  isConfig: boolean
+) => void;
+
 type StatusCallback = (deviceId: string, status: string) => void;
 type SessionListCallback = (sessions: SessionInfo[]) => void;
 type ErrorCallback = (deviceId: string, message: string) => void;
@@ -52,6 +58,7 @@ class DeviceSession {
   constructor(
     deviceInfo: DeviceInfo,
     private videoFrameCallback: VideoFrameCallback,
+    private audioFrameCallback: AudioFrameCallback,
     private statusCallback: StatusCallback,
     private errorCallback: ErrorCallback,
     private config: ScrcpyConfig,
@@ -75,7 +82,13 @@ class DeviceSession {
       this.deviceInfo.serial,
       undefined, // onClipboard callback (handled internally by ScrcpyConnection)
       this.clipboardAPI,
-      (error) => this.handleDisconnect(error) // onError for unexpected disconnects
+      (error) => this.handleDisconnect(error), // onError for unexpected disconnects
+      (data, isConfig) => {
+        // Only forward audio frames if not paused
+        if (!this.isPaused) {
+          this.audioFrameCallback(this.deviceId, data, isConfig);
+        }
+      }
     );
 
     try {
@@ -181,6 +194,14 @@ class DeviceSession {
   sendKeyWithMeta(keycode: number, action: 'down' | 'up', metastate: number): void {
     this.connection?.sendKeyWithMeta(keycode, action, metastate);
   }
+
+  async pasteFromHost(): Promise<void> {
+    await this.connection?.pasteFromHost();
+  }
+
+  async copyToHost(): Promise<void> {
+    await this.connection?.copyToHost();
+  }
 }
 
 /**
@@ -196,6 +217,7 @@ export class DeviceManager {
 
   constructor(
     private videoFrameCallback: VideoFrameCallback,
+    private audioFrameCallback: AudioFrameCallback,
     private statusCallback: StatusCallback,
     private sessionListCallback: SessionListCallback,
     private errorCallback: ErrorCallback,
@@ -247,6 +269,7 @@ export class DeviceManager {
     const session = new DeviceSession(
       deviceInfo,
       this.videoFrameCallback,
+      this.audioFrameCallback,
       this.statusCallback,
       this.errorCallback,
       this.config,
@@ -313,11 +336,15 @@ export class DeviceManager {
   }
 
   /**
-   * Remove device session
+   * Remove device session (user-initiated close)
    */
   async removeDevice(deviceId: string): Promise<void> {
     const session = this.sessions.get(deviceId);
     if (!session) return;
+
+    // Mark as manually closed to prevent auto-reconnect
+    const deviceSerial = session.deviceInfo.serial;
+    this.knownDeviceSerials.add(deviceSerial);
 
     await session.disconnect();
     this.sessions.delete(deviceId);
@@ -399,6 +426,20 @@ export class DeviceManager {
    */
   sendKeyWithMeta(keycode: number, action: 'down' | 'up', metastate: number): void {
     this.getActiveSession()?.sendKeyWithMeta(keycode, action, metastate);
+  }
+
+  /**
+   * Paste from host clipboard to active device
+   */
+  async pasteFromHost(): Promise<void> {
+    await this.getActiveSession()?.pasteFromHost();
+  }
+
+  /**
+   * Copy from active device to host clipboard
+   */
+  async copyToHost(): Promise<void> {
+    await this.getActiveSession()?.copyToHost();
   }
 
   /**

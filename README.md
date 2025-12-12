@@ -6,10 +6,11 @@ Display and control your Android device screen directly within VS Code, similar 
 
 - **Multi-device support** with tab bar for switching between devices
 - View Android device screen in real-time
+- **Audio streaming** - hear device audio with mute button (requires scrcpy 2.0+)
 - Touch input support (tap, drag)
 - **Keyboard input** - click canvas to enable typing, with modifier support (Ctrl, Alt, Shift)
 - **Device control buttons** with long press support (Volume, Back, Home, Recent Apps, Power)
-- **Clipboard sync** - bidirectional clipboard synchronization between host and device
+- **Clipboard sync** - Ctrl+V pastes from PC to device, Ctrl+C copies from device to PC
 - **Auto-connect** - automatically connects when devices are plugged in
 - **Auto-reconnect** - automatic reconnection on disconnect (configurable retries)
 - Hardware-accelerated video decoding (WebCodecs API)
@@ -17,7 +18,7 @@ Display and control your Android device screen directly within VS Code, similar 
 - Turn device screen off while mirroring (saves battery)
 - Auto-detects installed scrcpy version
 - Settings accessible via gear icon in view toolbar
-- Resource-efficient: inactive device tabs pause video streaming
+- Resource-efficient: inactive device tabs pause video and audio streaming
 
 ## Prerequisites
 
@@ -72,8 +73,8 @@ Click the **gear icon** in the scrcpy view toolbar to access settings. Changes a
 | `scrcpy.bitRate` | `8` | Video bitrate in Mbps (2/4/8/16/32) |
 | `scrcpy.maxFps` | `60` | Maximum frames per second (15/30/60) |
 | `scrcpy.showTouches` | `false` | Show visual touch feedback on device screen |
-| `scrcpy.clipboardSync` | `true` | Automatically sync clipboard between host and device |
-| `scrcpy.clipboardPollInterval` | `1000` | Clipboard polling interval in ms (500/1000/2000/3000/5000) |
+| `scrcpy.audio` | `true` | Enable audio streaming from device (requires scrcpy 2.0+) |
+| `scrcpy.clipboardSync` | `true` | Enable clipboard sync (Ctrl+V to paste, Ctrl+C to copy) |
 | `scrcpy.autoConnect` | `true` | Automatically connect to devices when they are plugged in |
 | `scrcpy.autoReconnect` | `true` | Automatically attempt to reconnect when connection is lost |
 | `scrcpy.reconnectRetries` | `2` | Number of reconnection attempts (1/2/3/5) |
@@ -90,6 +91,7 @@ scrcpy-vscode/
 │   └── webview/
 │       ├── main.ts           # WebView entry point, tab management
 │       ├── VideoRenderer.ts  # WebCodecs H.264 decoder (with pause/resume)
+│       ├── AudioRenderer.ts  # Opus decoder using opus-decoder WASM library
 │       ├── InputHandler.ts   # Touch/mouse event handling
 │       └── KeyboardHandler.ts # Keyboard input (text + keycodes)
 ├── dist/                     # Compiled output
@@ -104,15 +106,15 @@ scrcpy-vscode/
 ```
 Android Device                    VS Code Extension
 ┌──────────────┐                 ┌─────────────────┐
-│ scrcpy-server│ ──H.264 stream──│ Extension Host  │
-│ (captures    │      via        │ (ADB, sockets)  │
-│  screen)     │     ADB         │       │         │
-└──────────────┘                 │       ▼         │
-       ▲                         │   WebView       │
-       │                         │ (WebCodecs      │
-       └── control messages ─────│  decoder +      │
-           (touch events)        │  Canvas)        │
-                                 └─────────────────┘
+│ scrcpy-server│ ──H.264+Opus────│ Extension Host  │
+│ (captures    │   streams via   │ (ADB, sockets)  │
+│  screen +    │     ADB         │       │         │
+│  audio)      │                 │       ▼         │
+└──────────────┘                 │   WebView       │
+       ▲                         │ (WebCodecs +    │
+       │                         │  opus-decoder   │
+       └── control messages ─────│  + Canvas)      │
+           (touch, clipboard)    └─────────────────┘
 ```
 
 ### Connection Flow
@@ -122,8 +124,8 @@ Android Device                    VS Code Extension
 3. **Server Push**: Push scrcpy-server.jar to device if not present
 4. **Reverse Tunnel**: `adb reverse localabstract:scrcpy_XXXX tcp:PORT`
 5. **Server Start**: Launch scrcpy server via `adb shell app_process`
-6. **Socket Accept**: Accept two connections (video + control)
-7. **Stream Processing**: Parse scrcpy protocol and decode H.264
+6. **Socket Accept**: Accept 2 connections (video + control) or 3 if audio enabled (video + audio + control)
+7. **Stream Processing**: Parse scrcpy protocol and decode H.264 video + Opus audio
 
 ### Protocol Details
 
@@ -287,16 +289,16 @@ npm run watch
 
 ## Known Limitations
 
-- Video only (audio forwarding not implemented)
 - No rotation handling
+- Audio requires scrcpy 2.0+ and a device that supports audio capture
 
 ## Future Improvements
 
 - [x] ~~Multi-device support~~ ✅ Implemented (tab bar with device switching)
-- [x] ~~Clipboard synchronization~~ ✅ Implemented (bidirectional sync)
+- [x] ~~Clipboard synchronization~~ ✅ Implemented (Ctrl+V/Ctrl+C for paste/copy)
 - [x] ~~Hardware button controls~~ ✅ Implemented (with long press support)
 - [x] ~~Text/keyboard input~~ ✅ Implemented (click canvas to enable, supports modifiers)
-- [ ] Audio forwarding
+- [x] ~~Audio forwarding~~ ✅ Implemented (Opus via opus-decoder WASM library)
 - [ ] Screen rotation handling
 - [ ] Wireless ADB support
 
