@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { ScrcpyConnection } from './ScrcpyConnection';
+import { ScrcpyConnection, ScrcpyConfig } from './ScrcpyConnection';
 
 export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'scrcpy.deviceView';
@@ -51,10 +51,37 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
       }
     }, null, this._disposables);
 
+    // Listen for configuration changes and reconnect
+    vscode.workspace.onDidChangeConfiguration(async (e) => {
+      if (e.affectsConfiguration('scrcpy') && this._connection) {
+        try {
+          vscode.window.showInformationMessage('Scrcpy settings changed. Reconnecting...');
+          await this._disconnect();
+          await this._connect();
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          vscode.window.showErrorMessage(`Failed to reconnect: ${message}`);
+        }
+      }
+    }, null, this._disposables);
+
     // Initial connection if view is already visible
     if (webviewView.visible) {
       this._connect();
     }
+  }
+
+  private _getConfig(): ScrcpyConfig {
+    const config = vscode.workspace.getConfiguration('scrcpy');
+    return {
+      scrcpyPath: config.get<string>('path', ''),
+      screenOff: config.get<boolean>('screenOff', false),
+      stayAwake: config.get<boolean>('stayAwake', true),
+      maxSize: config.get<number>('maxSize', 1920),
+      bitRate: config.get<number>('bitRate', 8),
+      maxFps: config.get<number>('maxFps', 60),
+      showTouches: config.get<boolean>('showTouches', false)
+    };
   }
 
   private async _connect() {
@@ -69,6 +96,7 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
           cancellable: true
         },
         async (progress, token) => {
+          const config = this._getConfig();
           this._connection = new ScrcpyConnection(
             // Video frame callback
             (frameData: Uint8Array, isConfig: boolean, width?: number, height?: number) => {
@@ -86,7 +114,8 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
                 type: 'status',
                 message: status
               });
-            }
+            },
+            config
           );
 
           if (token.isCancellationRequested) {
@@ -149,6 +178,10 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
       case 'reconnect':
         await this._disconnect();
         await this._connect();
+        break;
+
+      case 'openSettings':
+        vscode.commands.executeCommand('workbench.action.openSettings', 'scrcpy');
         break;
     }
   }
@@ -247,6 +280,9 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
       font-size: 13px;
       text-align: center;
       padding: 16px;
+      max-width: 90%;
+      white-space: pre-wrap;
+      word-wrap: break-word;
     }
 
     .status.hidden {

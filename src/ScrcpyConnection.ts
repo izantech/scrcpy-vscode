@@ -14,6 +14,17 @@ type VideoFrameCallback = (
 // Type for status callback
 type StatusCallback = (status: string) => void;
 
+// Scrcpy configuration options
+export interface ScrcpyConfig {
+  scrcpyPath: string;
+  screenOff: boolean;
+  stayAwake: boolean;
+  maxSize: number;
+  bitRate: number;
+  maxFps: number;
+  showTouches: boolean;
+}
+
 /**
  * Manages scrcpy connection to Android device via ADB
  *
@@ -32,7 +43,8 @@ export class ScrcpyConnection {
 
   constructor(
     private onVideoFrame: VideoFrameCallback,
-    private onStatus: StatusCallback
+    private onStatus: StatusCallback,
+    private config: ScrcpyConfig
   ) {}
 
   /**
@@ -158,9 +170,12 @@ export class ScrcpyConnection {
       'audio=false',
       'control=true',
       'video_codec=h264',
-      'max_size=1920',
-      'video_bit_rate=8000000',
-      'max_fps=60',
+      `max_size=${this.config.maxSize}`,
+      `video_bit_rate=${this.config.bitRate * 1000000}`,
+      `max_fps=${this.config.maxFps}`,
+      `turn_screen_off=${this.config.screenOff}`,
+      `stay_awake=${this.config.stayAwake}`,
+      `show_touches=${this.config.showTouches}`,
       'send_device_meta=true',
       'send_frame_meta=true',
       'send_codec_meta=true'
@@ -211,18 +226,30 @@ export class ScrcpyConnection {
   }
 
   /**
+   * Get the scrcpy command path
+   */
+  private getScrcpyCommand(): string {
+    if (this.config.scrcpyPath) {
+      return path.join(this.config.scrcpyPath, 'scrcpy');
+    }
+    return 'scrcpy';
+  }
+
+  /**
    * Get installed scrcpy version
    */
   private async getScrcpyVersion(): Promise<string> {
+    const scrcpyCmd = this.getScrcpyCommand();
     return new Promise((resolve, reject) => {
-      exec('scrcpy --version', (error, stdout) => {
+      exec(`"${scrcpyCmd}" --version`, (error, stdout) => {
         if (error) {
           reject(new Error(
             'Failed to get scrcpy version.\n\n' +
             'Please ensure scrcpy is installed:\n' +
             '- macOS: brew install scrcpy\n' +
             '- Linux: sudo apt install scrcpy\n' +
-            '- Windows: scoop install scrcpy'
+            '- Windows: scoop install scrcpy\n\n' +
+            'Or set the scrcpy path in settings.'
           ));
           return;
         }
@@ -252,6 +279,8 @@ export class ScrcpyConnection {
 
     // Common locations for scrcpy-server on different platforms
     const possiblePaths = [
+      // User-configured path (highest priority)
+      ...(this.config.scrcpyPath ? [path.join(this.config.scrcpyPath, 'scrcpy-server')] : []),
       // macOS Homebrew
       '/opt/homebrew/share/scrcpy/scrcpy-server',
       '/usr/local/share/scrcpy/scrcpy-server',

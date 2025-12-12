@@ -7,8 +7,10 @@ Display and control your Android device screen directly within VS Code, similar 
 - View Android device screen in real-time
 - Touch input support (tap, drag)
 - Hardware-accelerated video decoding (WebCodecs API)
+- Configurable video quality, resolution, and FPS
+- Turn device screen off while mirroring (saves battery)
 - Auto-detects installed scrcpy version
-- Connects to locally running ADB daemon
+- Settings accessible via gear icon in view toolbar
 
 ## Prerequisites
 
@@ -40,6 +42,21 @@ Display and control your Android device screen directly within VS Code, similar 
 |---------|-------------|
 | `Scrcpy: Start` | Focus the view and connect to device |
 | `Scrcpy: Stop` | Disconnect from device |
+| `Scrcpy: Open Settings` | Open extension settings |
+
+## Settings
+
+Click the **gear icon** in the scrcpy view toolbar to access settings. Changes apply immediately.
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `scrcpy.path` | (empty) | Path to scrcpy installation directory (leave empty to use PATH) |
+| `scrcpy.screenOff` | `false` | Turn device screen off while mirroring (saves battery) |
+| `scrcpy.stayAwake` | `true` | Keep device awake during mirroring |
+| `scrcpy.maxSize` | `1920` | Maximum screen dimension in pixels (720/1080/1440/1920) |
+| `scrcpy.bitRate` | `8` | Video bitrate in Mbps (2/4/8/16/32) |
+| `scrcpy.maxFps` | `60` | Maximum frames per second (15/30/60) |
+| `scrcpy.showTouches` | `false` | Show visual touch feedback on device screen |
 
 ## Architecture
 
@@ -124,22 +141,9 @@ Uses WebCodecs API following the same approach as the native scrcpy client:
 
 ## Configuration
 
-Server parameters in `ScrcpyConnection.ts`:
+Server parameters are configurable via VS Code settings (see [Settings](#settings) above).
 
-```typescript
-const serverArgs = [
-  'video=true',
-  'audio=false',
-  'control=true',
-  'video_codec=h264',
-  'max_size=1920',        // Max dimension
-  'video_bit_rate=8000000', // 8 Mbps
-  'max_fps=60',
-  'send_device_meta=true',
-  'send_frame_meta=true',
-  'send_codec_meta=true'
-];
-```
+The extension reads your settings and passes them to the scrcpy server. If scrcpy is not in your PATH, you can set the `scrcpy.path` setting to point to your scrcpy installation directory.
 
 ## Development
 
@@ -173,7 +177,8 @@ npm run watch
 
 ### "Failed to get scrcpy version"
 - Ensure scrcpy is installed: `scrcpy --version`
-- Ensure scrcpy is in your PATH
+- Ensure scrcpy is in your PATH, or set `scrcpy.path` in settings
+- Click the "Settings" button in the error screen to configure the path
 
 ### "Timeout waiting for device connection"
 - Check device screen for any permission prompts
@@ -205,7 +210,6 @@ npm run watch
 - [ ] Audio forwarding
 - [ ] Screen rotation handling
 - [ ] Clipboard synchronization
-- [ ] Configurable video quality settings
 - [ ] Wireless ADB support
 - [ ] Status bar with FPS/bitrate info
 

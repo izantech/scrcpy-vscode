@@ -39,12 +39,14 @@ src/
 - **ScrcpyViewProvider.ts**: WebviewView provider
   - Implements `vscode.WebviewViewProvider` for sidebar integration
   - Auto-connects when view becomes visible
+  - Reads settings from `vscode.workspace.getConfiguration('scrcpy')`
+  - Listens for config changes and auto-reconnects
   - Handles message passing between extension and webview
-  - Creates HTML content with VS Code theme variables
 
 - **ScrcpyConnection.ts**: Core connection logic
+  - Accepts `ScrcpyConfig` for configurable server parameters
   - `connect()`: Discovers devices via `adb devices`
-  - `startScrcpy()`: Starts server, accepts video+control sockets
+  - `startScrcpy()`: Starts server with config-based args
   - `handleScrcpyStream()`: Parses video protocol
   - `sendTouch()`: Sends control messages
 
@@ -81,7 +83,13 @@ The main scrcpy repository is at `/Users/izan/Dev/Projects/scrcpy/`. Key referen
 
 ## Common Tasks
 
-### Adding a new server parameter
+### Adding a new setting
+1. Add to `contributes.configuration` in `package.json`
+2. Add to `ScrcpyConfig` interface in `ScrcpyConnection.ts`
+3. Add to `_getConfig()` in `ScrcpyViewProvider.ts`
+4. Use in `serverArgs` array in `ScrcpyConnection.ts`
+
+### Adding a new server parameter (without UI)
 1. Check `Options.java` in scrcpy for available parameters
 2. Add to `serverArgs` array in `ScrcpyConnection.ts`
 

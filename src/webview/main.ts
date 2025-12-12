@@ -132,20 +132,40 @@ function showError(text: string) {
     spinner.style.display = 'none';
   }
 
-  // Add reconnect button if not exists
-  if (!statusElement.querySelector('.reconnect-btn')) {
-    const btn = document.createElement('button');
-    btn.className = 'reconnect-btn';
-    btn.textContent = 'Reconnect';
-    btn.onclick = () => {
-      vscode.postMessage({ type: 'reconnect' });
-      showStatus('Reconnecting...');
-      if (spinner) {
-        spinner.style.display = 'block';
-      }
-    };
-    statusElement.appendChild(btn);
+  // Remove existing buttons
+  const existingBtns = statusElement.querySelectorAll('.reconnect-btn, .settings-btn');
+  existingBtns.forEach(btn => btn.remove());
+
+  // Create button container
+  let btnContainer = statusElement.querySelector('.button-container') as HTMLElement;
+  if (!btnContainer) {
+    btnContainer = document.createElement('div');
+    btnContainer.className = 'button-container';
+    btnContainer.style.cssText = 'display: flex; gap: 8px; justify-content: center; margin-top: 12px;';
+    statusElement.appendChild(btnContainer);
   }
+
+  // Add settings button
+  const settingsBtn = document.createElement('button');
+  settingsBtn.className = 'reconnect-btn settings-btn';
+  settingsBtn.textContent = 'Settings';
+  settingsBtn.onclick = () => {
+    vscode.postMessage({ type: 'openSettings' });
+  };
+  btnContainer.appendChild(settingsBtn);
+
+  // Add reconnect button
+  const reconnectBtn = document.createElement('button');
+  reconnectBtn.className = 'reconnect-btn';
+  reconnectBtn.textContent = 'Reconnect';
+  reconnectBtn.onclick = () => {
+    vscode.postMessage({ type: 'reconnect' });
+    showStatus('Reconnecting...');
+    if (spinner) {
+      spinner.style.display = 'block';
+    }
+  };
+  btnContainer.appendChild(reconnectBtn);
 
   statusElement.classList.remove('hidden');
 }

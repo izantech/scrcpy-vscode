@@ -31,7 +31,12 @@ export function activate(context: vscode.ExtensionContext) {
     provider?.stop();
   });
 
-  context.subscriptions.push(startCommand, stopCommand);
+  // Register settings command
+  const settingsCommand = vscode.commands.registerCommand('scrcpy.openSettings', () => {
+    vscode.commands.executeCommand('workbench.action.openSettings', 'scrcpy');
+  });
+
+  context.subscriptions.push(startCommand, stopCommand, settingsCommand);
 }
 
 export async function deactivate() {
