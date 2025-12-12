@@ -59,6 +59,7 @@ src/
   - Notifies webview of session list changes
   - Auto-connect: Polls for new devices every 2s and connects automatically
   - Auto-reconnect: Configurable retries (1-5) with 1.5s delay on unexpected disconnect
+  - `takeScreenshot()`: Delegates to active session's connection for screenshot capture
 
 - **ScrcpyConnection.ts**: Core connection logic
   - Accepts `ScrcpyConfig` for configurable server parameters
@@ -72,6 +73,7 @@ src/
   - `sendTouch()`: Sends touch control messages (32 bytes, uses stored `deviceWidth`/`deviceHeight` for coordinate mapping)
   - `sendKeyDown()` / `sendKeyUp()`: Sends separate key down/up events (14 bytes each)
   - `rotateDevice()`: Rotates device screen counter-clockwise (1 byte control message)
+  - `takeScreenshot()`: Captures device screen via `adb exec-out screencap -p` (original resolution, lossless PNG)
   - `updateDimensions()`: Updates stored dimensions when webview detects rotation via SPS parsing
   - Clipboard sync: On-demand via `pasteFromHost()` (Ctrl+V) and `copyToHost()` (Ctrl+C), listens for device clipboard messages
   - Error handling: Reports unexpected disconnects via `onError` callback (shows reconnect UI)
@@ -230,7 +232,8 @@ No automated tests yet. Manual testing:
     - Rotate device physically and verify video stays fixed when lock is enabled
 14. Test screenshots:
     - Click screenshot button (📷) in toolbar next to rotate button
-    - Verify save dialog appears with default filename (screenshot-TIMESTAMP.png)
-    - Choose a location and verify PNG file is saved correctly
-    - Open the saved image and verify it has the device's original resolution (not scaled)
-    - Verify PNG quality is lossless (no video compression artifacts)
+    - Verify loading spinner appears on button while capturing
+    - By default, screenshot saves to Downloads folder and opens in editor
+    - Verify PNG has device's original resolution (not scaled) and lossless quality
+    - Test `scrcpy.screenshotSavePath` setting to change default save location
+    - Test `scrcpy.screenshotShowSaveDialog` setting to enable save dialog
