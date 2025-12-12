@@ -176,8 +176,26 @@
         }
       },
       {
-        "title": "Connection",
+        "title": "Screenshots",
         "order": 6,
+        "properties": {
+          "scrcpy.screenshotSavePath": {
+            "type": "string",
+            "default": "",
+            "order": 0,
+            "markdownDescription": "Default folder for saving screenshots. Leave empty to use the Downloads folder."
+          },
+          "scrcpy.screenshotShowSaveDialog": {
+            "type": "boolean",
+            "default": false,
+            "order": 1,
+            "markdownDescription": "Show save dialog instead of saving directly to the default folder"
+          }
+        }
+      },
+      {
+        "title": "Connection",
+        "order": 7,
         "properties": {
           "scrcpy.autoConnect": {
             "type": "boolean",

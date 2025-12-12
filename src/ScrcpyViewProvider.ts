@@ -1,4 +1,6 @@
 import * as vscode from 'vscode';
+import * as os from 'os';
+import * as path from 'path';
 import { ScrcpyConfig } from './ScrcpyConnection';
 import { DeviceManager, DeviceInfo } from './DeviceManager';
 
@@ -469,22 +471,35 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
       // Take screenshot from device (original resolution, lossless PNG)
       const pngBuffer = await this._deviceManager.takeScreenshot();
 
-      // Generate default filename with timestamp
+      // Generate filename with timestamp
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-      const defaultFilename = `screenshot-${timestamp}.png`;
+      const filename = `screenshot-${timestamp}.png`;
 
-      // Show save dialog
-      const uri = await vscode.window.showSaveDialog({
-        defaultUri: vscode.Uri.file(defaultFilename),
-        filters: {
-          'PNG Image': ['png']
-        },
-        title: 'Save Screenshot'
-      });
+      // Get settings
+      const config = vscode.workspace.getConfiguration('scrcpy');
+      const showSaveDialog = config.get<boolean>('screenshotShowSaveDialog', false);
+      const customPath = config.get<string>('screenshotSavePath', '');
 
-      if (!uri) {
-        notifyComplete();
-        return; // User cancelled
+      let uri: vscode.Uri | undefined;
+
+      if (showSaveDialog) {
+        // Show save dialog
+        uri = await vscode.window.showSaveDialog({
+          defaultUri: vscode.Uri.file(filename),
+          filters: {
+            'PNG Image': ['png']
+          },
+          title: 'Save Screenshot'
+        });
+
+        if (!uri) {
+          notifyComplete();
+          return; // User cancelled
+        }
+      } else {
+        // Save directly to configured path or Downloads folder
+        const saveDir = customPath || path.join(os.homedir(), 'Downloads');
+        uri = vscode.Uri.file(path.join(saveDir, filename));
       }
 
       // Write to file
