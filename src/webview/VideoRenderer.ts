@@ -47,9 +47,12 @@ export class VideoRenderer {
     this.width = width;
     this.height = height;
 
-    // Set canvas size
+    // Set canvas size (drawing buffer)
     this.canvas.width = width;
     this.canvas.height = height;
+
+    // Set CSS aspect-ratio so layout adapts to dimension changes (e.g., rotation)
+    this.canvas.style.aspectRatio = `${width} / ${height}`;
 
     // Get 2D context for rendering
     this.ctx = this.canvas.getContext('2d');
