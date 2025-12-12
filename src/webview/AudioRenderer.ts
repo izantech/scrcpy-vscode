@@ -15,12 +15,36 @@ export class AudioRenderer {
   private isMuted = false;
   private isInitialized = false;
   private isReady = false;
+  private resumePending = false;
 
   // Opus audio parameters (scrcpy uses 48kHz stereo)
   private readonly SAMPLE_RATE = 48000;
   private readonly CHANNELS = 2;
 
   constructor() {}
+
+  /**
+   * Set up user gesture listeners to resume AudioContext
+   * Called once when AudioContext is created in suspended state
+   */
+  private setupUserGestureResume(): void {
+    if (this.resumePending) return;
+    this.resumePending = true;
+
+    const resumeAudio = () => {
+      if (this.audioContext?.state === 'suspended') {
+        this.audioContext.resume();
+      }
+      this.resumePending = false;
+      document.removeEventListener('click', resumeAudio);
+      document.removeEventListener('keydown', resumeAudio);
+      document.removeEventListener('pointerdown', resumeAudio);
+    };
+
+    document.addEventListener('click', resumeAudio, { once: true });
+    document.addEventListener('keydown', resumeAudio, { once: true });
+    document.addEventListener('pointerdown', resumeAudio, { once: true });
+  }
 
   /**
    * Initialize audio context and decoder
@@ -34,7 +58,8 @@ export class AudioRenderer {
     this.audioContext = new AudioContext({ sampleRate: this.SAMPLE_RATE });
 
     if (this.audioContext.state === 'suspended') {
-      console.log('AudioContext created in suspended state (autoplay policy)');
+      console.log('AudioContext created in suspended state, waiting for user gesture');
+      this.setupUserGestureResume();
     }
 
     // Create Opus decoder
@@ -97,11 +122,12 @@ export class AudioRenderer {
       return;
     }
 
-    // Resume AudioContext if suspended (requires user gesture)
+    // Drop frames if AudioContext is suspended (waiting for user gesture)
     if (this.audioContext.state === 'suspended') {
-      this.audioContext.resume().catch(err => {
-        console.error('Failed to resume AudioContext:', err);
-      });
+      if (!this.resumePending) {
+        this.setupUserGestureResume();
+      }
+      return;
     }
 
     try {
@@ -163,9 +189,8 @@ export class AudioRenderer {
 
     // Resume AudioContext on unmute (user gesture)
     if (!muted && this.audioContext?.state === 'suspended') {
-      this.audioContext.resume().catch(err => {
-        console.error('Failed to resume AudioContext:', err);
-      });
+      this.audioContext.resume();
+      this.resumePending = false;
     }
   }
 
