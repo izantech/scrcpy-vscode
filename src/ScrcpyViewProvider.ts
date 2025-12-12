@@ -490,8 +490,8 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
       // Write to file
       await vscode.workspace.fs.writeFile(uri, pngBuffer);
 
-      // Show success notification
-      vscode.window.showInformationMessage(`Screenshot saved to ${uri.fsPath}`);
+      // Open the screenshot in the main editor panel
+      await vscode.commands.executeCommand('vscode.open', uri);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       vscode.window.showErrorMessage(`Failed to take screenshot: ${message}`);
