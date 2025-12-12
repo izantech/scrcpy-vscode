@@ -22,6 +22,7 @@ export class VideoRenderer {
   // Config packet storage (like sc_packet_merger in scrcpy)
   private pendingConfig: Uint8Array | null = null;
   private codecConfigured = false;
+  private isPaused = false;
 
   constructor(
     canvas: HTMLCanvasElement,
@@ -89,11 +90,36 @@ export class VideoRenderer {
   }
 
   /**
+   * Pause video rendering (drops frames while paused)
+   */
+  pause(): void {
+    this.isPaused = true;
+    this.isRendering = false;
+    // Clear pending frames to free memory
+    for (const frame of this.pendingFrames) {
+      frame.close();
+    }
+    this.pendingFrames = [];
+  }
+
+  /**
+   * Resume video rendering
+   */
+  resume(): void {
+    this.isPaused = false;
+  }
+
+  /**
    * Push encoded video frame data
    * Following scrcpy approach: config packets are stored and prepended to next keyframe
    */
   pushFrame(data: Uint8Array, isConfig: boolean) {
     if (!this.decoder || !this.ctx) {
+      return;
+    }
+
+    // Drop non-config frames when paused (keep config for codec)
+    if (this.isPaused && !isConfig) {
       return;
     }
 

@@ -4,6 +4,7 @@ Display and control your Android device screen directly within VS Code, similar 
 
 ## Features
 
+- **Multi-device support** with tab bar for switching between devices
 - View Android device screen in real-time
 - Touch input support (tap, drag)
 - **Device control buttons** (Volume, Back, Home, Recent Apps, Power)
@@ -12,6 +13,7 @@ Display and control your Android device screen directly within VS Code, similar 
 - Turn device screen off while mirroring (saves battery)
 - Auto-detects installed scrcpy version
 - Settings accessible via gear icon in view toolbar
+- Resource-efficient: inactive device tabs pause video streaming
 
 ## Prerequisites
 
@@ -31,11 +33,19 @@ Display and control your Android device screen directly within VS Code, similar 
 
 ## Usage
 
-1. Connect your Android device via USB (or enable wireless debugging)
+1. Connect your Android device(s) via USB (or enable wireless debugging)
 2. Verify ADB sees your device: `adb devices`
 3. Click the **Android Device** icon in the Activity Bar (left sidebar)
-4. The device screen appears in the sidebar view
+4. The first device automatically connects and appears in the sidebar view
 5. **Tip**: Drag the view to the Secondary Sidebar (right side) for optimal placement - VS Code remembers this position
+
+### Multi-Device Support
+
+- Click the **+** button in the tab bar to add another device
+- A device picker shows all available devices (excluding already connected ones)
+- Switch between devices by clicking their tabs
+- Close a device connection by clicking the **×** on its tab
+- Only the active tab streams video (saves resources)
 
 ## Commands
 
@@ -66,10 +76,11 @@ scrcpy-vscode/
 ├── src/
 │   ├── extension.ts          # Extension entry point, provider registration
 │   ├── ScrcpyViewProvider.ts # WebviewView provider for sidebar integration
+│   ├── DeviceManager.ts      # Multi-device session management
 │   ├── ScrcpyConnection.ts   # ADB/scrcpy server communication
 │   └── webview/
-│       ├── main.ts           # WebView entry point, message handling
-│       ├── VideoRenderer.ts  # WebCodecs H.264 decoder
+│       ├── main.ts           # WebView entry point, tab management
+│       ├── VideoRenderer.ts  # WebCodecs H.264 decoder (with pause/resume)
 │       └── InputHandler.ts   # Touch/mouse event handling
 ├── dist/                     # Compiled output
 │   ├── extension.js          # Main extension bundle
@@ -216,7 +227,6 @@ npm run watch
 
 ## Known Limitations
 
-- Single device support (uses first detected device)
 - Video only (audio forwarding not implemented)
 - Text/keyboard input not implemented (only hardware buttons)
 - No rotation handling
@@ -224,7 +234,7 @@ npm run watch
 
 ## Future Improvements
 
-- [ ] Multi-device selection dialog
+- [x] ~~Multi-device support~~ ✅ Implemented (tab bar with device switching)
 - [ ] Text/keyboard input support
 - [ ] Audio forwarding
 - [ ] Screen rotation handling

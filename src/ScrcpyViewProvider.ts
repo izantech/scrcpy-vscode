@@ -1,13 +1,14 @@
 import * as vscode from 'vscode';
-import { ScrcpyConnection, ScrcpyConfig } from './ScrcpyConnection';
+import { ScrcpyConfig } from './ScrcpyConnection';
+import { DeviceManager, DeviceInfo } from './DeviceManager';
 
 export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'scrcpy.deviceView';
 
   private _view?: vscode.WebviewView;
-  private _connection?: ScrcpyConnection;
-  private _isConnecting = false;
+  private _deviceManager?: DeviceManager;
   private _disposables: vscode.Disposable[] = [];
+  private _isDisposed = false;
 
   constructor(private readonly _extensionUri: vscode.Uri) {}
 
@@ -46,26 +47,27 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
 
     // Auto-connect when view becomes visible
     webviewView.onDidChangeVisibility(() => {
-      if (webviewView.visible && !this._connection) {
-        this._connect();
+      if (webviewView.visible && !this._deviceManager) {
+        this._initializeAndConnect();
       }
     }, null, this._disposables);
 
-    // Listen for configuration changes and reconnect
+    // Listen for configuration changes and reconnect all
     vscode.workspace.onDidChangeConfiguration(async (e) => {
-      if (e.affectsConfiguration('scrcpy') && this._connection) {
+      if (e.affectsConfiguration('scrcpy') && this._deviceManager) {
         this._view?.webview.postMessage({
           type: 'status',
           message: 'Settings changed. Reconnecting...'
         });
-        await this._disconnect();
-        await this._connect();
+        this._deviceManager.updateConfig(this._getConfig());
+        await this._deviceManager.disconnectAll();
+        await this._autoConnectFirstDevice();
       }
     }, null, this._disposables);
 
     // Initial connection if view is already visible
     if (webviewView.visible) {
-      this._connect();
+      this._initializeAndConnect();
     }
   }
 
@@ -82,49 +84,82 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
     };
   }
 
-  private async _connect() {
-    if (!this._view || this._isConnecting || this._connection) return;
+  private _initializeAndConnect() {
+    if (!this._view || this._deviceManager) return;
 
-    this._isConnecting = true;
+    const config = this._getConfig();
+
+    this._deviceManager = new DeviceManager(
+      // Video frame callback
+      (deviceId, frameData, isConfig, width, height) => {
+        if (this._isDisposed || !this._view) return;
+        this._view.webview.postMessage({
+          type: 'videoFrame',
+          deviceId,
+          data: Array.from(frameData),
+          isConfig,
+          width,
+          height
+        });
+      },
+      // Status callback
+      (deviceId, status) => {
+        if (this._isDisposed || !this._view) return;
+        this._view.webview.postMessage({
+          type: 'status',
+          deviceId,
+          message: status
+        });
+      },
+      // Session list callback
+      (sessions) => {
+        if (this._isDisposed || !this._view) return;
+        this._view.webview.postMessage({
+          type: 'sessionList',
+          sessions
+        });
+      },
+      // Error callback
+      (deviceId, message) => {
+        if (this._isDisposed || !this._view) return;
+        this._view.webview.postMessage({
+          type: 'error',
+          deviceId,
+          message
+        });
+      },
+      config
+    );
+
+    this._autoConnectFirstDevice();
+  }
+
+  private async _autoConnectFirstDevice() {
+    if (!this._deviceManager) return;
+
     try {
-      const config = this._getConfig();
-      this._connection = new ScrcpyConnection(
-        // Video frame callback
-        (frameData: Uint8Array, isConfig: boolean, width?: number, height?: number) => {
-          this._view?.webview.postMessage({
-            type: 'videoFrame',
-            data: Array.from(frameData),
-            isConfig,
-            width,
-            height
-          });
-        },
-        // Status callback
-        (status: string) => {
-          this._view?.webview.postMessage({
-            type: 'status',
-            message: status
-          });
-        },
-        config
-      );
-
-      await this._connection.connect();
-      await this._connection.startScrcpy();
+      const devices = await this._deviceManager.getAvailableDevices();
+      if (devices.length > 0) {
+        await this._deviceManager.addDevice(devices[0]);
+      } else {
+        this._view?.webview.postMessage({
+          type: 'error',
+          message: 'No Android devices found.\n\nPlease connect a device and enable USB debugging.'
+        });
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       this._view?.webview.postMessage({
         type: 'error',
         message: `Connection failed: ${message}`
       });
-      this._connection = undefined;
-    } finally {
-      this._isConnecting = false;
     }
   }
 
   private async _onDidReceiveMessage(message: {
     type: string;
+    deviceId?: string;
+    serial?: string;
     x?: number;
     y?: number;
     action?: 'down' | 'move' | 'up';
@@ -134,8 +169,8 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
   }) {
     switch (message.type) {
       case 'touch':
-        if (this._connection && message.x !== undefined && message.y !== undefined && message.action) {
-          this._connection.sendTouch(
+        if (this._deviceManager && message.x !== undefined && message.y !== undefined && message.action) {
+          this._deviceManager.sendTouch(
             message.x,
             message.y,
             message.action,
@@ -145,23 +180,53 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
         }
         break;
 
+      case 'keyEvent':
+        if (this._deviceManager && message.keycode !== undefined) {
+          this._deviceManager.sendKeyEvent(message.keycode);
+        }
+        break;
+
+      case 'switchTab':
+        if (this._deviceManager && message.deviceId) {
+          this._deviceManager.switchToDevice(message.deviceId);
+        }
+        break;
+
+      case 'closeTab':
+        if (this._deviceManager && message.deviceId) {
+          await this._deviceManager.removeDevice(message.deviceId);
+        }
+        break;
+
+      case 'showDevicePicker':
+        await this._showDevicePicker();
+        break;
+
+      case 'connectDevice':
+        if (this._deviceManager && message.serial) {
+          const devices = await this._deviceManager.getAvailableDevices();
+          const device = devices.find(d => d.serial === message.serial);
+          if (device) {
+            try {
+              await this._deviceManager.addDevice(device);
+            } catch {
+              // Error already handled via callback
+            }
+          }
+        }
+        break;
+
       case 'ready':
         console.log('Webview ready');
         break;
 
       case 'reconnect':
         await this._disconnect();
-        await this._connect();
+        this._initializeAndConnect();
         break;
 
       case 'openSettings':
         vscode.commands.executeCommand('workbench.action.openSettings', '@id:scrcpy*');
-        break;
-
-      case 'keyEvent':
-        if (this._connection && message.keycode !== undefined) {
-          this._connection.sendKeyEvent(message.keycode);
-        }
         break;
 
       case 'browseScrcpyPath':
@@ -182,14 +247,53 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
     }
   }
 
+  private async _showDevicePicker(): Promise<void> {
+    if (!this._deviceManager) return;
+
+    const devices = await this._deviceManager.getAvailableDevices();
+
+    if (devices.length === 0) {
+      vscode.window.showErrorMessage('No Android devices found. Please connect a device and enable USB debugging.');
+      return;
+    }
+
+    // Filter out already connected devices
+    const availableDevices = devices.filter(d => !this._deviceManager!.isDeviceConnected(d.serial));
+
+    if (availableDevices.length === 0) {
+      vscode.window.showInformationMessage('All available devices are already connected.');
+      return;
+    }
+
+    // Show quick pick
+    const items = availableDevices.map(d => ({
+      label: d.name,
+      description: d.serial,
+      device: d
+    }));
+
+    const selected = await vscode.window.showQuickPick(items, {
+      placeHolder: 'Select a device to connect'
+    });
+
+    if (selected && this._deviceManager) {
+      try {
+        await this._deviceManager.addDevice(selected.device);
+      } catch {
+        // Error already handled via callback
+      }
+    }
+  }
+
   private async _disconnect() {
-    if (this._connection) {
-      await this._connection.disconnect().catch(console.error);
-      this._connection = undefined;
+    if (this._deviceManager) {
+      await this._deviceManager.disconnectAll();
+      this._deviceManager = undefined;
     }
   }
 
   private async _onViewDisposed() {
+    this._isDisposed = true;
     await this._disconnect();
     while (this._disposables.length) {
       const disposable = this._disposables.pop();
@@ -200,8 +304,8 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
   public async start() {
     if (this._view) {
       this._view.show?.(true);
-      if (!this._connection) {
-        await this._connect();
+      if (!this._deviceManager) {
+        this._initializeAndConnect();
       }
     }
   }
@@ -251,14 +355,109 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
       height: 100%;
       display: flex;
       flex-direction: column;
-      align-items: center;
-      justify-content: flex-start;
-      padding: 8px;
     }
 
-    #screen {
-      width: 100%;
-      max-height: calc(100vh - 110px);
+    /* Tab bar - fixed at top */
+    .tab-bar {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      padding: 4px;
+      background: var(--vscode-sideBar-background);
+      border-bottom: 1px solid var(--vscode-widget-border, rgba(255, 255, 255, 0.1));
+      overflow-x: auto;
+      overflow-y: hidden;
+      flex-shrink: 0;
+    }
+
+    .tab-bar.hidden {
+      display: none;
+    }
+
+    .tab {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 8px;
+      background: var(--vscode-tab-inactiveBackground, #2d2d2d);
+      color: var(--vscode-tab-inactiveForeground, #969696);
+      border: 1px solid transparent;
+      border-radius: 4px;
+      font-size: 11px;
+      cursor: pointer;
+      white-space: nowrap;
+      min-width: 60px;
+      max-width: 120px;
+    }
+
+    .tab.active {
+      background: var(--vscode-tab-activeBackground, #1e1e1e);
+      color: var(--vscode-tab-activeForeground, #ffffff);
+      border-color: var(--vscode-focusBorder, #0078d4);
+    }
+
+    .tab:hover:not(.active) {
+      background: var(--vscode-tab-hoverBackground, #3a3a3a);
+    }
+
+    .tab-label {
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .tab-close {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 14px;
+      height: 14px;
+      border-radius: 3px;
+      font-size: 12px;
+      opacity: 0.5;
+      line-height: 1;
+    }
+
+    .tab-close:hover {
+      opacity: 1;
+      background: var(--vscode-toolbar-hoverBackground, rgba(255, 255, 255, 0.1));
+    }
+
+    .tab-add {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 24px;
+      height: 24px;
+      padding: 0;
+      background: transparent;
+      color: var(--vscode-foreground, #ccc);
+      border: 1px solid transparent;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 16px;
+      flex-shrink: 0;
+      opacity: 0.7;
+    }
+
+    .tab-add:hover {
+      opacity: 1;
+      background: var(--vscode-toolbar-hoverBackground, rgba(255, 255, 255, 0.1));
+    }
+
+    /* Canvas container - takes remaining space, centers content */
+    .canvas-container {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .device-canvas {
+      max-width: 100%;
+      max-height: 100%;
       object-fit: contain;
       touch-action: none;
       cursor: pointer;
@@ -266,83 +465,17 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
       border-radius: 4px;
     }
 
-    #screen.hidden {
+    .device-canvas.hidden {
       display: none;
     }
 
-    .status {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      color: var(--vscode-foreground, #ccc);
-      font-family: var(--vscode-font-family, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
-      font-size: 13px;
-      text-align: center;
-      padding: 24px;
-      max-width: 90%;
-      white-space: pre-wrap;
-      word-wrap: break-word;
-      background: var(--vscode-editor-background, #1e1e1e);
-      border-radius: 8px;
-      border: 1px solid var(--vscode-widget-border, rgba(255, 255, 255, 0.1));
-    }
-
-    .status.hidden {
-      display: none;
-    }
-
-    .status .spinner {
-      width: 64px;
-      height: 64px;
-      border: 4px solid var(--vscode-widget-border, rgba(255, 255, 255, 0.2));
-      border-top-color: var(--vscode-focusBorder, #0078d4);
-      border-radius: 50%;
-      animation: spin 1s linear infinite;
-      margin: 0 auto 16px;
-    }
-
-    @keyframes spin {
-      to { transform: rotate(360deg); }
-    }
-
-    .error {
-      color: var(--vscode-errorForeground, #f48771);
-    }
-
-    .stats {
-      position: fixed;
-      bottom: 4px;
-      right: 4px;
-      background: var(--vscode-badge-background, rgba(0, 0, 0, 0.7));
-      color: var(--vscode-badge-foreground, #888);
-      font-family: var(--vscode-editor-font-family, monospace);
-      font-size: 10px;
-      padding: 2px 6px;
-      border-radius: 3px;
-    }
-
-    .reconnect-btn {
-      margin-top: 12px;
-      padding: 6px 12px;
-      background: var(--vscode-button-background, #0078d4);
-      color: var(--vscode-button-foreground, white);
-      border: none;
-      border-radius: 3px;
-      cursor: pointer;
-      font-size: 12px;
-      font-family: var(--vscode-font-family);
-    }
-
-    .reconnect-btn:hover {
-      background: var(--vscode-button-hoverBackground, #106ebe);
-    }
-
+    /* Control toolbar - fixed at bottom */
     .control-toolbar {
       display: flex;
       align-items: center;
-      padding: 8px;
-      width: 100%;
+      padding: 6px 8px;
+      background: var(--vscode-sideBar-background);
+      border-top: 1px solid var(--vscode-widget-border, rgba(255, 255, 255, 0.1));
       flex-shrink: 0;
     }
 
@@ -351,15 +484,15 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
     }
 
     .control-btn {
-      min-width: 36px;
-      height: 28px;
-      padding: 4px 8px;
+      min-width: 32px;
+      height: 26px;
+      padding: 4px 6px;
       background: var(--vscode-button-secondaryBackground, #3a3d41);
       color: var(--vscode-button-secondaryForeground, #ccc);
       border: 1px solid var(--vscode-input-border, #3a3d41);
       border-radius: 4px;
       cursor: pointer;
-      font-size: 11px;
+      font-size: 10px;
       font-family: var(--vscode-font-family);
       display: flex;
       align-items: center;
@@ -379,7 +512,7 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
 
     .toolbar-group {
       display: flex;
-      gap: 4px;
+      gap: 3px;
       flex: 1;
     }
 
@@ -394,30 +527,116 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
     .toolbar-right {
       justify-content: flex-end;
     }
+
+    /* Status overlay */
+    .status {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      color: var(--vscode-foreground, #ccc);
+      font-family: var(--vscode-font-family, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
+      font-size: 13px;
+      text-align: center;
+      padding: 24px;
+      max-width: 90%;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      background: var(--vscode-editor-background, #1e1e1e);
+      border-radius: 8px;
+      border: 1px solid var(--vscode-widget-border, rgba(255, 255, 255, 0.1));
+      z-index: 10;
+    }
+
+    .status.hidden {
+      display: none;
+    }
+
+    .status .spinner {
+      width: 48px;
+      height: 48px;
+      border: 3px solid var(--vscode-widget-border, rgba(255, 255, 255, 0.2));
+      border-top-color: var(--vscode-focusBorder, #0078d4);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 12px;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .error {
+      color: var(--vscode-errorForeground, #f48771);
+    }
+
+    .stats {
+      position: absolute;
+      bottom: 4px;
+      right: 4px;
+      background: var(--vscode-badge-background, rgba(0, 0, 0, 0.7));
+      color: var(--vscode-badge-foreground, #888);
+      font-family: var(--vscode-editor-font-family, monospace);
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 3px;
+      z-index: 5;
+    }
+
+    .stats.hidden {
+      display: none;
+    }
+
+    .reconnect-btn {
+      margin-top: 12px;
+      padding: 6px 12px;
+      background: var(--vscode-button-background, #0078d4);
+      color: var(--vscode-button-foreground, white);
+      border: none;
+      border-radius: 3px;
+      cursor: pointer;
+      font-size: 12px;
+      font-family: var(--vscode-font-family);
+    }
+
+    .reconnect-btn:hover {
+      background: var(--vscode-button-hoverBackground, #106ebe);
+    }
   </style>
 </head>
 <body>
   <div class="container">
-    <canvas id="screen" class="hidden"></canvas>
+    <!-- Tab bar - fixed at top -->
+    <div id="tab-bar" class="tab-bar hidden">
+      <button class="tab-add" id="add-device-btn" title="Add Device">+</button>
+    </div>
+
+    <!-- Canvas container - centered -->
+    <div id="canvas-container" class="canvas-container">
+      <!-- Status overlay -->
+      <div id="status" class="status">
+        <div class="spinner"></div>
+        <div id="status-text">Connecting to device...</div>
+      </div>
+      <!-- Stats display -->
+      <div id="stats" class="stats hidden"></div>
+    </div>
+
+    <!-- Control toolbar - fixed at bottom -->
     <div id="control-toolbar" class="control-toolbar hidden">
       <div class="toolbar-group toolbar-left">
         <button class="control-btn" data-keycode="25" title="Volume Down">Vol-</button>
         <button class="control-btn" data-keycode="24" title="Volume Up">Vol+</button>
       </div>
       <div class="toolbar-group toolbar-center">
-        <button class="control-btn" data-keycode="4" title="Back">◀</button>
-        <button class="control-btn" data-keycode="3" title="Home">●</button>
-        <button class="control-btn" data-keycode="187" title="Recent Apps">■</button>
+        <button class="control-btn" data-keycode="4" title="Back">&#x25C0;</button>
+        <button class="control-btn" data-keycode="3" title="Home">&#x25CF;</button>
+        <button class="control-btn" data-keycode="187" title="Recent Apps">&#x25A0;</button>
       </div>
       <div class="toolbar-group toolbar-right">
-        <button class="control-btn" data-keycode="26" title="Power">⏻</button>
+        <button class="control-btn" data-keycode="26" title="Power">&#x23FB;</button>
       </div>
     </div>
-    <div id="status" class="status">
-      <div class="spinner"></div>
-      <div id="status-text">Connecting to device...</div>
-    </div>
-    <div id="stats" class="stats hidden"></div>
   </div>
   <script nonce="${nonce}" src="${scriptUri}"></script>
 </body>

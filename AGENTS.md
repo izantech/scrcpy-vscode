@@ -27,10 +27,11 @@ npm run watch
 src/
 ├── extension.ts          # Entry point, registers provider and commands
 ├── ScrcpyViewProvider.ts # WebviewView provider for sidebar view
+├── DeviceManager.ts      # Multi-device session management
 ├── ScrcpyConnection.ts   # ADB communication, scrcpy protocol
 └── webview/
-    ├── main.ts           # WebView entry, message handling
-    ├── VideoRenderer.ts  # WebCodecs H.264 decoder
+    ├── main.ts           # WebView entry, message handling, tab management
+    ├── VideoRenderer.ts  # WebCodecs H.264 decoder (with pause/resume)
     └── InputHandler.ts   # Pointer event handling
 ```
 
@@ -38,13 +39,25 @@ src/
 
 - **ScrcpyViewProvider.ts**: WebviewView provider
   - Implements `vscode.WebviewViewProvider` for sidebar integration
-  - Auto-connects when view becomes visible
+  - Uses `DeviceManager` for multi-device support
+  - Auto-connects first device when view becomes visible
   - Reads settings from `vscode.workspace.getConfiguration('scrcpy')`
   - Listens for config changes and auto-reconnects
   - Handles message passing between extension and webview
+  - Generates HTML with tab bar (top), canvas container (center), control toolbar (bottom)
+
+- **DeviceManager.ts**: Multi-device session management
+  - Manages multiple `ScrcpyConnection` instances (one per device)
+  - `getAvailableDevices()`: Lists connected ADB devices with model names
+  - `addDevice()`: Connects to a specific device by serial
+  - `removeDevice()`: Disconnects and removes a device session
+  - `switchToDevice()`: Switches active device (pauses inactive, resumes active)
+  - Prevents duplicate device connections
+  - Notifies webview of session list changes
 
 - **ScrcpyConnection.ts**: Core connection logic
   - Accepts `ScrcpyConfig` for configurable server parameters
+  - Accepts optional `targetDeviceSerial` to connect to specific device
   - `connect()`: Discovers devices via `adb devices`
   - `startScrcpy()`: Starts server with config-based args
   - `handleScrcpyStream()`: Parses video protocol
@@ -55,6 +68,8 @@ src/
   - Uses WebCodecs API in Annex B mode (no description)
   - Merges config packets with keyframes (like scrcpy client)
   - Extracts codec string from SPS
+  - `pause()`: Stops rendering and clears frame queue (for inactive tabs)
+  - `resume()`: Resumes rendering
 
 ## Protocol Notes
 
@@ -119,9 +134,14 @@ The main scrcpy repository is at `/Users/izan/Dev/Projects/scrcpy/`. Key referen
 ## Testing
 
 No automated tests yet. Manual testing:
-1. Connect Android device
+1. Connect Android device(s)
 2. Run extension (F5)
 3. Click the Android Device icon in the Activity Bar (left sidebar)
 4. Drag the view to the Secondary Sidebar (right side) for optimal placement
 5. Verify video displays and touch works
 6. Verify control buttons work (Volume, Back, Home, Recent Apps, Power)
+7. Test multi-device support:
+   - Click "+" button to add another device
+   - Verify device picker shows available devices
+   - Switch between tabs and verify only active tab renders video
+   - Close tabs with "×" button and verify cleanup

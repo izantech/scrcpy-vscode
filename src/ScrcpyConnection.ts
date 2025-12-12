@@ -33,6 +33,7 @@ export interface ScrcpyConfig {
  */
 export class ScrcpyConnection {
   private deviceSerial: string | null = null;
+  private targetSerial: string | null = null;
   private videoSocket: net.Socket | null = null;
   private controlSocket: net.Socket | null = null;
   private adbProcess: ChildProcess | null = null;
@@ -44,8 +45,11 @@ export class ScrcpyConnection {
   constructor(
     private onVideoFrame: VideoFrameCallback,
     private onStatus: StatusCallback,
-    private config: ScrcpyConfig
-  ) {}
+    private config: ScrcpyConfig,
+    targetDeviceSerial?: string
+  ) {
+    this.targetSerial = targetDeviceSerial ?? null;
+  }
 
   /**
    * Connect to ADB daemon and select a device
@@ -65,8 +69,15 @@ export class ScrcpyConnection {
       );
     }
 
-    // Use first device
-    this.deviceSerial = devices[0];
+    // Use target serial if specified, otherwise first device
+    if (this.targetSerial) {
+      if (!devices.includes(this.targetSerial)) {
+        throw new Error(`Device ${this.targetSerial} not found or not authorized`);
+      }
+      this.deviceSerial = this.targetSerial;
+    } else {
+      this.deviceSerial = devices[0];
+    }
     this.onStatus(`Found device: ${this.deviceSerial}`);
   }
 
