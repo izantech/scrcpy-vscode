@@ -159,10 +159,12 @@ export class KeyboardHandler {
   }
 
   /**
-   * Check if the primary modifier key is pressed (Cmd on Mac, Ctrl elsewhere)
+   * Check if the primary modifier key is pressed
+   * On Mac: accepts both Cmd and Ctrl (works regardless of key remapping)
+   * On others: Ctrl only
    */
   private hasPrimaryModifier(event: KeyboardEvent): boolean {
-    return isMac ? event.metaKey : event.ctrlKey;
+    return isMac ? (event.metaKey || event.ctrlKey) : event.ctrlKey;
   }
 
   /**
