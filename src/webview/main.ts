@@ -47,6 +47,7 @@ let addDeviceBtn: HTMLElement;
 // Device sessions
 const sessions = new Map<string, DeviceSessionUI>();
 let activeDeviceId: string | null = null;
+let showStats = false;
 
 /**
  * Initialize the WebView
@@ -114,6 +115,10 @@ function handleMessage(event: MessageEvent) {
     case 'sessionList':
       updateSessionList(message.sessions);
       break;
+
+    case 'settings':
+      handleSettings(message);
+      break;
   }
 }
 
@@ -166,6 +171,23 @@ function handleStatus(message: { deviceId?: string; message: string }) {
  */
 function handleError(message: { deviceId?: string; message: string }) {
   showError(message.message);
+}
+
+/**
+ * Handle settings update from extension
+ */
+function handleSettings(message: { showStats?: boolean }) {
+  if (message.showStats !== undefined) {
+    showStats = message.showStats;
+    // Update all existing renderers
+    sessions.forEach(session => {
+      session.videoRenderer.setStatsEnabled(showStats);
+    });
+    // Hide stats element if disabled
+    if (!showStats) {
+      statsElement.classList.add('hidden');
+    }
+  }
 }
 
 /**
@@ -223,11 +245,12 @@ function createDeviceSession(
 
   // Create video renderer
   const videoRenderer = new VideoRenderer(canvas, (fps, frames) => {
-    if (deviceId === activeDeviceId) {
+    if (deviceId === activeDeviceId && showStats) {
       statsElement.textContent = `${fps} FPS | ${frames} frames`;
       statsElement.classList.remove('hidden');
     }
   });
+  videoRenderer.setStatsEnabled(showStats);
 
   // Create input handler
   const inputHandler = new InputHandler(canvas, (x, y, action) => {

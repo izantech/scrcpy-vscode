@@ -76,6 +76,11 @@
           "type": "boolean",
           "default": false,
           "description": "Show visual touch feedback on device screen"
+        },
+        "scrcpy.showStats": {
+          "type": "boolean",
+          "default": false,
+          "description": "Show FPS and frame count statistics"
         }
       }
     },

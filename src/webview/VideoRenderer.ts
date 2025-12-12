@@ -9,15 +9,17 @@ export class VideoRenderer {
   private canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D | null = null;
   private decoder: VideoDecoder | null = null;
-  private onStats: (fps: number, frames: number) => void;
+  private onStats: ((fps: number, frames: number) => void) | null;
 
   private width = 0;
   private height = 0;
   private frameCount = 0;
+  private totalFrames = 0;
   private lastFpsUpdate = 0;
   private fps = 0;
   private pendingFrames: VideoFrame[] = [];
   private isRendering = false;
+  private statsEnabled = false;
 
   // Config packet storage (like sc_packet_merger in scrcpy)
   private pendingConfig: Uint8Array | null = null;
@@ -26,7 +28,7 @@ export class VideoRenderer {
 
   constructor(
     canvas: HTMLCanvasElement,
-    onStats: (fps: number, frames: number) => void
+    onStats: ((fps: number, frames: number) => void) | null
   ) {
     this.canvas = canvas;
     this.onStats = onStats;
@@ -61,7 +63,10 @@ export class VideoRenderer {
 
     // Reset FPS tracking
     this.frameCount = 0;
-    this.lastFpsUpdate = performance.now();
+    this.totalFrames = 0;
+    if (this.statsEnabled) {
+      this.lastFpsUpdate = performance.now();
+    }
 
     // Create decoder
     this.createDecoder();
@@ -256,19 +261,33 @@ export class VideoRenderer {
   }
 
   /**
+   * Enable or disable stats tracking
+   */
+  setStatsEnabled(enabled: boolean): void {
+    this.statsEnabled = enabled;
+    if (enabled) {
+      this.lastFpsUpdate = performance.now();
+      this.frameCount = 0;
+    }
+  }
+
+  /**
    * Handle decoded video frame
    */
   private handleDecodedFrame(frame: VideoFrame) {
     this.pendingFrames.push(frame);
-    this.frameCount++;
+    this.totalFrames++;
 
-    // Update FPS counter
-    const now = performance.now();
-    if (now - this.lastFpsUpdate >= 1000) {
-      this.fps = Math.round(this.frameCount / ((now - this.lastFpsUpdate) / 1000));
-      this.onStats(this.fps, this.frameCount);
-      this.frameCount = 0;
-      this.lastFpsUpdate = now;
+    // Update FPS counter only if stats are enabled
+    if (this.statsEnabled && this.onStats) {
+      this.frameCount++;
+      const now = performance.now();
+      if (now - this.lastFpsUpdate >= 1000) {
+        this.fps = Math.round(this.frameCount / ((now - this.lastFpsUpdate) / 1000));
+        this.onStats(this.fps, this.totalFrames);
+        this.frameCount = 0;
+        this.lastFpsUpdate = now;
+      }
     }
 
     // Start rendering if not already

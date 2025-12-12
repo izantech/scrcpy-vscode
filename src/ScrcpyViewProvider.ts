@@ -52,16 +52,28 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
       }
     }, null, this._disposables);
 
-    // Listen for configuration changes and reconnect all
+    // Listen for configuration changes
     vscode.workspace.onDidChangeConfiguration(async (e) => {
-      if (e.affectsConfiguration('scrcpy') && this._deviceManager) {
-        this._view?.webview.postMessage({
-          type: 'status',
-          message: 'Settings changed. Reconnecting...'
-        });
-        this._deviceManager.updateConfig(this._getConfig());
-        await this._deviceManager.disconnectAll();
-        await this._autoConnectFirstDevice();
+      if (e.affectsConfiguration('scrcpy')) {
+        // Send settings updates that don't require reconnect
+        if (e.affectsConfiguration('scrcpy.showStats')) {
+          this._sendSettings();
+        }
+
+        // Reconnect for scrcpy options that affect the stream
+        const reconnectSettings = ['scrcpy.path', 'scrcpy.screenOff', 'scrcpy.stayAwake',
+          'scrcpy.maxSize', 'scrcpy.bitRate', 'scrcpy.maxFps', 'scrcpy.showTouches'];
+        const needsReconnect = reconnectSettings.some(s => e.affectsConfiguration(s));
+
+        if (needsReconnect && this._deviceManager) {
+          this._view?.webview.postMessage({
+            type: 'status',
+            message: 'Settings changed. Reconnecting...'
+          });
+          this._deviceManager.updateConfig(this._getConfig());
+          await this._deviceManager.disconnectAll();
+          await this._autoConnectFirstDevice();
+        }
       }
     }, null, this._disposables);
 
@@ -82,6 +94,15 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
       maxFps: config.get<number>('maxFps', 60),
       showTouches: config.get<boolean>('showTouches', false)
     };
+  }
+
+  private _sendSettings(): void {
+    if (!this._view) return;
+    const config = vscode.workspace.getConfiguration('scrcpy');
+    this._view.webview.postMessage({
+      type: 'settings',
+      showStats: config.get<boolean>('showStats', false)
+    });
   }
 
   private _initializeAndConnect() {
@@ -218,6 +239,7 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
 
       case 'ready':
         console.log('Webview ready');
+        this._sendSettings();
         break;
 
       case 'reconnect':
@@ -353,8 +375,10 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
     .container {
       width: 100%;
       height: 100%;
+      min-width: 200px;
       display: flex;
       flex-direction: column;
+      container-type: inline-size;
     }
 
     /* Tab bar - fixed at top */
@@ -483,10 +507,39 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
       display: none;
     }
 
+    .toolbar-group {
+      display: flex;
+      gap: 3px;
+      flex: 1;
+    }
+
+    .toolbar-left {
+      justify-content: flex-start;
+    }
+
+    .toolbar-center {
+      justify-content: center;
+    }
+
+    .toolbar-right {
+      justify-content: flex-end;
+    }
+
+    /* Hide non-essential buttons when toolbar is narrow */
+    @container (max-width: 220px) {
+      .toolbar-left,
+      .toolbar-right {
+        display: none;
+      }
+      .toolbar-center {
+        flex: 1;
+      }
+    }
+
     .control-btn {
-      min-width: 32px;
+      min-width: 28px;
       height: 26px;
-      padding: 4px 6px;
+      padding: 4px 5px;
       background: var(--vscode-button-secondaryBackground, #3a3d41);
       color: var(--vscode-button-secondaryForeground, #ccc);
       border: 1px solid var(--vscode-input-border, #3a3d41);
@@ -508,24 +561,6 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
       background: var(--vscode-button-background, #0078d4);
       color: var(--vscode-button-foreground, white);
       transform: scale(0.95);
-    }
-
-    .toolbar-group {
-      display: flex;
-      gap: 3px;
-      flex: 1;
-    }
-
-    .toolbar-left {
-      justify-content: flex-start;
-    }
-
-    .toolbar-center {
-      justify-content: center;
-    }
-
-    .toolbar-right {
-      justify-content: flex-end;
     }
 
     /* Status overlay */
