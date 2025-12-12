@@ -69,9 +69,10 @@ src/
   - `handleScrcpyStream()`: Parses video protocol
   - `handleAudioStream()`: Parses audio protocol (Opus codec)
   - `handleControlSocketData()`: Parses device messages (clipboard, ACKs)
-  - `sendTouch()`: Sends touch control messages (32 bytes)
+  - `sendTouch()`: Sends touch control messages (32 bytes, uses stored `deviceWidth`/`deviceHeight` for coordinate mapping)
   - `sendKeyDown()` / `sendKeyUp()`: Sends separate key down/up events (14 bytes each)
   - `rotateDevice()`: Rotates device screen counter-clockwise (1 byte control message)
+  - `updateDimensions()`: Updates stored dimensions when webview detects rotation via SPS parsing
   - Clipboard sync: On-demand via `pasteFromHost()` (Ctrl+V) and `copyToHost()` (Ctrl+C), listens for device clipboard messages
   - Error handling: Reports unexpected disconnects via `onError` callback (shows reconnect UI)
 
@@ -79,6 +80,8 @@ src/
   - Uses WebCodecs API in Annex B mode (no description)
   - Merges config packets with keyframes (like scrcpy client)
   - Extracts codec string from SPS
+  - Parses SPS to detect dimension changes on rotation (notifies extension via `dimensionsChanged` message)
+  - `fitToContainer()`: Sizes canvas to fit container while maintaining aspect ratio
   - `pause()`: Stops rendering and clears frame queue (for inactive tabs)
   - `resume()`: Resumes rendering
 

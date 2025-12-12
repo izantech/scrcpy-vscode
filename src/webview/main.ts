@@ -412,6 +412,13 @@ function createDeviceSession(
       if (deviceId === activeDeviceId) {
         updateRotateButton(width, height);
       }
+      // Notify extension of new dimensions for touch coordinate mapping
+      vscode.postMessage({
+        type: 'dimensionsChanged',
+        deviceId,
+        width,
+        height
+      });
     }
   );
   videoRenderer.setStatsEnabled(showStats);

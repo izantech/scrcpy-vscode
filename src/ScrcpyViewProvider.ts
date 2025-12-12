@@ -230,6 +230,8 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
     action?: 'down' | 'move' | 'up';
     screenWidth?: number;
     screenHeight?: number;
+    width?: number;
+    height?: number;
     keycode?: number;
     text?: string;
     metastate?: number;
@@ -292,6 +294,12 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
       case 'rotateDevice':
         if (this._deviceManager) {
           this._deviceManager.rotateDevice();
+        }
+        break;
+
+      case 'dimensionsChanged':
+        if (this._deviceManager && message.deviceId && message.width && message.height) {
+          this._deviceManager.updateDimensions(message.deviceId, message.width, message.height);
         }
         break;
 
@@ -570,7 +578,6 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
       align-items: center;
       justify-content: center;
       overflow: hidden;
-      overflow-y: auto;
       position: relative;
     }
 

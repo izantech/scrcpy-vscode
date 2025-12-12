@@ -89,7 +89,7 @@ export class VideoRenderer {
   }
 
   /**
-   * Fit canvas to container width, adjusting height to maintain aspect ratio
+   * Fit canvas to container while maintaining aspect ratio
    */
   private fitToContainer() {
     if (this.width === 0 || this.height === 0) return;
@@ -98,13 +98,19 @@ export class VideoRenderer {
     if (!container) return;
 
     const rect = container.getBoundingClientRect();
-    if (rect.width === 0) return;
+    if (rect.width === 0 || rect.height === 0) return;
 
     const aspectRatio = this.width / this.height;
-    const displayWidth = rect.width;
-    const displayHeight = displayWidth / aspectRatio;
 
-    console.log(`fitToContainer: video=${this.width}x${this.height}, container=${rect.width}, display=${displayWidth}x${displayHeight}`);
+    // Calculate display size that fits within container
+    let displayWidth = rect.width;
+    let displayHeight = displayWidth / aspectRatio;
+
+    // If height exceeds container, scale based on height instead
+    if (displayHeight > rect.height) {
+      displayHeight = rect.height;
+      displayWidth = displayHeight * aspectRatio;
+    }
 
     this.canvas.style.width = `${displayWidth}px`;
     this.canvas.style.height = `${displayHeight}px`;
@@ -172,7 +178,6 @@ export class VideoRenderer {
       // Parse SPS for dimensions (rotation sends new SPS with new dimensions)
       const dims = this.parseSPSDimensions(data);
       if (dims && (dims.width !== this.width || dims.height !== this.height)) {
-        console.log(`Dimensions changed: ${this.width}x${this.height} -> ${dims.width}x${dims.height}`);
         this.configure(dims.width, dims.height);
         this.onDimensionsChanged?.(dims.width, dims.height);
       }

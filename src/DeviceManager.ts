@@ -195,6 +195,10 @@ class DeviceSession {
     this.connection?.sendKeyWithMeta(keycode, action, metastate);
   }
 
+  updateDimensions(width: number, height: number): void {
+    this.connection?.updateDimensions(width, height);
+  }
+
   async pasteFromHost(): Promise<void> {
     await this.connection?.pasteFromHost();
   }
@@ -430,6 +434,14 @@ export class DeviceManager {
    */
   sendKeyWithMeta(keycode: number, action: 'down' | 'up', metastate: number): void {
     this.getActiveSession()?.sendKeyWithMeta(keycode, action, metastate);
+  }
+
+  /**
+   * Update dimensions for a specific device (called when webview detects rotation)
+   */
+  updateDimensions(deviceId: string, width: number, height: number): void {
+    const session = this.sessions.get(deviceId);
+    session?.updateDimensions(width, height);
   }
 
   /**

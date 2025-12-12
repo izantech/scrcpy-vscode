@@ -650,6 +650,16 @@ export class ScrcpyConnection {
   }
 
   /**
+   * Update device dimensions (called when webview detects rotation via SPS parsing)
+   */
+  updateDimensions(width: number, height: number): void {
+    if (width !== this.deviceWidth || height !== this.deviceHeight) {
+      this.deviceWidth = width;
+      this.deviceHeight = height;
+    }
+  }
+
+  /**
    * Set display power (turn screen on/off)
    */
   setDisplayPower(on: boolean): void {
