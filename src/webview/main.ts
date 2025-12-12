@@ -72,9 +72,30 @@ function initialize() {
   // Set up control toolbar with long-press support
   if (controlToolbar) {
     const buttons = controlToolbar.querySelectorAll('.control-btn');
+
+    // Volume buttons (keycodes 24=VOL_UP, 25=VOL_DOWN) use repeat-while-held
+    const volumeKeycodes = [24, 25];
+    const repeatDelay = 400; // Initial delay before repeat starts (ms)
+    const repeatInterval = 100; // Interval between repeats (ms)
+
     buttons.forEach((button) => {
       const keycode = parseInt((button as HTMLElement).dataset.keycode || '0', 10);
       if (!keycode) return;
+
+      const isVolumeButton = volumeKeycodes.includes(keycode);
+      let repeatTimeout: ReturnType<typeof setTimeout> | null = null;
+      let repeatIntervalId: ReturnType<typeof setInterval> | null = null;
+
+      const stopRepeat = () => {
+        if (repeatTimeout) {
+          clearTimeout(repeatTimeout);
+          repeatTimeout = null;
+        }
+        if (repeatIntervalId) {
+          clearInterval(repeatIntervalId);
+          repeatIntervalId = null;
+        }
+      };
 
       // Send key down on pointer press
       button.addEventListener('pointerdown', (e) => {
@@ -85,11 +106,21 @@ function initialize() {
         } catch {
           // Ignore errors from setting capture
         }
+
+        // Start repeat for volume buttons
+        if (isVolumeButton) {
+          repeatTimeout = setTimeout(() => {
+            repeatIntervalId = setInterval(() => {
+              vscode.postMessage({ type: 'keyDown', keycode });
+            }, repeatInterval);
+          }, repeatDelay);
+        }
       });
 
       // Send key up on pointer release
       button.addEventListener('pointerup', (e) => {
         const event = e as PointerEvent;
+        stopRepeat();
         vscode.postMessage({ type: 'keyUp', keycode });
         try {
           (button as HTMLElement).releasePointerCapture(event.pointerId);
@@ -101,6 +132,7 @@ function initialize() {
       // Handle pointer cancel (e.g., touch interrupted)
       button.addEventListener('pointercancel', (e) => {
         const event = e as PointerEvent;
+        stopRepeat();
         vscode.postMessage({ type: 'keyUp', keycode });
         try {
           (button as HTMLElement).releasePointerCapture(event.pointerId);
