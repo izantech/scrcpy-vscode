@@ -165,18 +165,29 @@ function showError(text: string) {
   if (!btnContainer) {
     btnContainer = document.createElement('div');
     btnContainer.className = 'button-container';
-    btnContainer.style.cssText = 'display: flex; gap: 8px; justify-content: center; margin-top: 12px;';
+    btnContainer.style.cssText = 'display: flex; gap: 8px; justify-content: center; margin-top: 12px; flex-wrap: wrap;';
     statusElement.appendChild(btnContainer);
   }
 
-  // Add settings button
-  const settingsBtn = document.createElement('button');
-  settingsBtn.className = 'reconnect-btn settings-btn';
-  settingsBtn.textContent = 'Settings';
-  settingsBtn.onclick = () => {
-    vscode.postMessage({ type: 'openSettings' });
+  // Add browse path button
+  const browseBtn = document.createElement('button');
+  browseBtn.className = 'reconnect-btn';
+  browseBtn.textContent = 'Browse...';
+  browseBtn.title = 'Select scrcpy installation folder';
+  browseBtn.onclick = () => {
+    vscode.postMessage({ type: 'browseScrcpyPath' });
   };
-  btnContainer.appendChild(settingsBtn);
+  btnContainer.appendChild(browseBtn);
+
+  // Add reset path button
+  const resetBtn = document.createElement('button');
+  resetBtn.className = 'reconnect-btn';
+  resetBtn.textContent = 'Reset Path';
+  resetBtn.title = 'Reset scrcpy path to default (use PATH)';
+  resetBtn.onclick = () => {
+    vscode.postMessage({ type: 'resetScrcpyPath' });
+  };
+  btnContainer.appendChild(resetBtn);
 
   // Add reconnect button
   const reconnectBtn = document.createElement('button');

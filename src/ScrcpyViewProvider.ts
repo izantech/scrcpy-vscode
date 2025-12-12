@@ -190,6 +190,24 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
           this._connection.sendKeyEvent(message.keycode);
         }
         break;
+
+      case 'browseScrcpyPath':
+        const result = await vscode.window.showOpenDialog({
+          canSelectFiles: false,
+          canSelectFolders: true,
+          canSelectMany: false,
+          title: 'Select scrcpy installation folder'
+        });
+        if (result && result[0]) {
+          await vscode.workspace.getConfiguration('scrcpy').update('path', result[0].fsPath, true);
+          vscode.window.showInformationMessage(`Scrcpy path set to: ${result[0].fsPath}`);
+        }
+        break;
+
+      case 'resetScrcpyPath':
+        await vscode.workspace.getConfiguration('scrcpy').update('path', undefined, true);
+        vscode.window.showInformationMessage('Scrcpy path reset to default (using PATH)');
+        break;
     }
   }
 
