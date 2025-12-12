@@ -134,6 +134,11 @@ function handleVideoFrame(message: {
   if (message.width && message.height) {
     session.videoRenderer.configure(message.width, message.height);
 
+    // Show canvas if this is the active device
+    if (message.deviceId === activeDeviceId) {
+      session.canvas.classList.remove('hidden');
+    }
+
     // Show UI elements on first frame
     tabBar.classList.remove('hidden');
     hideStatus();
@@ -208,10 +213,12 @@ function createDeviceSession(
   deviceId: string,
   deviceInfo: { serial: string; name: string }
 ): DeviceSessionUI {
-  // Create canvas
+  // Create canvas (set dimensions to 0 to prevent showing before video arrives)
   const canvas = document.createElement('canvas');
   canvas.id = `canvas-${deviceId}`;
   canvas.className = 'device-canvas hidden';
+  canvas.width = 0;
+  canvas.height = 0;
   canvasContainer.appendChild(canvas);
 
   // Create video renderer
@@ -296,11 +303,11 @@ function removeDeviceSession(deviceId: string) {
     statsElement.classList.add('hidden');
   }
 
-  // Hide UI and show status if no more sessions
+  // Hide UI and show empty state if no more sessions
   if (sessions.size === 0) {
     tabBar.classList.add('hidden');
     controlToolbar.classList.add('hidden');
-    showStatus('No devices connected.\nClick + to add a device.');
+    showEmptyState();
   }
 }
 
@@ -321,15 +328,19 @@ function switchToDevice(deviceId: string) {
     }
   }
 
-  // Show and resume new canvas
+  // Activate new session
   activeDeviceId = deviceId;
-  newSession.canvas.classList.remove('hidden');
   newSession.tabElement.classList.add('active');
   newSession.videoRenderer.resume();
+
+  // Only show canvas if it has received video (has dimensions)
+  if (newSession.canvas.width > 0 && newSession.canvas.height > 0) {
+    newSession.canvas.classList.remove('hidden');
+  }
 }
 
 /**
- * Show status message
+ * Show status message (with loading spinner)
  */
 function showStatus(text: string) {
   statusTextElement.textContent = text;
@@ -340,6 +351,12 @@ function showStatus(text: string) {
   const spinner = statusElement.querySelector('.spinner') as HTMLElement;
   if (spinner) {
     spinner.style.display = 'block';
+  }
+
+  // Hide empty icon if exists
+  const emptyIcon = statusElement.querySelector('.empty-icon') as HTMLElement;
+  if (emptyIcon) {
+    emptyIcon.style.display = 'none';
   }
 
   // Remove buttons if exists
@@ -418,6 +435,57 @@ function showError(text: string) {
  */
 function hideStatus() {
   statusElement.classList.add('hidden');
+}
+
+/**
+ * Show empty state (no devices connected)
+ */
+function showEmptyState() {
+  statusTextElement.textContent = 'No devices connected';
+  statusTextElement.classList.remove('error');
+  statusElement.classList.remove('hidden');
+
+  // Hide spinner
+  const spinner = statusElement.querySelector('.spinner') as HTMLElement;
+  if (spinner) {
+    spinner.style.display = 'none';
+  }
+
+  // Show empty icon
+  let emptyIcon = statusElement.querySelector('.empty-icon') as HTMLElement;
+  if (!emptyIcon) {
+    emptyIcon = document.createElement('div');
+    emptyIcon.className = 'empty-icon';
+    emptyIcon.innerHTML = `<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect>
+      <line x1="12" y1="18" x2="12" y2="18"></line>
+    </svg>`;
+    emptyIcon.style.cssText = 'margin-bottom: 12px; opacity: 0.5;';
+    statusElement.insertBefore(emptyIcon, statusTextElement);
+  }
+  emptyIcon.style.display = 'block';
+
+  // Remove existing buttons
+  let btnContainer = statusElement.querySelector('.button-container') as HTMLElement;
+  if (btnContainer) {
+    btnContainer.remove();
+  }
+
+  // Create button container with add device button
+  btnContainer = document.createElement('div');
+  btnContainer.className = 'button-container';
+  btnContainer.style.cssText = 'display: flex; gap: 8px; justify-content: center; margin-top: 12px;';
+  statusElement.appendChild(btnContainer);
+
+  const addBtn = document.createElement('button');
+  addBtn.className = 'reconnect-btn';
+  addBtn.textContent = '+ Add Device';
+  addBtn.onclick = () => {
+    vscode.postMessage({ type: 'showDevicePicker' });
+  };
+  btnContainer.appendChild(addBtn);
+
+  statusElement.classList.remove('hidden');
 }
 
 /**
