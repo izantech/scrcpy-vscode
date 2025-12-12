@@ -1,5 +1,6 @@
 import { VideoRenderer } from './VideoRenderer';
 import { InputHandler } from './InputHandler';
+import { KeyboardHandler } from './KeyboardHandler';
 
 // VS Code API interface
 interface VSCodeAPI {
@@ -31,6 +32,7 @@ interface DeviceSessionUI {
   canvas: HTMLCanvasElement;
   videoRenderer: VideoRenderer;
   inputHandler: InputHandler;
+  keyboardHandler: KeyboardHandler;
   tabElement: HTMLElement;
 }
 
@@ -328,6 +330,33 @@ function createDeviceSession(
     }
   });
 
+  // Create keyboard handler
+  const keyboardHandler = new KeyboardHandler(
+    canvas,
+    // Text callback (INJECT_TEXT)
+    (text) => {
+      if (deviceId === activeDeviceId) {
+        vscode.postMessage({
+          type: 'injectText',
+          deviceId,
+          text
+        });
+      }
+    },
+    // Keycode callback (INJECT_KEYCODE)
+    (keycode, metastate, action) => {
+      if (deviceId === activeDeviceId) {
+        vscode.postMessage({
+          type: 'injectKeycode',
+          deviceId,
+          keycode,
+          metastate,
+          action
+        });
+      }
+    }
+  );
+
   // Create tab element
   const tab = document.createElement('div');
   tab.className = 'tab';
@@ -359,6 +388,7 @@ function createDeviceSession(
     canvas,
     videoRenderer,
     inputHandler,
+    keyboardHandler,
     tabElement: tab
   };
 
@@ -376,6 +406,7 @@ function removeDeviceSession(deviceId: string) {
   // Cleanup
   session.videoRenderer.dispose();
   session.inputHandler.dispose();
+  session.keyboardHandler.dispose();
   session.canvas.remove();
   session.tabElement.remove();
 
@@ -409,6 +440,7 @@ function switchToDevice(deviceId: string) {
       oldSession.canvas.classList.add('hidden');
       oldSession.tabElement.classList.remove('active');
       oldSession.videoRenderer.pause();
+      oldSession.keyboardHandler.setFocused(false);
     }
   }
 

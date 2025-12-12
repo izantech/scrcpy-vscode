@@ -32,7 +32,8 @@ src/
 └── webview/
     ├── main.ts           # WebView entry, message handling, tab management
     ├── VideoRenderer.ts  # WebCodecs H.264 decoder (with pause/resume)
-    └── InputHandler.ts   # Pointer event handling
+    ├── InputHandler.ts   # Pointer event handling
+    └── KeyboardHandler.ts # Keyboard input (text injection + keycodes)
 ```
 
 ## Key Files
@@ -128,9 +129,12 @@ The main scrcpy repository is at `/Users/izan/Dev/Projects/scrcpy/`. Key referen
 4. Android keycodes: HOME=3, BACK=4, VOL_UP=24, VOL_DOWN=25, POWER=26, MENU=82, APP_SWITCH=187
 
 ### Adding text/keyboard input
-1. Add keyboard event handler in `webview/main.ts`
-2. Send keycode messages via `sendKeyDown()` / `sendKeyUp()` in `ScrcpyConnection.ts`
-3. Or use INJECT_TEXT (type 1) for text strings
+Text/keyboard input is implemented via `KeyboardHandler.ts`:
+- Click on canvas to enable keyboard input (blue outline indicates focus)
+- Regular typing uses INJECT_TEXT (type 1) for efficient text injection
+- Special keys (Enter, Backspace, Tab, arrows) use INJECT_KEYCODE (type 0)
+- Modifier combos (Ctrl+C, etc.) use INJECT_KEYCODE with metastate
+- Unfocusing the canvas releases any pressed keys
 
 ### Adding audio support
 1. Set `audio=true` in server args
@@ -177,3 +181,10 @@ No automated tests yet. Manual testing:
     - If reconnect fails after all attempts, verify error screen with phone icon
     - Click "Reconnect" button and verify manual reconnection works
     - Plug in device again after failure, verify auto-connect picks it up
+11. Test keyboard input:
+    - Click on canvas to enable keyboard (blue outline should appear)
+    - Type text in an input field on the device and verify it appears
+    - Test special keys: Enter, Backspace, Tab, Escape, arrow keys
+    - Test modifier combos: Ctrl+A (select all), Ctrl+C (copy), Ctrl+V (paste)
+    - Click outside canvas and verify keyboard is disabled (outline disappears)
+    - Switch between device tabs and verify keyboard is disabled on switch

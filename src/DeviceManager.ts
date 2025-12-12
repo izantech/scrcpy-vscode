@@ -173,6 +173,14 @@ class DeviceSession {
   sendKeyUp(keycode: number): void {
     this.connection?.sendKeyUp(keycode);
   }
+
+  sendText(text: string): void {
+    this.connection?.sendText(text);
+  }
+
+  sendKeyWithMeta(keycode: number, action: 'down' | 'up', metastate: number): void {
+    this.connection?.sendKeyWithMeta(keycode, action, metastate);
+  }
 }
 
 /**
@@ -377,6 +385,20 @@ export class DeviceManager {
    */
   sendKeyUp(keycode: number): void {
     this.getActiveSession()?.sendKeyUp(keycode);
+  }
+
+  /**
+   * Send text to active device
+   */
+  sendText(text: string): void {
+    this.getActiveSession()?.sendText(text);
+  }
+
+  /**
+   * Send key with metastate to active device (for keyboard input with modifiers)
+   */
+  sendKeyWithMeta(keycode: number, action: 'down' | 'up', metastate: number): void {
+    this.getActiveSession()?.sendKeyWithMeta(keycode, action, metastate);
   }
 
   /**

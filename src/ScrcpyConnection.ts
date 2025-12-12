@@ -570,9 +570,9 @@ export class ScrcpyConnection {
   }
 
   /**
-   * Send key event with specific action
+   * Send key event with specific action and metastate
    */
-  private _sendKey(keycode: number, action: number): void {
+  private _sendKey(keycode: number, action: number, metastate: number = 0): void {
     if (!this.controlSocket || !this.isConnected) {
       return;
     }
@@ -590,12 +590,46 @@ export class ScrcpyConnection {
     // Repeat count (32-bit big-endian)
     msg.writeUInt32BE(0, 6);
     // Metastate (32-bit big-endian)
-    msg.writeUInt32BE(0, 10);
+    msg.writeUInt32BE(metastate, 10);
 
     try {
       this.controlSocket.write(msg);
     } catch (error) {
       console.error('Failed to send key event:', error);
+    }
+  }
+
+  /**
+   * Send key event with metastate (for keyboard input with modifiers)
+   */
+  sendKeyWithMeta(keycode: number, action: 'down' | 'up', metastate: number): void {
+    this._sendKey(keycode, action === 'down' ? 0 : 1, metastate);
+  }
+
+  /**
+   * Send text to device using INJECT_TEXT (type 1)
+   * More efficient than INJECT_KEYCODE for regular typing
+   */
+  sendText(text: string): void {
+    if (!this.controlSocket || !this.isConnected || !text || text.length === 0) {
+      return;
+    }
+
+    // Limit to 300 bytes (scrcpy protocol limit)
+    const textBuffer = Buffer.from(text, 'utf8');
+    const maxLength = 300;
+    const textLength = Math.min(textBuffer.length, maxLength);
+
+    // Message format: type(1) + length(4) + text
+    const msg = Buffer.alloc(5 + textLength);
+    msg.writeUInt8(1, 0); // SC_CONTROL_MSG_TYPE_INJECT_TEXT = 1
+    msg.writeUInt32BE(textLength, 1);
+    textBuffer.copy(msg, 5, 0, textLength);
+
+    try {
+      this.controlSocket.write(msg);
+    } catch (error) {
+      console.error('Failed to send text:', error);
     }
   }
 

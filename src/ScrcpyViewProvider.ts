@@ -197,6 +197,8 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
     screenWidth?: number;
     screenHeight?: number;
     keycode?: number;
+    text?: string;
+    metastate?: number;
   }) {
     switch (message.type) {
       case 'touch':
@@ -220,6 +222,24 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
       case 'keyUp':
         if (this._deviceManager && message.keycode !== undefined) {
           this._deviceManager.sendKeyUp(message.keycode);
+        }
+        break;
+
+      case 'injectText':
+        if (this._deviceManager && message.text !== undefined) {
+          this._deviceManager.sendText(message.text);
+        }
+        break;
+
+      case 'injectKeycode':
+        if (this._deviceManager && message.keycode !== undefined &&
+            message.metastate !== undefined &&
+            (message.action === 'down' || message.action === 'up')) {
+          this._deviceManager.sendKeyWithMeta(
+            message.keycode,
+            message.action,
+            message.metastate
+          );
         }
         break;
 
@@ -508,6 +528,11 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
 
     .device-canvas.hidden {
       display: none;
+    }
+
+    .device-canvas.keyboard-focused {
+      outline: 2px solid var(--vscode-focusBorder, #0078d4);
+      outline-offset: -2px;
     }
 
     /* Control toolbar - fixed at bottom */

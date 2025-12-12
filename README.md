@@ -7,6 +7,7 @@ Display and control your Android device screen directly within VS Code, similar 
 - **Multi-device support** with tab bar for switching between devices
 - View Android device screen in real-time
 - Touch input support (tap, drag)
+- **Keyboard input** - click canvas to enable typing, with modifier support (Ctrl, Alt, Shift)
 - **Device control buttons** with long press support (Volume, Back, Home, Recent Apps, Power)
 - **Clipboard sync** - bidirectional clipboard synchronization between host and device
 - **Auto-connect** - automatically connects when devices are plugged in
@@ -89,7 +90,8 @@ scrcpy-vscode/
 │   └── webview/
 │       ├── main.ts           # WebView entry point, tab management
 │       ├── VideoRenderer.ts  # WebCodecs H.264 decoder (with pause/resume)
-│       └── InputHandler.ts   # Touch/mouse event handling
+│       ├── InputHandler.ts   # Touch/mouse event handling
+│       └── KeyboardHandler.ts # Keyboard input (text + keycodes)
 ├── dist/                     # Compiled output
 │   ├── extension.js          # Main extension bundle
 │   └── webview/
@@ -171,7 +173,21 @@ Offset  Size  Field
 - `AKEYCODE_VOLUME_UP` (24) - Volume Up
 - `AKEYCODE_VOLUME_DOWN` (25) - Volume Down
 - `AKEYCODE_POWER` (26) - Power button
+- `AKEYCODE_ENTER` (66) - Enter key
+- `AKEYCODE_DEL` (67) - Backspace key
+- `AKEYCODE_TAB` (61) - Tab key
+- `AKEYCODE_ESCAPE` (111) - Escape key
+- `AKEYCODE_DPAD_UP/DOWN/LEFT/RIGHT` (19-22) - Arrow keys
 - `AKEYCODE_APP_SWITCH` (187) - Recent Apps
+
+**Control Messages (Inject Text) - Variable length:**
+
+```
+Offset  Size  Field
+0       1     Type (1 = INJECT_TEXT)
+1       4     Text length (big-endian)
+5       n     UTF-8 text data (max 300 bytes)
+```
 
 **Control Messages (Set Clipboard) - Variable length:**
 
@@ -272,7 +288,6 @@ npm run watch
 ## Known Limitations
 
 - Video only (audio forwarding not implemented)
-- Text/keyboard input not implemented (only hardware buttons)
 - No rotation handling
 
 ## Future Improvements
@@ -280,7 +295,7 @@ npm run watch
 - [x] ~~Multi-device support~~ ✅ Implemented (tab bar with device switching)
 - [x] ~~Clipboard synchronization~~ ✅ Implemented (bidirectional sync)
 - [x] ~~Hardware button controls~~ ✅ Implemented (with long press support)
-- [ ] Text/keyboard input support
+- [x] ~~Text/keyboard input~~ ✅ Implemented (click canvas to enable, supports modifiers)
 - [ ] Audio forwarding
 - [ ] Screen rotation handling
 - [ ] Wireless ADB support
