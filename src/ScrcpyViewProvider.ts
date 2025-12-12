@@ -182,7 +182,7 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
         break;
 
       case 'openSettings':
-        vscode.commands.executeCommand('workbench.action.openSettings', 'scrcpy');
+        vscode.commands.executeCommand('workbench.action.openSettings', '@id:scrcpy*');
         break;
 
       case 'keyEvent':
