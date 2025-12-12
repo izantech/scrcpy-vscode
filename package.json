@@ -85,11 +85,13 @@
         "scrcpy.clipboardSync": {
           "type": "boolean",
           "default": true,
+          "order": 1,
           "description": "Automatically sync clipboard between host and device"
         },
         "scrcpy.clipboardPollInterval": {
           "type": "number",
           "default": 1000,
+          "order": 2,
           "enum": [500, 1000, 2000, 3000, 5000],
           "enumDescriptions": [
             "500ms - Fastest, slightly higher CPU usage",
