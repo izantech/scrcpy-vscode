@@ -42,7 +42,7 @@ src/
 - **ScrcpyViewProvider.ts**: WebviewView provider
   - Implements `vscode.WebviewViewProvider` for sidebar integration
   - Uses `DeviceManager` for multi-device support
-  - Auto-connects first device when view becomes visible
+  - Auto-connects ALL available devices on startup (USB and WiFi already in ADB)
   - Reads settings from `vscode.workspace.getConfiguration('scrcpy')`
   - Listens for config changes and auto-reconnects
   - Handles message passing between extension and webview
@@ -51,17 +51,18 @@ src/
 
 - **DeviceManager.ts**: Multi-device session management
   - Manages multiple `ScrcpyConnection` instances (one per device)
-  - `getAvailableDevices()`: Lists connected ADB devices with model names
-  - `addDevice()`: Connects to a specific device by serial
+  - `getAvailableDevices()`: Lists connected ADB devices with model names (excludes mDNS duplicates)
+  - `addDevice()`: Connects to a specific device by serial, auto-switches to new device tab
   - `removeDevice()`: Disconnects and removes a device session
-  - `switchToDevice()`: Switches active device (pauses inactive, resumes active)
+  - `switchToDevice()`: Switches active device (pauses inactive, resumes active with stored config)
   - `pairWifi()`: Pairs with a device using Android 11+ Wireless Debugging (`adb pair`)
   - `connectWifi()`: Connects to a device over WiFi using `adb connect`
   - `disconnectWifi()`: Disconnects a WiFi device using `adb disconnect`
   - Prevents duplicate device connections
   - Notifies webview of session list changes
-  - Auto-connect: Polls for new USB devices every 2s and connects automatically (WiFi devices excluded)
-  - Auto-reconnect: Configurable retries (1-5) with 1.5s delay on unexpected disconnect
+  - Device monitoring: Uses `adb track-devices` for efficient push-based detection (no polling)
+  - Auto-connect: New USB devices are connected automatically (WiFi excluded from auto-connect, but included in startup)
+  - Auto-reconnect: Configurable retries (1-5) with 1.5s delay on unexpected disconnect (works for both USB and WiFi)
   - `takeScreenshot()`: Delegates to active session's connection for screenshot capture
 
 - **ScrcpyConnection.ts**: Core connection logic
@@ -87,6 +88,7 @@ src/
   - Extracts codec string from SPS
   - Parses SPS to detect dimension changes on rotation (notifies extension via `dimensionsChanged` message)
   - `fitToContainer()`: Sizes canvas to fit container while maintaining aspect ratio
+  - `configure()`: Skips reconfiguration if dimensions unchanged (preserves canvas content on tab switch)
   - `pause()`: Stops rendering and clears frame queue (for inactive tabs)
   - `resume()`: Resumes rendering
 
@@ -202,10 +204,11 @@ No automated tests yet. Manual testing:
 9. Test auto-connect:
    - Start with no devices connected (should show "No devices connected" with phone icon)
    - Plug in a device via USB
-   - Verify device auto-connects within 2 seconds
+   - Verify device auto-connects instantly (uses `adb track-devices`, no polling delay)
    - Unplug device, verify error screen
    - Plug in again, verify auto-reconnects
    - Toggle `scrcpy.autoConnect` setting and verify behavior changes
+   - Reload window (Cmd+R) and verify all devices (including WiFi) reconnect automatically
 10. Test auto-reconnect:
     - Open Android Studio while connected (restarts ADB)
     - Verify "Reconnecting (attempt 1/2)..." status shows
