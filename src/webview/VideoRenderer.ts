@@ -1,3 +1,5 @@
+import { H264Utils, NALUnitType } from './H264Utils';
+
 /**
  * H.264 video decoder and renderer using WebCodecs API
  *
@@ -165,7 +167,7 @@ export class VideoRenderer {
    * Push encoded video frame data
    * Following scrcpy approach: config packets are stored and prepended to next keyframe
    */
-  pushFrame(data: Uint8Array, isConfig: boolean) {
+  pushFrame(data: Uint8Array, isConfig: boolean, isKeyFrame?: boolean) {
     if (!this.decoder || !this.ctx) {
       return;
     }
@@ -176,7 +178,7 @@ export class VideoRenderer {
       this.pendingConfig = data;
 
       // Parse SPS for dimensions (rotation sends new SPS with new dimensions)
-      const dims = this.parseSPSDimensions(data);
+      const dims = H264Utils.parseSPSDimensions(data);
       if (dims && (dims.width !== this.width || dims.height !== this.height)) {
         this.configure(dims.width, dims.height);
         this.onDimensionsChanged?.(dims.width, dims.height);
@@ -185,10 +187,10 @@ export class VideoRenderer {
     }
 
     // Check if this is a keyframe by looking at NAL type
-    const isKeyFrame = this.containsKeyFrame(data);
+    const isKey = isKeyFrame ?? this.containsKeyFrame(data);
 
     // Configure codec on first keyframe with config
-    if (!this.codecConfigured && isKeyFrame && this.pendingConfig) {
+    if (!this.codecConfigured && isKey && this.pendingConfig) {
       this.configureCodec();
     }
 
@@ -200,13 +202,13 @@ export class VideoRenderer {
     try {
       // Merge config with keyframe (like sc_packet_merger_merge)
       let frameData = data;
-      if (isKeyFrame && this.pendingConfig) {
+      if (isKey && this.pendingConfig) {
         frameData = this.mergeConfigWithFrame(this.pendingConfig, data);
         this.pendingConfig = null;
       }
 
       const chunk = new EncodedVideoChunk({
-        type: isKeyFrame ? 'key' : 'delta',
+        type: isKey ? 'key' : 'delta',
         timestamp: performance.now() * 1000, // microseconds
         data: frameData
       });
@@ -228,7 +230,7 @@ export class VideoRenderer {
           (data[i] === 0 && data[i + 1] === 0 && data[i + 2] === 0 && data[i + 3] === 1)) {
         const offset = data[i + 2] === 1 ? 3 : 4;
         const nalType = data[i + offset] & 0x1F;
-        if (nalType === 5) { // IDR
+        if (nalType === NALUnitType.IDR) { // IDR
           return true;
         }
       }
@@ -247,7 +249,7 @@ export class VideoRenderer {
 
     try {
       // Extract profile info from SPS for codec string
-      const spsInfo = this.extractSPSInfo(this.pendingConfig);
+      const spsInfo = H264Utils.extractSPSInfo(this.pendingConfig);
 
       const codecString = spsInfo
         ? `avc1.${spsInfo.profile.toString(16).padStart(2, '0')}${spsInfo.constraint.toString(16).padStart(2, '0')}${spsInfo.level.toString(16).padStart(2, '0')}`
@@ -270,151 +272,9 @@ export class VideoRenderer {
     }
   }
 
-  /**
-   * Parse SPS to extract video dimensions
-   */
-  private parseSPSDimensions(config: Uint8Array): { width: number; height: number } | null {
-    // Find SPS NAL unit (type 7)
-    for (let i = 0; i < config.length - 4; i++) {
-      let offset = 0;
-      if (config[i] === 0 && config[i + 1] === 0 && config[i + 2] === 1) {
-        offset = 3;
-      } else if (config[i] === 0 && config[i + 1] === 0 && config[i + 2] === 0 && config[i + 3] === 1) {
-        offset = 4;
-      }
 
-      if (offset > 0) {
-        const nalType = config[i + offset] & 0x1F;
-        if (nalType === 7) {
-          // Found SPS, parse it
-          const spsStart = i + offset + 1;
-          return this.decodeSPSDimensions(config.subarray(spsStart));
-        }
-      }
-    }
-    return null;
-  }
 
-  /**
-   * Decode SPS NAL unit to extract dimensions (simplified parser)
-   */
-  private decodeSPSDimensions(sps: Uint8Array): { width: number; height: number } | null {
-    try {
-      const reader = new BitReader(sps);
 
-      const profileIdc = reader.readBits(8);
-      reader.readBits(8); // constraint_set flags + reserved
-      reader.readBits(8); // level_idc
-
-      reader.readUE(); // seq_parameter_set_id
-
-      // High profile has additional fields
-      if (profileIdc === 100 || profileIdc === 110 || profileIdc === 122 ||
-          profileIdc === 244 || profileIdc === 44 || profileIdc === 83 ||
-          profileIdc === 86 || profileIdc === 118 || profileIdc === 128) {
-        const chromaFormatIdc = reader.readUE();
-        if (chromaFormatIdc === 3) {
-          reader.readBits(1); // separate_colour_plane_flag
-        }
-        reader.readUE(); // bit_depth_luma_minus8
-        reader.readUE(); // bit_depth_chroma_minus8
-        reader.readBits(1); // qpprime_y_zero_transform_bypass_flag
-        const seqScalingMatrixPresent = reader.readBits(1);
-        if (seqScalingMatrixPresent) {
-          const count = chromaFormatIdc !== 3 ? 8 : 12;
-          for (let i = 0; i < count; i++) {
-            if (reader.readBits(1)) { // seq_scaling_list_present_flag
-              this.skipScalingList(reader, i < 6 ? 16 : 64);
-            }
-          }
-        }
-      }
-
-      reader.readUE(); // log2_max_frame_num_minus4
-      const picOrderCntType = reader.readUE();
-      if (picOrderCntType === 0) {
-        reader.readUE(); // log2_max_pic_order_cnt_lsb_minus4
-      } else if (picOrderCntType === 1) {
-        reader.readBits(1); // delta_pic_order_always_zero_flag
-        reader.readSE(); // offset_for_non_ref_pic
-        reader.readSE(); // offset_for_top_to_bottom_field
-        const numRefFrames = reader.readUE();
-        for (let i = 0; i < numRefFrames; i++) {
-          reader.readSE(); // offset_for_ref_frame
-        }
-      }
-
-      reader.readUE(); // max_num_ref_frames
-      reader.readBits(1); // gaps_in_frame_num_value_allowed_flag
-
-      const picWidthInMbsMinus1 = reader.readUE();
-      const picHeightInMapUnitsMinus1 = reader.readUE();
-      const frameMbsOnlyFlag = reader.readBits(1);
-
-      if (!frameMbsOnlyFlag) {
-        reader.readBits(1); // mb_adaptive_frame_field_flag
-      }
-
-      reader.readBits(1); // direct_8x8_inference_flag
-
-      let cropLeft = 0, cropRight = 0, cropTop = 0, cropBottom = 0;
-      const frameCroppingFlag = reader.readBits(1);
-      if (frameCroppingFlag) {
-        cropLeft = reader.readUE();
-        cropRight = reader.readUE();
-        cropTop = reader.readUE();
-        cropBottom = reader.readUE();
-      }
-
-      // Calculate dimensions
-      const width = (picWidthInMbsMinus1 + 1) * 16 - (cropLeft + cropRight) * 2;
-      const height = (picHeightInMapUnitsMinus1 + 1) * 16 * (2 - frameMbsOnlyFlag) - (cropTop + cropBottom) * 2 * (2 - frameMbsOnlyFlag);
-
-      return { width, height };
-    } catch {
-      return null;
-    }
-  }
-
-  private skipScalingList(reader: BitReader, size: number): void {
-    let lastScale = 8;
-    let nextScale = 8;
-    for (let i = 0; i < size; i++) {
-      if (nextScale !== 0) {
-        const deltaScale = reader.readSE();
-        nextScale = (lastScale + deltaScale + 256) % 256;
-      }
-      lastScale = nextScale === 0 ? lastScale : nextScale;
-    }
-  }
-
-  /**
-   * Extract SPS info (profile, constraint, level) from config data
-   */
-  private extractSPSInfo(config: Uint8Array): { profile: number; constraint: number; level: number } | null {
-    // Find SPS NAL unit (type 7)
-    for (let i = 0; i < config.length - 4; i++) {
-      let offset = 0;
-      if (config[i] === 0 && config[i + 1] === 0 && config[i + 2] === 1) {
-        offset = 3;
-      } else if (config[i] === 0 && config[i + 1] === 0 && config[i + 2] === 0 && config[i + 3] === 1) {
-        offset = 4;
-      }
-
-      if (offset > 0) {
-        const nalType = config[i + offset] & 0x1F;
-        if (nalType === 7 && i + offset + 3 < config.length) {
-          // SPS found - bytes after NAL header are profile_idc, constraint_set_flags, level_idc
-          return {
-            profile: config[i + offset + 1],
-            constraint: config[i + offset + 2],
-            level: config[i + offset + 3]
-          };
-        }
-      }
-    }
-    return null;
-  }
 
   /**
    * Merge config packet with frame data (like sc_packet_merger_merge)
@@ -525,51 +385,3 @@ export class VideoRenderer {
   }
 }
 
-/**
- * Bit reader for parsing H.264 SPS (Exp-Golomb coded)
- */
-class BitReader {
-  private data: Uint8Array;
-  private byteOffset = 0;
-  private bitOffset = 0;
-
-  constructor(data: Uint8Array) {
-    this.data = data;
-  }
-
-  readBits(count: number): number {
-    let result = 0;
-    for (let i = 0; i < count; i++) {
-      if (this.byteOffset >= this.data.length) {
-        throw new Error('End of data');
-      }
-      const bit = (this.data[this.byteOffset] >> (7 - this.bitOffset)) & 1;
-      result = (result << 1) | bit;
-      this.bitOffset++;
-      if (this.bitOffset === 8) {
-        this.bitOffset = 0;
-        this.byteOffset++;
-      }
-    }
-    return result;
-  }
-
-  // Unsigned Exp-Golomb
-  readUE(): number {
-    let leadingZeros = 0;
-    while (this.readBits(1) === 0) {
-      leadingZeros++;
-      if (leadingZeros > 31) throw new Error('Invalid UE');
-    }
-    if (leadingZeros === 0) return 0;
-    return (1 << leadingZeros) - 1 + this.readBits(leadingZeros);
-  }
-
-  // Signed Exp-Golomb
-  readSE(): number {
-    const value = this.readUE();
-    if (value === 0) return 0;
-    const sign = (value & 1) ? 1 : -1;
-    return sign * Math.ceil(value / 2);
-  }
-}

@@ -26,6 +26,7 @@ type VideoFrameCallback = (
   deviceId: string,
   data: Uint8Array,
   isConfig: boolean,
+  isKeyFrame: boolean,
   width?: number,
   height?: number
 ) => void;
@@ -59,6 +60,7 @@ class DeviceSession {
   private lastWidth = 0;
   private lastHeight = 0;
   private lastConfigData: Uint8Array | null = null;
+  private lastKeyFrameData: Uint8Array | null = null;
 
   constructor(
     deviceInfo: DeviceInfo,
@@ -76,19 +78,22 @@ class DeviceSession {
 
   async connect(): Promise<void> {
     this.connection = new ScrcpyConnection(
-      (data, isConfig, width, height) => {
+      (data, isConfig, isKeyFrame, width, height) => {
         // Store dimensions and config data for replay on resume
         if (width && height) {
           this.lastWidth = width;
           this.lastHeight = height;
         }
-        if (isConfig) {
+        if (isConfig && data.length > 0) {
           this.lastConfigData = data;
+        }
+        if (isKeyFrame && data.length > 0) {
+          this.lastKeyFrameData = data;
         }
 
         // Only forward frames if not paused
         if (!this.isPaused) {
-          this.videoFrameCallback(this.deviceId, data, isConfig, width, height);
+          this.videoFrameCallback(this.deviceId, data, isConfig, isKeyFrame, width, height);
         }
       },
       (status) => this.statusCallback(this.deviceId, status),
@@ -177,8 +182,19 @@ class DeviceSession {
     // Send config with dimensions so the webview knows this device is active
     // The canvas retains its last rendered frame, and fresh frames from server
     // will update it (delta frames are discarded until next keyframe)
-    if (this.lastWidth && this.lastHeight && this.lastConfigData) {
-      this.videoFrameCallback(this.deviceId, this.lastConfigData, true, this.lastWidth, this.lastHeight);
+    if (this.lastWidth && this.lastHeight) {
+      // First re-send config/dimensions
+      if (this.lastConfigData) {
+        this.videoFrameCallback(this.deviceId, this.lastConfigData, true, false, this.lastWidth, this.lastHeight);
+      } else {
+        // Just dimensions
+        this.videoFrameCallback(this.deviceId, new Uint8Array(0), true, false, this.lastWidth, this.lastHeight);
+      }
+
+      // Then re-send last keyframe to ensure immediate display
+      if (this.lastKeyFrameData) {
+        this.videoFrameCallback(this.deviceId, this.lastKeyFrameData, false, true);
+      }
     }
   }
 

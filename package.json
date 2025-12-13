@@ -293,6 +293,8 @@
     "lint": "eslint src --ext ts"
   },
   "dependencies": {
+    "buffer": "^6.0.3",
+    "h264-sps-parser": "^0.2.1",
     "opus-decoder": "^0.7.11"
   },
   "devDependencies": {

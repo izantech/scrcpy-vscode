@@ -2,11 +2,14 @@ import * as net from 'net';
 import * as fs from 'fs';
 import * as path from 'path';
 import { exec, spawn, ChildProcess } from 'child_process';
+import { ScrcpyProtocol } from './ScrcpyProtocol';
+
 
 // Type for video frame callback
 type VideoFrameCallback = (
   data: Uint8Array,
   isConfig: boolean,
+  isKeyFrame: boolean,
   width?: number,
   height?: number
 ) => void;
@@ -428,11 +431,11 @@ export class ScrcpyConnection {
       while (buffer.length > 0) {
         if (!headerReceived) {
           // First, receive device name (64 bytes)
-          if (buffer.length < 64) break;
+          if (buffer.length < ScrcpyProtocol.DEVICE_NAME_LENGTH) break;
 
-          const deviceName = buffer.subarray(0, 64).toString('utf8').replace(/\0+$/, '');
+          const deviceName = buffer.subarray(0, ScrcpyProtocol.DEVICE_NAME_LENGTH).toString('utf8').replace(/\0+$/, '');
           console.log('Device name:', deviceName);
-          buffer = buffer.subarray(64);
+          buffer = buffer.subarray(ScrcpyProtocol.DEVICE_NAME_LENGTH);
           headerReceived = true;
           continue;
         }
@@ -450,7 +453,7 @@ export class ScrcpyConnection {
           codecReceived = true;
 
           // Notify webview of video dimensions
-          this.onVideoFrame(new Uint8Array(0), true, this.deviceWidth, this.deviceHeight);
+          this.onVideoFrame(new Uint8Array(0), true, false, this.deviceWidth, this.deviceHeight);
           continue;
         }
 
@@ -459,7 +462,7 @@ export class ScrcpyConnection {
         // H.264 codec_id = 0x68323634 ("h264")
         if (buffer.length >= 12) {
           const possibleCodecId = buffer.readUInt32BE(0);
-          if (possibleCodecId === 0x68323634) {
+          if (possibleCodecId === ScrcpyProtocol.VIDEO_CODEC_ID_H264) {
             const newWidth = buffer.readUInt32BE(4);
             const newHeight = buffer.readUInt32BE(8);
 
@@ -472,7 +475,7 @@ export class ScrcpyConnection {
                 buffer = buffer.subarray(12);
 
                 // Notify webview of new dimensions
-                this.onVideoFrame(new Uint8Array(0), true, this.deviceWidth, this.deviceHeight);
+                this.onVideoFrame(new Uint8Array(0), true, false, this.deviceWidth, this.deviceHeight);
                 continue;
               }
             }
@@ -488,14 +491,14 @@ export class ScrcpyConnection {
         if (buffer.length < 12 + packetSize) break;
 
         const isConfig = (ptsFlags & (1n << 63n)) !== 0n;
-        // const isKeyFrame = (ptsFlags & (1n << 62n)) !== 0n;
+        const isKeyFrame = (ptsFlags & (1n << 62n)) !== 0n;
         // const pts = ptsFlags & ((1n << 62n) - 1n);
 
         const packetData = buffer.subarray(12, 12 + packetSize);
         buffer = buffer.subarray(12 + packetSize);
 
         // Send to webview
-        this.onVideoFrame(new Uint8Array(packetData), isConfig);
+        this.onVideoFrame(new Uint8Array(packetData), isConfig, isKeyFrame);
       }
     });
 
@@ -604,14 +607,14 @@ export class ScrcpyConnection {
     const msg = Buffer.alloc(32);
 
     // Type: INJECT_TOUCH_EVENT = 2
-    msg.writeUInt8(2, 0);
+    msg.writeUInt8(ScrcpyProtocol.ControlMessageType.INJECT_TOUCH_EVENT, 0);
 
     // Action
     let actionCode: number;
     switch (action) {
-      case 'down': actionCode = 0; break; // AMOTION_EVENT_ACTION_DOWN
-      case 'move': actionCode = 2; break; // AMOTION_EVENT_ACTION_MOVE
-      case 'up': actionCode = 1; break;   // AMOTION_EVENT_ACTION_UP
+      case 'down': actionCode = ScrcpyProtocol.MotionEventAction.DOWN; break; // AMOTION_EVENT_ACTION_DOWN
+      case 'move': actionCode = ScrcpyProtocol.MotionEventAction.MOVE; break; // AMOTION_EVENT_ACTION_MOVE
+      case 'up': actionCode = ScrcpyProtocol.MotionEventAction.UP; break;   // AMOTION_EVENT_ACTION_UP
     }
     msg.writeUInt8(actionCode, 1);
 
@@ -662,7 +665,7 @@ export class ScrcpyConnection {
 
     // Control message format: type (1) + boolean (1) = 2 bytes
     const msg = Buffer.alloc(2);
-    msg.writeUInt8(10, 0); // TYPE_SET_DISPLAY_POWER = 10
+    msg.writeUInt8(ScrcpyProtocol.ControlMessageType.SET_DISPLAY_POWER, 0); // TYPE_SET_DISPLAY_POWER = 10
     msg.writeUInt8(on ? 1 : 0, 1);
 
     try {
@@ -682,7 +685,7 @@ export class ScrcpyConnection {
 
     // Control message format: type (1) = 1 byte only
     const msg = Buffer.alloc(1);
-    msg.writeUInt8(11, 0); // TYPE_ROTATE_DEVICE = 11
+    msg.writeUInt8(ScrcpyProtocol.ControlMessageType.ROTATE_DEVICE, 0); // TYPE_ROTATE_DEVICE = 11
 
     try {
       this.controlSocket.write(msg);
@@ -718,7 +721,7 @@ export class ScrcpyConnection {
     const msg = Buffer.alloc(14);
 
     // Type: INJECT_KEYCODE = 0
-    msg.writeUInt8(0, 0);
+    msg.writeUInt8(ScrcpyProtocol.ControlMessageType.INJECT_KEYCODE, 0);
     // Action: down = 0, up = 1
     msg.writeUInt8(action, 1);
     // Keycode (32-bit big-endian)
@@ -758,7 +761,7 @@ export class ScrcpyConnection {
 
     // Message format: type(1) + length(4) + text
     const msg = Buffer.alloc(5 + textLength);
-    msg.writeUInt8(1, 0); // SC_CONTROL_MSG_TYPE_INJECT_TEXT = 1
+    msg.writeUInt8(ScrcpyProtocol.ControlMessageType.INJECT_TEXT, 0); // SC_CONTROL_MSG_TYPE_INJECT_TEXT = 1
     msg.writeUInt32BE(textLength, 1);
     textBuffer.copy(msg, 5, 0, textLength);
 
@@ -789,7 +792,7 @@ export class ScrcpyConnection {
       const msgType = this.deviceMsgBuffer.readUInt8(0);
 
       switch (msgType) {
-        case 0: { // DEVICE_MSG_TYPE_CLIPBOARD
+        case ScrcpyProtocol.DeviceMessageType.CLIPBOARD: { // DEVICE_MSG_TYPE_CLIPBOARD
           if (this.deviceMsgBuffer.length < 5) return; // Need type + length
           const textLength = this.deviceMsgBuffer.readUInt32BE(1);
           if (this.deviceMsgBuffer.length < 5 + textLength) return; // Need full message
@@ -801,14 +804,14 @@ export class ScrcpyConnection {
           break;
         }
 
-        case 1: { // DEVICE_MSG_TYPE_ACK_CLIPBOARD
+        case ScrcpyProtocol.DeviceMessageType.ACK_CLIPBOARD: { // DEVICE_MSG_TYPE_ACK_CLIPBOARD
           if (this.deviceMsgBuffer.length < 9) return; // Need type + sequence
           this.deviceMsgBuffer = this.deviceMsgBuffer.subarray(9);
           // ACK received, clipboard set successfully
           break;
         }
 
-        case 2: { // DEVICE_MSG_TYPE_UHID_OUTPUT
+        case ScrcpyProtocol.DeviceMessageType.UHID_OUTPUT: { // DEVICE_MSG_TYPE_UHID_OUTPUT
           if (this.deviceMsgBuffer.length < 5) return; // Need type + id + length
           const dataLength = this.deviceMsgBuffer.readUInt16BE(3);
           if (this.deviceMsgBuffer.length < 5 + dataLength) return;
@@ -894,7 +897,7 @@ export class ScrcpyConnection {
 
     // Message format: type(1) + sequence(8) + paste(1) + length(4) + text
     const msg = Buffer.alloc(14 + textLength);
-    msg.writeUInt8(9, 0); // SC_CONTROL_MSG_TYPE_SET_CLIPBOARD = 9
+    msg.writeUInt8(ScrcpyProtocol.ControlMessageType.SET_CLIPBOARD, 0); // SC_CONTROL_MSG_TYPE_SET_CLIPBOARD = 9
     msg.writeBigUInt64BE(this.clipboardSequence++, 1);
     msg.writeUInt8(paste ? 1 : 0, 9); // paste flag
     msg.writeUInt32BE(textLength, 10);

@@ -299,6 +299,7 @@ function handleVideoFrame(message: {
   deviceId: string;
   data: number[];
   isConfig: boolean;
+  isKeyFrame: boolean;
   width?: number;
   height?: number;
 }) {
@@ -318,7 +319,7 @@ function handleVideoFrame(message: {
   // Push frame data
   if (message.data && message.data.length > 0) {
     const frameData = new Uint8Array(message.data);
-    session.videoRenderer.pushFrame(frameData, message.isConfig);
+    session.videoRenderer.pushFrame(frameData, message.isConfig, message.isKeyFrame);
 
     // Hide status and show UI once we're receiving frames for active device
     if (message.deviceId === activeDeviceId && session.canvas.width > 0) {

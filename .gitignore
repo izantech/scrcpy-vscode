@@ -28,3 +28,7 @@ Thumbs.db
 # Environment
 .env
 .env.local
+
+# Gemini
+.gemini-clipboard/
+.gemini/
