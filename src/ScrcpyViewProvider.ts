@@ -93,7 +93,7 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
           });
           this._deviceManager.updateConfig(this._getConfig());
           await this._deviceManager.disconnectAll();
-          await this._autoConnectFirstDevice();
+          await this._autoConnectAllDevices();
         }
       }
     }, null, this._disposables);
@@ -193,26 +193,37 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
       vscode.env.clipboard
     );
 
-    this._autoConnectFirstDevice();
+    this._autoConnectAllDevices();
 
-    // Start monitoring for new devices (auto-connect)
+    // Start monitoring for new USB devices (auto-connect)
     this._deviceManager.startDeviceMonitoring();
   }
 
-  private async _autoConnectFirstDevice() {
+  private async _autoConnectAllDevices() {
     const signal = this._abortController?.signal;
     if (!this._deviceManager) return;
 
     try {
       const devices = await this._deviceManager.getAvailableDevices();
       if (signal?.aborted || !this._deviceManager) return;
-      if (devices.length > 0) {
-        await this._deviceManager.addDevice(devices[0]);
-      } else {
+
+      if (devices.length === 0) {
         this._view?.webview.postMessage({
           type: 'error',
           message: 'No Android devices found.\n\nPlease connect a device and enable USB debugging.'
         });
+        return;
+      }
+
+      // Connect to all available devices (including WiFi devices already in ADB)
+      // This ensures WiFi connections persist across window reloads
+      for (const device of devices) {
+        if (signal?.aborted || !this._deviceManager) return;
+        try {
+          await this._deviceManager.addDevice(device);
+        } catch {
+          // Continue connecting other devices even if one fails
+        }
       }
     } catch (error) {
       if (signal?.aborted || !this._deviceManager) return;
