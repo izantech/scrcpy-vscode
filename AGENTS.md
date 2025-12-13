@@ -2,6 +2,8 @@
 
 This file provides guidance to AI coding assistants when working with this repository.
 
+For protocol details, architecture diagrams, and low-level implementation notes, see [INTERNALS.md](./INTERNALS.md).
+
 ## Project Overview
 
 scrcpy-vscode is a VS Code extension that mirrors Android device screens directly in the editor. It uses the scrcpy server component running on the Android device and implements a custom client using WebCodecs for H.264 video decoding and Opus audio playback.
