@@ -55,10 +55,11 @@ class DeviceSession {
   private isDisposed = false;
   private static readonly RETRY_DELAY_MS = 1500;
 
-  // Store last video dimensions and config for replay on resume
+  // Store last video dimensions, config, and keyframe for replay on resume
   private lastWidth = 0;
   private lastHeight = 0;
   private lastConfigData: Uint8Array | null = null;
+  private lastKeyframeData: Uint8Array | null = null;
 
   constructor(
     deviceInfo: DeviceInfo,
@@ -84,6 +85,9 @@ class DeviceSession {
         }
         if (isConfig) {
           this.lastConfigData = data;
+        } else if (this.containsKeyFrame(data)) {
+          // Store keyframes for replay on resume
+          this.lastKeyframeData = data;
         }
 
         // Only forward frames if not paused
@@ -174,16 +178,40 @@ class DeviceSession {
   resume(): void {
     this.isPaused = false;
 
-    // Replay stored config and dimensions so the renderer can initialize
+    // Replay stored config, dimensions, and keyframe so the renderer can display immediately
     if (this.lastWidth && this.lastHeight) {
-      // Send config packet first if we have one
+      // Send config packet first (SPS/PPS) with dimensions
       if (this.lastConfigData) {
         this.videoFrameCallback(this.deviceId, this.lastConfigData, true, this.lastWidth, this.lastHeight);
-      } else {
-        // Send empty frame with dimensions to trigger renderer configuration
-        this.videoFrameCallback(this.deviceId, new Uint8Array(0), false, this.lastWidth, this.lastHeight);
+      }
+
+      // Send last keyframe so decoder can display something immediately
+      // Without this, we'd have to wait for the next keyframe from the server
+      if (this.lastKeyframeData) {
+        this.videoFrameCallback(this.deviceId, this.lastKeyframeData, false, this.lastWidth, this.lastHeight);
       }
     }
+  }
+
+  /**
+   * Check if data contains a keyframe (IDR NAL unit)
+   */
+  private containsKeyFrame(data: Uint8Array): boolean {
+    // Look for IDR NAL unit (type 5) in the data
+    for (let i = 0; i < data.length - 4; i++) {
+      // Find start code (0x000001 or 0x00000001)
+      if ((data[i] === 0 && data[i + 1] === 0 && data[i + 2] === 1) ||
+          (data[i] === 0 && data[i + 1] === 0 && data[i + 2] === 0 && data[i + 3] === 1)) {
+        const offset = data[i + 2] === 1 ? 3 : 4;
+        if (i + offset < data.length) {
+          const nalType = data[i + offset] & 0x1F;
+          if (nalType === 5) { // IDR
+            return true;
+          }
+        }
+      }
+    }
+    return false;
   }
 
   async disconnect(): Promise<void> {
