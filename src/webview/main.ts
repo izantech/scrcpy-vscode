@@ -305,13 +305,11 @@ function handleVideoFrame(message: {
   const session = sessions.get(message.deviceId);
   if (!session) return;
 
-  // Configure renderer with dimensions
+  // Configure renderer with dimensions (only sent with first frame)
   if (message.width && message.height) {
     session.videoRenderer.configure(message.width, message.height);
 
     // When we receive dimensions, this device should be shown
-    // (DeviceManager only sends frames for active sessions)
-    // Hide all other canvases and show this one
     sessions.forEach((s, id) => {
       if (id === message.deviceId) {
         s.canvas.classList.remove('hidden');
@@ -321,22 +319,23 @@ function handleVideoFrame(message: {
       }
     });
 
-    // Update active device tracking
     activeDeviceId = message.deviceId;
     updateRotateButton(message.width, message.height);
-
-    // Show UI elements on first frame
-    tabBar.classList.remove('hidden');
-    hideStatus();
-    if (controlToolbar) {
-      controlToolbar.classList.remove('hidden');
-    }
   }
 
   // Push frame data
   if (message.data && message.data.length > 0) {
     const frameData = new Uint8Array(message.data);
     session.videoRenderer.pushFrame(frameData, message.isConfig);
+
+    // Hide status and show UI once we're receiving frames for active device
+    if (message.deviceId === activeDeviceId && session.canvas.width > 0) {
+      tabBar.classList.remove('hidden');
+      hideStatus();
+      if (controlToolbar) {
+        controlToolbar.classList.remove('hidden');
+      }
+    }
   }
 }
 
