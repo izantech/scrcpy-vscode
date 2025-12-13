@@ -309,18 +309,10 @@ function handleVideoFrame(message: {
   if (message.width && message.height) {
     session.videoRenderer.configure(message.width, message.height);
 
-    // When we receive dimensions, this device should be shown
-    sessions.forEach((s, id) => {
-      if (id === message.deviceId) {
-        s.canvas.classList.remove('hidden');
-        s.videoRenderer.resume();
-      } else {
-        s.canvas.classList.add('hidden');
-      }
-    });
-
-    activeDeviceId = message.deviceId;
-    updateRotateButton(message.width, message.height);
+    // Update rotate button if this is the active device
+    if (message.deviceId === activeDeviceId) {
+      updateRotateButton(message.width, message.height);
+    }
   }
 
   // Push frame data
@@ -330,6 +322,7 @@ function handleVideoFrame(message: {
 
     // Hide status and show UI once we're receiving frames for active device
     if (message.deviceId === activeDeviceId && session.canvas.width > 0) {
+      session.canvas.classList.remove('hidden');
       tabBar.classList.remove('hidden');
       hideStatus();
       if (controlToolbar) {
@@ -414,16 +407,6 @@ function updateSessionList(sessionList: SessionInfo[]) {
       // Create new session UI
       session = createDeviceSession(sessionInfo.deviceId, sessionInfo.deviceInfo);
     }
-
-    // Update tab active state
-    if (sessionInfo.isActive) {
-      if (activeDeviceId !== sessionInfo.deviceId) {
-        switchToDevice(sessionInfo.deviceId);
-      }
-      session.tabElement.classList.add('active');
-    } else {
-      session.tabElement.classList.remove('active');
-    }
   }
 
   // Remove sessions that no longer exist
@@ -432,6 +415,12 @@ function updateSessionList(sessionList: SessionInfo[]) {
     if (!currentIds.has(deviceId)) {
       removeDeviceSession(deviceId);
     }
+  }
+
+  // Switch to the active device (always call to ensure proper state)
+  const activeSession = sessionList.find(s => s.isActive);
+  if (activeSession) {
+    switchToDevice(activeSession.deviceId);
   }
 
   // Show tab bar if we have sessions
@@ -616,17 +605,16 @@ function switchToDevice(deviceId: string) {
   const newSession = sessions.get(deviceId);
   if (!newSession) return;
 
-  // Pause and hide old active canvas
-  if (activeDeviceId && activeDeviceId !== deviceId) {
-    const oldSession = sessions.get(activeDeviceId);
-    if (oldSession) {
-      oldSession.canvas.classList.add('hidden');
-      oldSession.tabElement.classList.remove('active');
-      oldSession.videoRenderer.pause();
-      oldSession.audioRenderer.pause();
-      oldSession.keyboardHandler.setFocused(false);
+  // Pause and hide ALL other canvases (not just the previous active one)
+  sessions.forEach((s, id) => {
+    if (id !== deviceId) {
+      s.canvas.classList.add('hidden');
+      s.tabElement.classList.remove('active');
+      s.videoRenderer.pause();
+      s.audioRenderer.pause();
+      s.keyboardHandler.setFocused(false);
     }
-  }
+  });
 
   // Activate new session
   activeDeviceId = deviceId;
@@ -634,9 +622,13 @@ function switchToDevice(deviceId: string) {
   newSession.videoRenderer.resume();
   newSession.audioRenderer.resume();
 
-  // Only show canvas if it has received video (has dimensions)
+  // Show canvas if it has received video (has dimensions)
   if (newSession.canvas.width > 0 && newSession.canvas.height > 0) {
     newSession.canvas.classList.remove('hidden');
+    hideStatus();
+    if (controlToolbar) {
+      controlToolbar.classList.remove('hidden');
+    }
   }
 }
 
