@@ -1,5 +1,5 @@
 import { ScrcpyConnection, ScrcpyConfig, ClipboardAPI } from './ScrcpyConnection';
-import { exec, execSync, spawn } from 'child_process';
+import { exec, execSync, spawn, ChildProcess } from 'child_process';
 
 /**
  * Device information
@@ -246,10 +246,9 @@ class DeviceSession {
 export class DeviceManager {
   private sessions = new Map<string, DeviceSession>();
   private activeDeviceId: string | null = null;
-  private deviceMonitorInterval: NodeJS.Timeout | null = null;
+  private trackDevicesProcess: ChildProcess | null = null;
   private knownDeviceSerials = new Set<string>();
   private isMonitoring = false;
-  private static readonly DEVICE_POLL_INTERVAL_MS = 2000;
 
   constructor(
     private videoFrameCallback: VideoFrameCallback,
@@ -691,7 +690,8 @@ export class DeviceManager {
   }
 
   /**
-   * Start monitoring for new devices (auto-connect)
+   * Start monitoring for new devices using adb track-devices
+   * This is more efficient than polling - ADB pushes device changes to us
    */
   async startDeviceMonitoring(): Promise<void> {
     if (this.isMonitoring) return;
@@ -703,9 +703,7 @@ export class DeviceManager {
       this.knownDeviceSerials.add(session.deviceInfo.serial);
     }
 
-    // Only mark existing ADB devices as "known" if we have active sessions
-    // This prevents the race condition where a device plugged in during startup
-    // gets marked as known and never auto-connects
+    // Mark existing ADB devices as known if we have active sessions
     if (this.sessions.size > 0) {
       const devices = await this.getAvailableDevices();
       for (const device of devices) {
@@ -713,9 +711,125 @@ export class DeviceManager {
       }
     }
 
-    this.deviceMonitorInterval = setInterval(() => {
-      this.checkForNewDevices();
-    }, DeviceManager.DEVICE_POLL_INTERVAL_MS);
+    // Start adb track-devices process
+    this.startTrackDevices();
+  }
+
+  /**
+   * Start the adb track-devices process
+   */
+  private startTrackDevices(): void {
+    if (this.trackDevicesProcess) {
+      this.trackDevicesProcess.kill();
+    }
+
+    this.trackDevicesProcess = spawn('adb', ['track-devices']);
+    let buffer = '';
+
+    this.trackDevicesProcess.stdout?.on('data', (data: Buffer) => {
+      buffer += data.toString();
+
+      // Parse track-devices output: <4-char hex length><device list>
+      while (buffer.length >= 4) {
+        const lengthHex = buffer.substring(0, 4);
+        const length = parseInt(lengthHex, 16);
+
+        if (isNaN(length)) {
+          // Invalid data, clear buffer
+          buffer = '';
+          break;
+        }
+
+        if (buffer.length < 4 + length) {
+          // Not enough data yet, wait for more
+          break;
+        }
+
+        const deviceList = buffer.substring(4, 4 + length);
+        buffer = buffer.substring(4 + length);
+
+        // Process device list
+        this.handleDeviceListUpdate(deviceList);
+      }
+    });
+
+    this.trackDevicesProcess.on('error', (error) => {
+      console.error('track-devices error:', error);
+    });
+
+    this.trackDevicesProcess.on('close', () => {
+      // Restart if still monitoring (process died unexpectedly)
+      if (this.isMonitoring) {
+        setTimeout(() => this.startTrackDevices(), 1000);
+      }
+    });
+  }
+
+  /**
+   * Handle device list update from track-devices
+   */
+  private async handleDeviceListUpdate(deviceList: string): Promise<void> {
+    if (!this.config.autoConnect) return;
+
+    // Parse device list (same format as 'adb devices' output, without header)
+    const lines = deviceList.trim().split('\n').filter(line => line.length > 0);
+    const currentDevices: DeviceInfo[] = [];
+
+    for (const line of lines) {
+      const parts = line.trim().split(/\s+/);
+      if (parts.length >= 2 && parts[1] === 'device') {
+        const serial = parts[0];
+        // Skip mDNS devices
+        if (serial.includes('._adb-tls-connect._tcp')) {
+          continue;
+        }
+        currentDevices.push({
+          serial,
+          name: serial, // We'll get the model name when connecting
+          model: undefined
+        });
+      }
+    }
+
+    const currentSerials = new Set(currentDevices.map(d => d.serial));
+
+    // Find new USB devices and auto-connect
+    for (const device of currentDevices) {
+      // Skip WiFi devices for auto-connect
+      if (this.isWifiDevice(device.serial)) {
+        continue;
+      }
+
+      if (!this.knownDeviceSerials.has(device.serial) && !this.isDeviceConnected(device.serial)) {
+        // Get device model name
+        try {
+          const modelOutput = execSync(`adb -s ${device.serial} shell getprop ro.product.model`, {
+            timeout: 5000,
+            encoding: 'utf8'
+          }).trim();
+          device.name = modelOutput || device.serial;
+          device.model = modelOutput || undefined;
+        } catch {
+          // Keep serial as name
+        }
+
+        this.statusCallback('', `Connecting to ${device.name}...`);
+
+        try {
+          await this.addDevice(device);
+          this.knownDeviceSerials.add(device.serial);
+        } catch {
+          // Failed to connect
+        }
+      }
+    }
+
+    // Remove unplugged USB devices from known list
+    for (const serial of Array.from(this.knownDeviceSerials)) {
+      if (!currentSerials.has(serial) && !this.isWifiDevice(serial)) {
+        this.knownDeviceSerials.delete(serial);
+      }
+    }
   }
 
   /**
@@ -723,9 +837,9 @@ export class DeviceManager {
    */
   stopDeviceMonitoring(): void {
     this.isMonitoring = false;
-    if (this.deviceMonitorInterval) {
-      clearInterval(this.deviceMonitorInterval);
-      this.deviceMonitorInterval = null;
+    if (this.trackDevicesProcess) {
+      this.trackDevicesProcess.kill();
+      this.trackDevicesProcess = null;
     }
     this.knownDeviceSerials.clear();
   }
@@ -734,51 +848,8 @@ export class DeviceManager {
    * Check if a device serial represents a WiFi connection (IP:port format)
    */
   private isWifiDevice(serial: string): boolean {
-    // WiFi devices have format like "192.168.1.100:5555" or include IP addresses
-    // Also match mDNS format like "adb-XXXXX._adb-tls-connect._tcp"
     return /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}:\d+$/.test(serial) ||
            serial.includes('._adb-tls-connect._tcp');
-  }
-
-  /**
-   * Check for newly connected devices and auto-connect
-   * Only auto-connects USB devices, not WiFi/network devices
-   */
-  private async checkForNewDevices(): Promise<void> {
-    if (!this.config.autoConnect) return;
-
-    const devices = await this.getAvailableDevices();
-    const currentSerials = new Set(devices.map(d => d.serial));
-
-    // Find new devices (present now but not known before)
-    for (const device of devices) {
-      // Skip WiFi/network devices - auto-connect is only for USB
-      if (this.isWifiDevice(device.serial)) {
-        continue;
-      }
-
-      if (!this.knownDeviceSerials.has(device.serial) && !this.isDeviceConnected(device.serial)) {
-        // New USB device detected - auto-connect
-        // Clear any error state by sending status before connecting
-        this.statusCallback('', `Connecting to ${device.name}...`);
-
-        try {
-          await this.addDevice(device);
-          // Successfully connected - mark as known
-          this.knownDeviceSerials.add(device.serial);
-        } catch {
-          // Failed to connect - don't mark as known so we retry next poll
-        }
-      }
-    }
-
-    // Remove devices that are no longer present (unplugged)
-    // But only for USB devices - keep WiFi devices in known list
-    for (const serial of Array.from(this.knownDeviceSerials)) {
-      if (!currentSerials.has(serial) && !this.isWifiDevice(serial)) {
-        this.knownDeviceSerials.delete(serial);
-      }
-    }
   }
 
   private notifySessionListChanged(): void {
