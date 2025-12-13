@@ -780,7 +780,7 @@ export class DeviceManager {
       if (parts.length >= 2 && parts[1] === 'device') {
         const serial = parts[0];
         // Skip mDNS devices
-        if (serial.includes('._adb-tls-connect._tcp')) {
+        if (serial.includes('_adb-tls-connect')) {
           continue;
         }
         currentDevices.push({
@@ -848,8 +848,7 @@ export class DeviceManager {
    * Check if a device serial represents a WiFi connection (IP:port format)
    */
   private isWifiDevice(serial: string): boolean {
-    return /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}:\d+$/.test(serial) ||
-           serial.includes('._adb-tls-connect._tcp');
+    return /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}:\d+$/.test(serial);
   }
 
   private notifySessionListChanged(): void {

@@ -796,10 +796,10 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
     .tab-bar {
       display: flex;
       align-items: center;
-      gap: 2px;
-      padding: 4px;
-      background: var(--vscode-sideBar-background);
-      border-bottom: 1px solid var(--vscode-widget-border, rgba(255, 255, 255, 0.1));
+      gap: 0;
+      padding: 0;
+      background: var(--vscode-editorGroupHeader-tabsBackground, #252526);
+      height: 35px;
       overflow-x: auto;
       overflow-y: hidden;
       flex-shrink: 0;
@@ -812,73 +812,86 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
     .tab {
       display: flex;
       align-items: center;
-      gap: 4px;
-      padding: 4px 8px;
-      background: var(--vscode-tab-inactiveBackground, transparent);
-      color: var(--vscode-tab-inactiveForeground, #888888);
-      border: none;
-      border-radius: 0;
-      font-size: 11px;
+      gap: 6px;
+      padding: 0 10px;
+      height: 100%;
+      background: var(--vscode-tab-inactiveBackground, #2d2d2d);
+      color: var(--vscode-tab-inactiveForeground, #969696);
+      border-right: 1px solid var(--vscode-tab-border, #252526);
+      border-bottom: 1px solid var(--vscode-editorGroupHeader-tabsBorder, transparent);
       cursor: pointer;
       white-space: nowrap;
-      min-width: 60px;
-      max-width: 120px;
+      min-width: 120px;
+      max-width: 200px;
       user-select: none;
+      position: relative;
     }
 
     .tab.active {
-      background: var(--vscode-tab-activeBackground, var(--vscode-editor-background, #1e1e1e));
+      background: var(--vscode-tab-activeBackground, #1e1e1e);
       color: var(--vscode-tab-activeForeground, #ffffff);
+      border-top: 1px solid var(--vscode-tab-activeBorderTop, #0078d4);
+      border-bottom: 1px solid var(--vscode-tab-activeBackground, #1e1e1e);
     }
 
     .tab:hover:not(.active) {
-      background: var(--vscode-tab-hoverBackground, rgba(255, 255, 255, 0.1));
-      color: var(--vscode-tab-activeForeground, #ffffff);
+      background: var(--vscode-tab-hoverBackground, #2d2d2d);
+      color: var(--vscode-tab-hoverForeground, #ffffff);
     }
 
     .tab-label {
       flex: 1;
       overflow: hidden;
       text-overflow: ellipsis;
+      font-size: 13px;
+    }
+
+    .tab-icon {
+      flex-shrink: 0;
+      opacity: 0.7;
     }
 
     .tab-close {
       display: flex;
       align-items: center;
       justify-content: center;
-      width: 14px;
-      height: 14px;
-      border-radius: 3px;
-      font-size: 12px;
-      opacity: 0.5;
-      line-height: 1;
+      width: 20px;
+      height: 20px;
+      border-radius: 4px;
+      font-size: 16px;
+      opacity: 0; /* Hidden by default until hover or active */
+      color: inherit;
+    }
+
+    .tab:hover .tab-close,
+    .tab.active .tab-close {
+      opacity: 1;
     }
 
     .tab-close:hover {
-      opacity: 1;
-      background: var(--vscode-toolbar-hoverBackground, rgba(255, 255, 255, 0.1));
+      background: var(--vscode-toolbar-hoverBackground, rgba(90, 93, 94, 0.31));
     }
 
     .tab-add {
       display: flex;
       align-items: center;
       justify-content: center;
-      width: 24px;
-      height: 24px;
-      padding: 0;
+      width: 28px;
+      height: 28px;
+      margin-left: 5px;
       background: transparent;
       color: var(--vscode-foreground, #ccc);
-      border: 1px solid transparent;
+      border: none;
       border-radius: 4px;
       cursor: pointer;
-      font-size: 16px;
+      font-size: 18px;
       flex-shrink: 0;
       opacity: 0.7;
     }
 
     .tab-add:hover {
       opacity: 1;
-      background: var(--vscode-toolbar-hoverBackground, rgba(255, 255, 255, 0.1));
+      background: var(--vscode-toolbar-hoverBackground, rgba(90, 93, 94, 0.31));
     }
 
     /* Canvas container - takes remaining space */
