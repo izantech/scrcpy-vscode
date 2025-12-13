@@ -309,11 +309,21 @@ function handleVideoFrame(message: {
   if (message.width && message.height) {
     session.videoRenderer.configure(message.width, message.height);
 
-    // Update rotate button based on orientation
-    if (message.deviceId === activeDeviceId) {
-      updateRotateButton(message.width, message.height);
-      session.canvas.classList.remove('hidden');
-    }
+    // When we receive dimensions, this device should be shown
+    // (DeviceManager only sends frames for active sessions)
+    // Hide all other canvases and show this one
+    sessions.forEach((s, id) => {
+      if (id === message.deviceId) {
+        s.canvas.classList.remove('hidden');
+        s.videoRenderer.resume();
+      } else {
+        s.canvas.classList.add('hidden');
+      }
+    });
+
+    // Update active device tracking
+    activeDeviceId = message.deviceId;
+    updateRotateButton(message.width, message.height);
 
     // Show UI elements on first frame
     tabBar.classList.remove('hidden');

@@ -803,8 +803,8 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
       align-items: center;
       gap: 4px;
       padding: 4px 8px;
-      background: var(--vscode-tab-inactiveBackground, #2d2d2d);
-      color: var(--vscode-tab-inactiveForeground, #969696);
+      background: var(--vscode-button-secondaryBackground, #3a3d41);
+      color: var(--vscode-button-secondaryForeground, #cccccc);
       border: 1px solid transparent;
       border-radius: 4px;
       font-size: 11px;
@@ -812,16 +812,17 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
       white-space: nowrap;
       min-width: 60px;
       max-width: 120px;
+      user-select: none;
     }
 
     .tab.active {
-      background: var(--vscode-tab-activeBackground, #1e1e1e);
-      color: var(--vscode-tab-activeForeground, #ffffff);
-      border-color: var(--vscode-focusBorder, #0078d4);
+      background: var(--vscode-button-background, #0078d4);
+      color: var(--vscode-button-foreground, #ffffff);
+      border-color: transparent;
     }
 
     .tab:hover:not(.active) {
-      background: var(--vscode-tab-hoverBackground, #3a3a3a);
+      background: var(--vscode-button-secondaryHoverBackground, #45494e);
     }
 
     .tab-label {

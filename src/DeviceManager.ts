@@ -266,7 +266,7 @@ export class DeviceManager {
   ) {}
 
   /**
-   * Get list of available ADB devices
+   * Get list of available ADB devices (excludes mDNS devices for cleaner UI)
    */
   async getAvailableDevices(): Promise<DeviceInfo[]> {
     return new Promise((resolve) => {
@@ -282,11 +282,16 @@ export class DeviceManager {
         for (let i = 1; i < lines.length; i++) {
           const parts = lines[i].trim().split(/\s+/);
           if (parts.length >= 2 && parts[1] === 'device') {
+            const serial = parts[0];
+            // Skip mDNS devices (they're duplicates of WiFi connections)
+            if (serial.includes('._adb-tls-connect._tcp')) {
+              continue;
+            }
             const modelMatch = lines[i].match(/model:([^\s]+)/);
             const model = modelMatch ? modelMatch[1].replace(/_/g, ' ') : undefined;
             devices.push({
-              serial: parts[0],
-              name: model || parts[0],
+              serial,
+              name: model || serial,
               model
             });
           }
