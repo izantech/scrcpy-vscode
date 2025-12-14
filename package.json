@@ -313,6 +313,7 @@
     "lint": "eslint src --ext ts",
     "format": "prettier --write \"**/*.{ts,js,json,md,yml,yaml,html,css}\"",
     "format:check": "prettier --check \"**/*.{ts,js,json,md,yml,yaml,html,css}\"",
+    "test": "echo \"No tests yet\" && exit 0",
     "prepare": "husky"
   },
   "lint-staged": {

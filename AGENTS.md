@@ -36,6 +36,9 @@ npm run format:check
 
 # Run ESLint
 npm run lint
+
+# Run tests (placeholder for now)
+npm test
 ```
 
 **Pre-commit hook**: Husky + lint-staged automatically formats and lints staged files before each commit.
@@ -48,6 +51,45 @@ npm run lint
 - `.prettierignore` - Files to skip formatting
 - `.eslintrc.json` - ESLint rules with TypeScript support
 - `.editorconfig` - Cross-editor settings for consistent formatting
+
+## CI/CD
+
+The project uses **GitHub Actions** for continuous integration and deployment.
+
+**Workflow file**: `.github/workflows/ci.yml`
+
+### Build Job (runs on every push/PR to main)
+
+1. Checkout code
+2. Setup Node.js 20
+3. Install dependencies (`npm ci`)
+4. Run linter (`npm run lint`)
+5. Check formatting (`npm run format:check`)
+6. Compile (`npm run compile`)
+7. Run tests (`npm test`)
+
+### Publish Job (runs only on version tags `v*`)
+
+1. Build production package (`npm run package`)
+2. Package extension (`vsce package`)
+3. Publish to VS Code Marketplace
+4. Publish to Open VSX Registry
+
+### Required GitHub Secrets
+
+Configure these in repository Settings > Secrets and variables > Actions:
+
+| Secret     | Description                               | How to obtain                                                                            |
+| ---------- | ----------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `VSCE_PAT` | VS Code Marketplace Personal Access Token | Create at [Azure DevOps](https://dev.azure.com) with "Marketplace > Manage" scope        |
+| `OVSX_PAT` | Open VSX Personal Access Token            | Create at [open-vsx.org/user-settings/tokens](https://open-vsx.org/user-settings/tokens) |
+
+### Publishing a Release
+
+1. Update version in `package.json`
+2. Commit the version bump
+3. Create and push a tag: `git tag v0.1.0 && git push origin v0.1.0`
+4. The workflow automatically builds, verifies, and publishes to both marketplaces
 
 ## Project Structure
 
