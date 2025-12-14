@@ -66,6 +66,8 @@ src/
   - Auto-connect: New USB devices are connected automatically (WiFi excluded from auto-connect, but included in startup)
   - Auto-reconnect: Configurable retries (1-5) with 1.5s delay on unexpected disconnect (works for both USB and WiFi)
   - `takeScreenshot()`: Delegates to active session's connection for screenshot capture
+  - `installApk()`: Installs APK on active device via `adb install`
+  - `pushFiles()`: Uploads files/folders to active device in a single `adb push` command
 
 - **ScrcpyConnection.ts**: Core connection logic
   - Accepts `ScrcpyConfig` for configurable server parameters
@@ -83,6 +85,8 @@ src/
   - `takeScreenshot()`: Captures device screen via `adb exec-out screencap -p` (original resolution, lossless PNG)
   - `updateDimensions()`: Updates stored dimensions when webview detects rotation via SPS parsing
   - Clipboard sync: On-demand via `pasteFromHost()` (Ctrl+V) and `copyToHost()` (Ctrl+C), listens for device clipboard messages
+  - `installApk()`: Installs APK via `adb install -r`
+  - `pushFiles()`: Uploads files/folders in a single `adb push` command (default destination: `/sdcard/Download/`)
   - Error handling: Reports unexpected disconnects via `onError` callback (shows reconnect UI)
 
 - **VideoRenderer.ts**: H.264 decoding
@@ -272,10 +276,20 @@ No automated tests yet. Manual testing:
     - Verify connection progress notification appears
     - Verify device connects and video displays
 18. Test APK install button:
-    - Click the package icon (📦) in the view title bar (next to WiFi icon)
+    - Click the package icon (📦) in the view title bar
     - Verify file picker opens with APK filter
     - By default, file picker should open in Downloads folder
     - Test `scrcpy.apkInstallDefaultPath` setting to change default folder
     - Select an APK file and verify "Installing..." progress notification appears
     - Verify success notification appears when installation completes
     - Verify APK is installed on device
+19. Test file upload button:
+    - Click the cloud upload icon (☁️↑) in the view title bar (leftmost button)
+    - Verify file/folder picker opens allowing multiple selection
+    - By default, file picker should open in Downloads folder
+    - Test single file upload: select one file and verify progress notification
+    - Test multiple file upload: select several files and verify progress shows count
+    - Test folder upload: select a folder and verify it uploads recursively (adb push handles this)
+    - Test mixed selection: select files and folders together
+    - Verify files appear in `/sdcard/Download/` on device
+    - Verify summary notification shows success/failure count

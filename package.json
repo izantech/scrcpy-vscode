@@ -250,6 +250,11 @@
         "icon": "$(package)"
       },
       {
+        "command": "scrcpy.uploadFiles",
+        "title": "%command.uploadFiles%",
+        "icon": "$(cloud-upload)"
+      },
+      {
         "command": "scrcpy.openSettings",
         "title": "%command.openSettings%",
         "icon": "$(gear)"
@@ -258,12 +263,17 @@
     "menus": {
       "view/title": [
         {
-          "command": "scrcpy.connectWifi",
+          "command": "scrcpy.uploadFiles",
           "when": "view == scrcpy.deviceView",
           "group": "navigation"
         },
         {
           "command": "scrcpy.installApk",
+          "when": "view == scrcpy.deviceView",
+          "group": "navigation"
+        },
+        {
+          "command": "scrcpy.connectWifi",
           "when": "view == scrcpy.deviceView",
           "group": "navigation"
         },

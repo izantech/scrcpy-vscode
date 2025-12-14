@@ -267,11 +267,11 @@ class DeviceSession {
     await this.connection.installApk(filePath);
   }
 
-  async pushFile(filePath: string, destPath?: string): Promise<void> {
+  async pushFiles(filePaths: string[], destPath?: string): Promise<void> {
     if (!this.connection) {
       throw new Error(vscode.l10n.t('No connection'));
     }
-    await this.connection.pushFile(filePath, destPath);
+    await this.connection.pushFiles(filePaths, destPath);
   }
 }
 
@@ -695,14 +695,14 @@ export class DeviceManager {
   }
 
   /**
-   * Push file to active device Downloads folder
+   * Push files/folders to active device in a single adb push command
    */
-  async pushFile(filePath: string, destPath?: string): Promise<void> {
+  async pushFiles(filePaths: string[], destPath?: string): Promise<void> {
     const session = this.getActiveSession();
     if (!session) {
       throw new Error(vscode.l10n.t('No active device'));
     }
-    await session.pushFile(filePath, destPath);
+    await session.pushFiles(filePaths, destPath);
   }
 
   /**

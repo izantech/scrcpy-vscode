@@ -972,13 +972,17 @@ export class ScrcpyConnection {
   }
 
   /**
-   * Push a file to the device
+   * Push files/folders to the device in a single adb push command
    */
-  async pushFile(filePath: string, destPath: string = '/sdcard/Download/'): Promise<void> {
+  async pushFiles(filePaths: string[], destPath: string = '/sdcard/Download/'): Promise<void> {
     if (!this.deviceSerial) {
       throw new Error(vscode.l10n.t('No device connected'));
     }
-    await this.execAdb(`push "${filePath}" "${destPath}"`);
+    if (filePaths.length === 0) {
+      return;
+    }
+    const quotedPaths = filePaths.map(p => `"${p}"`).join(' ');
+    await this.execAdb(`push ${quotedPaths} "${destPath}"`);
   }
 
   /**

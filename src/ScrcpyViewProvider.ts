@@ -459,7 +459,7 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
         if (isApk) {
           await this._deviceManager.installApk(file.path);
         } else {
-          await this._deviceManager.pushFile(file.path);
+          await this._deviceManager.pushFiles([file.path]);
         }
 
         // Send success message to webview
@@ -519,7 +519,7 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
       if (isApk) {
         await this._deviceManager.installApk(tempPath);
       } else {
-        await this._deviceManager.pushFile(tempPath);
+        await this._deviceManager.pushFiles([tempPath]);
       }
 
       // Send success message to webview
@@ -769,6 +769,59 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
           vscode.window.showErrorMessage(vscode.l10n.t('Failed to install APK: {0}', message));
+        }
+      }
+    );
+  }
+
+  /**
+   * Show file/folder picker and upload to device
+   */
+  public async uploadFiles(): Promise<void> {
+    // Get default path from settings (reuse APK default path setting)
+    const config = vscode.workspace.getConfiguration('scrcpy');
+    const customPath = config.get<string>('apkInstallDefaultPath', '');
+    const defaultPath = customPath || path.join(os.homedir(), 'Downloads');
+
+    // Show file/folder picker - allow multiple selections
+    const result = await vscode.window.showOpenDialog({
+      canSelectFiles: true,
+      canSelectFolders: true,
+      canSelectMany: true,
+      defaultUri: vscode.Uri.file(defaultPath),
+      title: vscode.l10n.t('Select Files or Folders to Upload')
+    });
+
+    if (!result || result.length === 0) {
+      return; // User cancelled
+    }
+
+    // Check device connection
+    if (!this._deviceManager) {
+      vscode.window.showErrorMessage(vscode.l10n.t('No device connected'));
+      return;
+    }
+
+    // Upload with progress notification
+    // adb push handles directories recursively and supports multiple paths in one command
+    const filePaths = result.map(uri => uri.fsPath);
+    const itemNames = filePaths.map(p => path.basename(p)).join(', ');
+
+    await vscode.window.withProgress(
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: vscode.l10n.t('Uploading to device...'),
+        cancellable: false
+      },
+      async () => {
+        try {
+          await this._deviceManager!.pushFiles(filePaths);
+          vscode.window.showInformationMessage(
+            vscode.l10n.t('Successfully uploaded to /sdcard/Download/: {0}', itemNames)
+          );
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          vscode.window.showErrorMessage(vscode.l10n.t('Failed to upload: {0}', message));
         }
       }
     );

@@ -47,6 +47,7 @@
     "command.stop": "Scrcpy: Stop Device Mirroring",
     "command.connectWifi": "Scrcpy: Connect to Device over WiFi",
     "command.installApk": "Scrcpy: Install APK",
+    "command.uploadFiles": "Scrcpy: Upload Files to Device",
     "command.openSettings": "Scrcpy: Open Settings",
     "view.scrcpy": "scrcpy",
     "view.deviceView": "Screen"

@@ -14,6 +14,7 @@ Display and control your Android device screen directly within VS Code, similar 
 - **Clipboard sync** - Ctrl+V pastes from PC to device, Ctrl+C copies from device to PC
 - **WiFi connection** - connect wirelessly via Android 11+ Wireless Debugging or legacy adb tcpip
 - **APK installation** - install APKs via toolbar button
+- **File upload** - upload files and folders to device via toolbar button
 - **Auto-connect** - automatically connects when devices are plugged in
 - **Auto-reconnect** - automatic reconnection on disconnect (configurable retries)
 - Hardware-accelerated video decoding (WebCodecs API)
@@ -77,6 +78,7 @@ Display and control your Android device screen directly within VS Code, similar 
 | `Scrcpy: Stop Device Mirroring` | Disconnect from device |
 | `Scrcpy: Connect to Device over WiFi` | Connect wirelessly (supports Android 11+ pairing) |
 | `Scrcpy: Install APK` | Select and install an APK file on the device |
+| `Scrcpy: Upload Files to Device` | Upload files or folders to /sdcard/Download/ |
 | `Scrcpy: Open Settings` | Open extension settings |
 
 ## Settings
