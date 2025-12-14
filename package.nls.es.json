@@ -35,6 +35,7 @@
     "config.scrcpy.clipboardSync": "Sincronizar automáticamente portapapeles entre host y dispositivo",
     "config.scrcpy.screenshotSavePath": "Carpeta predeterminada para guardar capturas. Dejar vacío para usar la carpeta de Descargas.",
     "config.scrcpy.screenshotShowSaveDialog": "Mostrar diálogo de guardar en lugar de guardar directamente en la carpeta predeterminada",
+    "config.scrcpy.apkInstallDefaultPath": "Carpeta predeterminada para el selector de archivos APK. Dejar vacío para usar la carpeta de Descargas.",
     "config.scrcpy.autoConnect": "Conectar automáticamente a dispositivos cuando se enchufan",
     "config.scrcpy.autoReconnect": "Intentar reconectar automáticamente cuando se pierde la conexión",
     "config.scrcpy.reconnectRetries": "Número de intentos de reconexión antes de mostrar error. *Solo aplica cuando `#scrcpy.autoReconnect#` está habilitado.*",
@@ -45,6 +46,7 @@
     "command.start": "Scrcpy: Iniciar Duplicación de Dispositivo",
     "command.stop": "Scrcpy: Detener Duplicación de Dispositivo",
     "command.connectWifi": "Scrcpy: Conectar a Dispositivo por WiFi",
+    "command.installApk": "Scrcpy: Instalar APK",
     "command.openSettings": "Scrcpy: Abrir Configuración",
     "view.scrcpy": "scrcpy",
     "view.deviceView": "Pantalla"

@@ -13,6 +13,7 @@ Display and control your Android device screen directly within VS Code, similar 
 - **Device control buttons** with long press support (Volume, Back, Home, Recent Apps, Power, Rotate)
 - **Clipboard sync** - Ctrl+V pastes from PC to device, Ctrl+C copies from device to PC
 - **WiFi connection** - connect wirelessly via Android 11+ Wireless Debugging or legacy adb tcpip
+- **APK installation** - install APKs via toolbar button or drag & drop
 - **Auto-connect** - automatically connects when devices are plugged in
 - **Auto-reconnect** - automatic reconnection on disconnect (configurable retries)
 - Hardware-accelerated video decoding (WebCodecs API)
@@ -75,6 +76,7 @@ Display and control your Android device screen directly within VS Code, similar 
 | `Scrcpy: Start Device Mirroring` | Focus the view and connect to device |
 | `Scrcpy: Stop Device Mirroring` | Disconnect from device |
 | `Scrcpy: Connect to Device over WiFi` | Connect wirelessly (supports Android 11+ pairing) |
+| `Scrcpy: Install APK` | Select and install an APK file on the device |
 | `Scrcpy: Open Settings` | Open extension settings |
 
 ## Settings
@@ -84,6 +86,7 @@ Click the **gear icon** in the scrcpy view toolbar to access settings.
 | Setting | Default | Description |
 |---------|---------|-------------|
 | `scrcpy.path` | (empty) | Path to scrcpy installation directory |
+| `scrcpy.apkInstallDefaultPath` | (empty) | Default folder for APK file picker (defaults to Downloads) |
 | `scrcpy.screenOff` | `false` | Turn device screen off while mirroring |
 | `scrcpy.stayAwake` | `true` | Keep device awake during mirroring |
 | `scrcpy.maxSize` | `1920` | Maximum screen dimension in pixels |

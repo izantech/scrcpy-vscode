@@ -280,3 +280,11 @@ No automated tests yet. Manual testing:
     - Drop the file and verify "Copying to device..." progress overlay appears
     - Verify file is copied to /sdcard/Download/ on device
     - Overlay should auto-hide after 2-3 seconds
+19. Test APK install button:
+    - Click the package icon (📦) in the view title bar (next to WiFi icon)
+    - Verify file picker opens with APK filter
+    - By default, file picker should open in Downloads folder
+    - Test `scrcpy.apkInstallDefaultPath` setting to change default folder
+    - Select an APK file and verify "Installing..." progress notification appears
+    - Verify success notification appears when installation completes
+    - Verify APK is installed on device

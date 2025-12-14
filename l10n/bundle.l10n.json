@@ -87,5 +87,9 @@
   "Copied to Downloads": "Copied to Downloads",
   "Failed": "Failed",
   "Failed to read file": "Failed to read file",
-  "{0} FPS | {1} frames": "{0} FPS | {1} frames"
+  "{0} FPS | {1} frames": "{0} FPS | {1} frames",
+  "Select APK to Install": "Select APK to Install",
+  "Installing {0}...": "Installing {0}...",
+  "APK installed successfully: {0}": "APK installed successfully: {0}",
+  "Failed to install APK: {0}": "Failed to install APK: {0}"
 }

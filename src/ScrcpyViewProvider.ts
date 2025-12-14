@@ -722,6 +722,59 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
   }
 
   /**
+   * Show file picker and install APK on device
+   */
+  public async installApk(): Promise<void> {
+    // Get default path from settings (fallback to Downloads folder)
+    const config = vscode.workspace.getConfiguration('scrcpy');
+    const customPath = config.get<string>('apkInstallDefaultPath', '');
+    const defaultPath = customPath || path.join(os.homedir(), 'Downloads');
+
+    // Show file picker for APK files
+    const result = await vscode.window.showOpenDialog({
+      canSelectFiles: true,
+      canSelectFolders: false,
+      canSelectMany: false,
+      defaultUri: vscode.Uri.file(defaultPath),
+      filters: {
+        'APK Files': ['apk']
+      },
+      title: vscode.l10n.t('Select APK to Install')
+    });
+
+    if (!result || result.length === 0) {
+      return; // User cancelled
+    }
+
+    const apkPath = result[0].fsPath;
+    const apkName = path.basename(apkPath);
+
+    // Initialize device manager if not already
+    if (!this._deviceManager) {
+      vscode.window.showErrorMessage(vscode.l10n.t('No device connected'));
+      return;
+    }
+
+    // Install with progress notification
+    await vscode.window.withProgress(
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: vscode.l10n.t('Installing {0}...', apkName),
+        cancellable: false
+      },
+      async () => {
+        try {
+          await this._deviceManager!.installApk(apkPath);
+          vscode.window.showInformationMessage(vscode.l10n.t('APK installed successfully: {0}', apkName));
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          vscode.window.showErrorMessage(vscode.l10n.t('Failed to install APK: {0}', message));
+        }
+      }
+    );
+  }
+
+  /**
    * Connect to a WiFi device with the given address
    */
   private async _connectWifiDeviceWithAddress(address: string): Promise<void> {

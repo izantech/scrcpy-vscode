@@ -27,7 +27,14 @@
           "scrcpy.path": {
             "type": "string",
             "default": "",
+            "order": 0,
             "markdownDescription": "%config.scrcpy.path%"
+          },
+          "scrcpy.apkInstallDefaultPath": {
+            "type": "string",
+            "default": "",
+            "order": 1,
+            "markdownDescription": "%config.scrcpy.apkInstallDefaultPath%"
           }
         }
       },
@@ -238,6 +245,11 @@
         "icon": "$(radio-tower)"
       },
       {
+        "command": "scrcpy.installApk",
+        "title": "%command.installApk%",
+        "icon": "$(package)"
+      },
+      {
         "command": "scrcpy.openSettings",
         "title": "%command.openSettings%",
         "icon": "$(gear)"
@@ -247,6 +259,11 @@
       "view/title": [
         {
           "command": "scrcpy.connectWifi",
+          "when": "view == scrcpy.deviceView",
+          "group": "navigation"
+        },
+        {
+          "command": "scrcpy.installApk",
           "when": "view == scrcpy.deviceView",
           "group": "navigation"
         },

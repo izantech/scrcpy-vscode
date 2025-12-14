@@ -36,12 +36,17 @@ export function activate(context: vscode.ExtensionContext) {
     provider?.connectWifi();
   });
 
+  // Register APK installation command
+  const installApkCommand = vscode.commands.registerCommand('scrcpy.installApk', () => {
+    provider?.installApk();
+  });
+
   // Register settings command
   const settingsCommand = vscode.commands.registerCommand('scrcpy.openSettings', () => {
     vscode.commands.executeCommand('workbench.action.openSettings', '@ext:izan.scrcpy-vscode');
   });
 
-  context.subscriptions.push(startCommand, stopCommand, wifiCommand, settingsCommand);
+  context.subscriptions.push(startCommand, stopCommand, wifiCommand, installApkCommand, settingsCommand);
 }
 
 export async function deactivate() {

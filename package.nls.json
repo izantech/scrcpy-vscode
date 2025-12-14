@@ -35,6 +35,7 @@
     "config.scrcpy.clipboardSync": "Automatically sync clipboard between host and device",
     "config.scrcpy.screenshotSavePath": "Default folder for saving screenshots. Leave empty to use the Downloads folder.",
     "config.scrcpy.screenshotShowSaveDialog": "Show save dialog instead of saving directly to the default folder",
+    "config.scrcpy.apkInstallDefaultPath": "Default folder for the APK file picker. Leave empty to use the Downloads folder.",
     "config.scrcpy.autoConnect": "Automatically connect to devices when they are plugged in",
     "config.scrcpy.autoReconnect": "Automatically attempt to reconnect when connection is lost",
     "config.scrcpy.reconnectRetries": "Number of reconnection attempts before showing error. *Only applies when `#scrcpy.autoReconnect#` is enabled.*",
@@ -45,6 +46,7 @@
     "command.start": "Scrcpy: Start Device Mirroring",
     "command.stop": "Scrcpy: Stop Device Mirroring",
     "command.connectWifi": "Scrcpy: Connect to Device over WiFi",
+    "command.installApk": "Scrcpy: Install APK",
     "command.openSettings": "Scrcpy: Open Settings",
     "view.scrcpy": "scrcpy",
     "view.deviceView": "Screen"
