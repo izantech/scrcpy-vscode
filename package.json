@@ -265,22 +265,22 @@
         {
           "command": "scrcpy.uploadFiles",
           "when": "view == scrcpy.deviceView",
-          "group": "navigation"
+          "group": "navigation@1"
         },
         {
           "command": "scrcpy.installApk",
           "when": "view == scrcpy.deviceView",
-          "group": "navigation"
+          "group": "navigation@2"
         },
         {
           "command": "scrcpy.connectWifi",
           "when": "view == scrcpy.deviceView",
-          "group": "navigation"
+          "group": "navigation@3"
         },
         {
           "command": "scrcpy.openSettings",
           "when": "view == scrcpy.deviceView",
-          "group": "navigation"
+          "group": "navigation@4"
         }
       ]
     },
