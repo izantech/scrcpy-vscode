@@ -24,12 +24,6 @@ declare global {
       reconnect: string;
       noDevicesConnected: string;
       addDevice: string;
-      copyingToDevice: string;
-      installing: string;
-      installed: string;
-      copiedToDownloads: string;
-      failed: string;
-      failedToReadFile: string;
       statsFormat: string;
     };
   }
@@ -70,13 +64,6 @@ let statusTextElement: HTMLElement;
 let statsElement: HTMLElement;
 let controlToolbar: HTMLElement;
 let addDeviceBtn: HTMLElement;
-let dropZone: HTMLElement;
-let fileTransferOverlay: HTMLElement;
-let fileTransferSpinner: HTMLElement;
-let fileTransferIcon: HTMLElement;
-let fileTransferText: HTMLElement;
-let fileTransferFilename: HTMLElement;
-let fileTransferTimeout: ReturnType<typeof setTimeout> | null = null;
 
 // Device sessions
 const sessions = new Map<string, DeviceSessionUI>();
@@ -213,19 +200,6 @@ function initialize() {
     });
   }
 
-  // Drop zone for file drag & drop
-  dropZone = document.getElementById('drop-zone') as HTMLElement;
-  if (dropZone && canvasContainer) {
-    setupDragAndDrop();
-  }
-
-  // File transfer overlay elements
-  fileTransferOverlay = document.getElementById('file-transfer-overlay') as HTMLElement;
-  fileTransferSpinner = document.getElementById('file-transfer-spinner') as HTMLElement;
-  fileTransferIcon = document.getElementById('file-transfer-icon') as HTMLElement;
-  fileTransferText = document.getElementById('file-transfer-text') as HTMLElement;
-  fileTransferFilename = document.getElementById('file-transfer-filename') as HTMLElement;
-
   vscode.postMessage({ type: 'ready' });
   console.log('WebView initialized');
 }
@@ -331,18 +305,6 @@ function handleMessage(event: MessageEvent) {
 
     case 'screenshotComplete':
       resetScreenshotButton();
-      break;
-
-    case 'fileTransferStart':
-      showFileTransferProgress(message.filename, message.isApk);
-      break;
-
-    case 'fileTransferComplete':
-      showFileTransferSuccess(message.filename, message.isApk);
-      break;
-
-    case 'fileTransferError':
-      showFileTransferError(message.filename, message.error);
       break;
   }
 }
@@ -876,210 +838,6 @@ function showEmptyState() {
   btnContainer.appendChild(addBtn);
 
   statusElement.classList.remove('hidden');
-}
-
-/**
- * Show file transfer progress overlay
- */
-function showFileTransferProgress(filename: string, isApk: boolean): void {
-  if (!fileTransferOverlay) return;
-
-  // Clear any pending timeout
-  if (fileTransferTimeout) {
-    clearTimeout(fileTransferTimeout);
-    fileTransferTimeout = null;
-  }
-
-  // Reset classes
-  fileTransferOverlay.classList.remove('success', 'error');
-  fileTransferOverlay.classList.add('active');
-
-  // Show spinner, hide icon
-  fileTransferSpinner.style.display = 'block';
-  fileTransferIcon.style.display = 'none';
-
-  // Set text
-  fileTransferText.textContent = isApk ? window.l10n.installing : window.l10n.copyingToDevice;
-  fileTransferFilename.textContent = filename;
-}
-
-/**
- * Show file transfer success overlay
- */
-function showFileTransferSuccess(filename: string, isApk: boolean): void {
-  if (!fileTransferOverlay) return;
-
-  // Clear any pending timeout
-  if (fileTransferTimeout) {
-    clearTimeout(fileTransferTimeout);
-  }
-
-  fileTransferOverlay.classList.remove('error');
-  fileTransferOverlay.classList.add('active', 'success');
-
-  // Hide spinner, show success icon
-  fileTransferSpinner.style.display = 'none';
-  fileTransferIcon.style.display = 'block';
-  fileTransferIcon.textContent = '\u2714'; // ✔
-
-  // Set text
-  fileTransferText.textContent = isApk ? window.l10n.installed : window.l10n.copiedToDownloads;
-  fileTransferFilename.textContent = filename;
-
-  // Auto-hide after 2 seconds
-  fileTransferTimeout = setTimeout(() => {
-    hideFileTransferOverlay();
-  }, 2000);
-}
-
-/**
- * Show file transfer error overlay
- */
-function showFileTransferError(filename: string, error: string): void {
-  if (!fileTransferOverlay) return;
-
-  // Clear any pending timeout
-  if (fileTransferTimeout) {
-    clearTimeout(fileTransferTimeout);
-  }
-
-  fileTransferOverlay.classList.remove('success');
-  fileTransferOverlay.classList.add('active', 'error');
-
-  // Hide spinner, show error icon
-  fileTransferSpinner.style.display = 'none';
-  fileTransferIcon.style.display = 'block';
-  fileTransferIcon.textContent = '\u2716'; // ✖
-
-  // Set text
-  fileTransferText.textContent = window.l10n.failed;
-  fileTransferFilename.textContent = error || filename;
-
-  // Auto-hide after 3 seconds
-  fileTransferTimeout = setTimeout(() => {
-    hideFileTransferOverlay();
-  }, 3000);
-}
-
-/**
- * Hide file transfer overlay
- */
-function hideFileTransferOverlay(): void {
-  if (!fileTransferOverlay) return;
-
-  fileTransferOverlay.classList.remove('active', 'success', 'error');
-
-  if (fileTransferTimeout) {
-    clearTimeout(fileTransferTimeout);
-    fileTransferTimeout = null;
-  }
-}
-
-/**
- * Transfer a file to the device
- */
-async function transferFile(file: File): Promise<void> {
-  const isApk = file.name.toLowerCase().endsWith('.apk');
-
-  // Show progress immediately
-  showFileTransferProgress(file.name, isApk);
-
-  // Try to get path property (Electron/VS Code specific)
-  const filePath = (file as File & { path?: string }).path;
-
-  if (filePath) {
-    // Path is available, send it directly
-    vscode.postMessage({
-      type: 'fileDrop',
-      deviceId: activeDeviceId,
-      files: [{ name: file.name, path: filePath, type: file.type }]
-    });
-  } else {
-    // Path not available, read file content and send as base64
-    try {
-      const arrayBuffer = await file.arrayBuffer();
-      const base64 = arrayBufferToBase64(arrayBuffer);
-      vscode.postMessage({
-        type: 'fileDropData',
-        deviceId: activeDeviceId,
-        name: file.name,
-        data: base64
-      });
-    } catch (err) {
-      console.error('Failed to read file:', err);
-      showFileTransferError(file.name, window.l10n.failedToReadFile);
-    }
-  }
-}
-
-/**
- * Setup drag and drop handlers for file transfer
- */
-function setupDragAndDrop(): void {
-  let dragCounter = 0;
-
-  // Attach to document.body to capture drags even when window regains focus
-  const dropTarget = document.body;
-
-  // Show drop zone when dragging files over the window
-  dropTarget.addEventListener('dragenter', (e) => {
-    e.preventDefault();
-    dragCounter++;
-
-    if (activeDeviceId && sessions.size > 0) {
-      dropZone.classList.add('active');
-    }
-  });
-
-  dropTarget.addEventListener('dragover', (e) => {
-    e.preventDefault();
-  });
-
-  dropTarget.addEventListener('dragleave', (e) => {
-    e.preventDefault();
-    dragCounter--;
-
-    if (dragCounter === 0) {
-      dropZone.classList.remove('active');
-    }
-  });
-
-  dropTarget.addEventListener('drop', async (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    dragCounter = 0;
-    dropZone.classList.remove('active');
-
-    if (!activeDeviceId || sessions.size === 0) {
-      return;
-    }
-
-    const files = e.dataTransfer?.files;
-    if (!files || files.length === 0) {
-      return;
-    }
-
-    // Process each file
-    for (let i = 0; i < files.length; i++) {
-      await transferFile(files[i]);
-    }
-  });
-}
-
-/**
- * Convert ArrayBuffer to base64 string (efficient chunked approach)
- */
-function arrayBufferToBase64(buffer: ArrayBuffer): string {
-  const bytes = new Uint8Array(buffer);
-  const chunkSize = 0x8000; // 32KB chunks
-  const chunks: string[] = [];
-
-  for (let i = 0; i < bytes.length; i += chunkSize) {
-    const chunk = bytes.subarray(i, i + chunkSize);
-    chunks.push(String.fromCharCode.apply(null, chunk as unknown as number[]));
-  }
-
-  return btoa(chunks.join(''));
 }
 
 /**
