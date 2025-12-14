@@ -1,0 +1,19 @@
+# Build outputs
+dist/
+out/
+*.vsix
+
+# Dependencies
+node_modules/
+
+# Coverage
+coverage/
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+
+# Localization bundles (auto-generated)
+l10n/*.json

@@ -32,11 +32,7 @@ type VideoFrameCallback = (
   height?: number
 ) => void;
 
-type AudioFrameCallback = (
-  deviceId: string,
-  data: Uint8Array,
-  isConfig: boolean
-) => void;
+type AudioFrameCallback = (deviceId: string, data: Uint8Array, isConfig: boolean) => void;
 
 type StatusCallback = (deviceId: string, status: string) => void;
 type SessionListCallback = (sessions: SessionInfo[]) => void;
@@ -128,7 +124,9 @@ class DeviceSession {
    */
   private async handleDisconnect(error: string): Promise<void> {
     // Don't reconnect if disposed or already reconnecting
-    if (this.isDisposed || this.isReconnecting) return;
+    if (this.isDisposed || this.isReconnecting) {
+      return;
+    }
 
     const maxRetries = this.config.autoReconnect ? this.config.reconnectRetries : 0;
 
@@ -137,10 +135,13 @@ class DeviceSession {
       this.isReconnecting = true;
       this.retryCount++;
 
-      this.statusCallback(this.deviceId, vscode.l10n.t('Reconnecting (attempt {0}/{1})...', this.retryCount, maxRetries));
+      this.statusCallback(
+        this.deviceId,
+        vscode.l10n.t('Reconnecting (attempt {0}/{1})...', this.retryCount, maxRetries)
+      );
 
       // Wait before reconnecting (gives ADB time to recover)
-      await new Promise(resolve => setTimeout(resolve, DeviceSession.RETRY_DELAY_MS));
+      await new Promise((resolve) => setTimeout(resolve, DeviceSession.RETRY_DELAY_MS));
 
       // Check if disposed during wait
       if (this.isDisposed) {
@@ -186,10 +187,24 @@ class DeviceSession {
     if (this.lastWidth && this.lastHeight) {
       // First re-send config/dimensions
       if (this.lastConfigData) {
-        this.videoFrameCallback(this.deviceId, this.lastConfigData, true, false, this.lastWidth, this.lastHeight);
+        this.videoFrameCallback(
+          this.deviceId,
+          this.lastConfigData,
+          true,
+          false,
+          this.lastWidth,
+          this.lastHeight
+        );
       } else {
         // Just dimensions
-        this.videoFrameCallback(this.deviceId, new Uint8Array(0), true, false, this.lastWidth, this.lastHeight);
+        this.videoFrameCallback(
+          this.deviceId,
+          new Uint8Array(0),
+          true,
+          false,
+          this.lastWidth,
+          this.lastHeight
+        );
       }
 
       // Then re-send last keyframe to ensure immediate display
@@ -322,7 +337,7 @@ export class DeviceManager {
             devices.push({
               serial,
               name: model || serial,
-              model
+              model,
             });
           }
         }
@@ -364,7 +379,10 @@ export class DeviceManager {
       adb.on('close', (code: number) => {
         const output = (stdout + stderr).toLowerCase();
 
-        if (code === 0 && (output.includes('successfully paired') || output.includes('paired to'))) {
+        if (
+          code === 0 &&
+          (output.includes('successfully paired') || output.includes('paired to'))
+        ) {
           resolve();
         } else if (output.includes('failed') || output.includes('error') || code !== 0) {
           reject(new Error(stderr || stdout || 'Pairing failed'));
@@ -410,27 +428,35 @@ export class DeviceManager {
           try {
             const modelOutput = execSync(`adb -s ${address} shell getprop ro.product.model`, {
               timeout: 5000,
-              encoding: 'utf8'
+              encoding: 'utf8',
             }).trim();
 
             resolve({
               serial: address,
               name: modelOutput || address,
-              model: modelOutput || undefined
+              model: modelOutput || undefined,
             });
           } catch {
             // If we can't get the model, just use the address
             resolve({
               serial: address,
               name: address,
-              model: undefined
+              model: undefined,
             });
           }
-        } else if (output.includes('failed') || output.includes('unable') || output.includes('cannot')) {
+        } else if (
+          output.includes('failed') ||
+          output.includes('unable') ||
+          output.includes('cannot')
+        ) {
           // Provide helpful error message for common failure cases
           let errorMsg = stdout.trim();
           if (output.includes('connection refused') || output.includes('failed to connect')) {
-            errorMsg += '\n\n' + vscode.l10n.t('For Android 11+, you need to pair the device first using "Pair new device".');
+            errorMsg +=
+              '\n\n' +
+              vscode.l10n.t(
+                'For Android 11+, you need to pair the device first using "Pair new device".'
+              );
           }
           reject(new Error(errorMsg));
         } else {
@@ -438,7 +464,7 @@ export class DeviceManager {
           resolve({
             serial: address,
             name: address,
-            model: undefined
+            model: undefined,
           });
         }
       });
@@ -524,7 +550,9 @@ export class DeviceManager {
    */
   switchToDevice(deviceId: string): void {
     const newSession = this.sessions.get(deviceId);
-    if (!newSession) return;
+    if (!newSession) {
+      return;
+    }
 
     // Pause old active session
     if (this.activeDeviceId && this.activeDeviceId !== deviceId) {
@@ -548,7 +576,9 @@ export class DeviceManager {
    */
   async removeDevice(deviceId: string): Promise<void> {
     const session = this.sessions.get(deviceId);
-    if (!session) return;
+    if (!session) {
+      return;
+    }
 
     // Mark as manually closed to prevent auto-reconnect
     const deviceSerial = session.deviceInfo.serial;
@@ -573,7 +603,7 @@ export class DeviceManager {
    * Get active session
    */
   getActiveSession(): DeviceSession | null {
-    return this.activeDeviceId ? this.sessions.get(this.activeDeviceId) ?? null : null;
+    return this.activeDeviceId ? (this.sessions.get(this.activeDeviceId) ?? null) : null;
   }
 
   /**
@@ -709,9 +739,7 @@ export class DeviceManager {
    * Disconnect all sessions
    */
   async disconnectAll(): Promise<void> {
-    await Promise.all(
-      Array.from(this.sessions.values()).map(s => s.disconnect())
-    );
+    await Promise.all(Array.from(this.sessions.values()).map((s) => s.disconnect()));
     this.sessions.clear();
     this.activeDeviceId = null;
     this.notifySessionListChanged();
@@ -730,7 +758,9 @@ export class DeviceManager {
    */
   private handleSessionFailed(deviceId: string): void {
     const session = this.sessions.get(deviceId);
-    if (!session) return;
+    if (!session) {
+      return;
+    }
 
     const deviceSerial = session.deviceInfo.serial;
 
@@ -758,7 +788,9 @@ export class DeviceManager {
    * This is more efficient than polling - ADB pushes device changes to us
    */
   async startDeviceMonitoring(): Promise<void> {
-    if (this.isMonitoring) return;
+    if (this.isMonitoring) {
+      return;
+    }
     this.isMonitoring = true;
 
     // Initialize known devices with currently connected sessions
@@ -833,10 +865,15 @@ export class DeviceManager {
    * Handle device list update from track-devices
    */
   private async handleDeviceListUpdate(deviceList: string): Promise<void> {
-    if (!this.config.autoConnect) return;
+    if (!this.config.autoConnect) {
+      return;
+    }
 
     // Parse device list (same format as 'adb devices' output, without header)
-    const lines = deviceList.trim().split('\n').filter(line => line.length > 0);
+    const lines = deviceList
+      .trim()
+      .split('\n')
+      .filter((line) => line.length > 0);
     const currentDevices: DeviceInfo[] = [];
 
     for (const line of lines) {
@@ -850,12 +887,12 @@ export class DeviceManager {
         currentDevices.push({
           serial,
           name: serial, // We'll get the model name when connecting
-          model: undefined
+          model: undefined,
         });
       }
     }
 
-    const currentSerials = new Set(currentDevices.map(d => d.serial));
+    const currentSerials = new Set(currentDevices.map((d) => d.serial));
 
     // Find new USB devices and auto-connect
     for (const device of currentDevices) {
@@ -869,7 +906,7 @@ export class DeviceManager {
         try {
           const modelOutput = execSync(`adb -s ${device.serial} shell getprop ro.product.model`, {
             timeout: 5000,
-            encoding: 'utf8'
+            encoding: 'utf8',
           }).trim();
           device.name = modelOutput || device.serial;
           device.model = modelOutput || undefined;
@@ -916,10 +953,10 @@ export class DeviceManager {
   }
 
   private notifySessionListChanged(): void {
-    const sessionList: SessionInfo[] = Array.from(this.sessions.values()).map(s => ({
+    const sessionList: SessionInfo[] = Array.from(this.sessions.values()).map((s) => ({
       deviceId: s.deviceId,
       deviceInfo: s.deviceInfo,
-      isActive: s.isActive
+      isActive: s.isActive,
     }));
     this.sessionListCallback(sessionList);
   }

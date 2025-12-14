@@ -5,7 +5,6 @@ import * as path from 'path';
 import { exec, spawn, ChildProcess } from 'child_process';
 import { ScrcpyProtocol } from './ScrcpyProtocol';
 
-
 // Type for video frame callback
 type VideoFrameCallback = (
   data: Uint8Array,
@@ -16,10 +15,7 @@ type VideoFrameCallback = (
 ) => void;
 
 // Type for audio frame callback
-type AudioFrameCallback = (
-  data: Uint8Array,
-  isConfig: boolean
-) => void;
+type AudioFrameCallback = (data: Uint8Array, isConfig: boolean) => void;
 
 // Type for status callback
 type StatusCallback = (status: string) => void;
@@ -101,7 +97,11 @@ export class ScrcpyConnection {
     const devices = await this.getDeviceList();
 
     if (devices.length === 0) {
-      throw new Error(vscode.l10n.t('No Android devices found.\n\nPlease ensure:\n1. Device is connected via USB\n2. USB debugging is enabled\n3. ADB is authorized on the device'));
+      throw new Error(
+        vscode.l10n.t(
+          'No Android devices found.\n\nPlease ensure:\n1. Device is connected via USB\n2. USB debugging is enabled\n3. ADB is authorized on the device'
+        )
+      );
     }
 
     // Use target serial if specified, otherwise first device
@@ -121,11 +121,15 @@ export class ScrcpyConnection {
    */
   private getDeviceList(): Promise<string[]> {
     return new Promise((resolve, reject) => {
-      exec('adb devices', (error, stdout, stderr) => {
+      exec('adb devices', (error, stdout, _stderr) => {
         if (error) {
-          reject(new Error(
-            vscode.l10n.t('Failed to run "adb devices".\n\nPlease ensure ADB is installed and in your PATH.\nInstall via: brew install android-platform-tools (macOS)\nOr download from: https://developer.android.com/studio/releases/platform-tools')
-          ));
+          reject(
+            new Error(
+              vscode.l10n.t(
+                'Failed to run "adb devices".\n\nPlease ensure ADB is installed and in your PATH.\nInstall via: brew install android-platform-tools (macOS)\nOr download from: https://developer.android.com/studio/releases/platform-tools'
+              )
+            )
+          );
           return;
         }
 
@@ -162,7 +166,9 @@ export class ScrcpyConnection {
     await this.ensureServerOnDevice();
 
     // Generate unique session ID
-    this.scid = Math.floor(Math.random() * 0x7FFFFFFF).toString(16).padStart(8, '0');
+    this.scid = Math.floor(Math.random() * 0x7fffffff)
+      .toString(16)
+      .padStart(8, '0');
     const localPort = 27183 + Math.floor(Math.random() * 16);
 
     // Setup reverse port forwarding
@@ -175,10 +181,20 @@ export class ScrcpyConnection {
     // Number of sockets: video + control (+ audio if enabled)
     const expectedSockets = this.config.audio ? 3 : 2;
 
-    const connectionPromise = new Promise<{ videoSocket: net.Socket; controlSocket: net.Socket; audioSocket: net.Socket | null }>((resolve, reject) => {
+    const connectionPromise = new Promise<{
+      videoSocket: net.Socket;
+      controlSocket: net.Socket;
+      audioSocket: net.Socket | null;
+    }>((resolve, reject) => {
       const timeout = setTimeout(() => {
         server.close();
-        reject(new Error(vscode.l10n.t('Timeout waiting for device connection. The server may have failed to start.')));
+        reject(
+          new Error(
+            vscode.l10n.t(
+              'Timeout waiting for device connection. The server may have failed to start.'
+            )
+          )
+        );
       }, 15000);
 
       const sockets: net.Socket[] = [];
@@ -190,7 +206,11 @@ export class ScrcpyConnection {
           clearTimeout(timeout);
           // Order: video, audio (if enabled), control (control is always last)
           if (this.config.audio) {
-            resolve({ videoSocket: sockets[0], audioSocket: sockets[1], controlSocket: sockets[2] });
+            resolve({
+              videoSocket: sockets[0],
+              audioSocket: sockets[1],
+              controlSocket: sockets[2],
+            });
           } else {
             resolve({ videoSocket: sockets[0], audioSocket: null, controlSocket: sockets[1] });
           }
@@ -207,7 +227,8 @@ export class ScrcpyConnection {
 
     // Start scrcpy server on device
     const serverArgs = [
-      '-s', this.deviceSerial,
+      '-s',
+      this.deviceSerial,
       'shell',
       `CLASSPATH=/data/local/tmp/scrcpy-server.jar`,
       'app_process',
@@ -229,11 +250,11 @@ export class ScrcpyConnection {
       ...(this.config.lockVideoOrientation ? ['capture_orientation=@'] : []),
       'send_device_meta=true',
       'send_frame_meta=true',
-      'send_codec_meta=true'
+      'send_codec_meta=true',
     ];
 
     this.adbProcess = spawn('adb', serverArgs, {
-      stdio: ['ignore', 'pipe', 'pipe']
+      stdio: ['ignore', 'pipe', 'pipe'],
     });
 
     this.adbProcess.stderr?.on('data', (data: Buffer) => {
@@ -291,7 +312,6 @@ export class ScrcpyConnection {
       this.handleControlSocketData(controlSocket);
 
       // Clipboard sync is now on-demand (paste/copy), no polling needed
-
     } catch (error) {
       server.close();
       this.adbProcess?.kill();
@@ -317,9 +337,13 @@ export class ScrcpyConnection {
     return new Promise((resolve, reject) => {
       exec(`"${scrcpyCmd}" --version`, (error, stdout) => {
         if (error) {
-          reject(new Error(
-            vscode.l10n.t('Failed to get scrcpy version.\n\nPlease ensure scrcpy is installed:\n- macOS: brew install scrcpy\n- Linux: sudo apt install scrcpy\n- Windows: scoop install scrcpy\n\nOr set the scrcpy path in settings.')
-          ));
+          reject(
+            new Error(
+              vscode.l10n.t(
+                'Failed to get scrcpy version.\n\nPlease ensure scrcpy is installed:\n- macOS: brew install scrcpy\n- Linux: sudo apt install scrcpy\n- Windows: scoop install scrcpy\n\nOr set the scrcpy path in settings.'
+              )
+            )
+          );
           return;
         }
 
@@ -354,7 +378,7 @@ export class ScrcpyConnection {
       // Windows Scoop
       path.join(process.env.USERPROFILE || '', 'scoop/apps/scrcpy/current/scrcpy-server'),
       // Windows Chocolatey
-      path.join(process.env.PROGRAMDATA || '', 'chocolatey/lib/scrcpy/tools/scrcpy-server')
+      path.join(process.env.PROGRAMDATA || '', 'chocolatey/lib/scrcpy/tools/scrcpy-server'),
     ];
 
     let serverPath: string | null = null;
@@ -367,7 +391,11 @@ export class ScrcpyConnection {
     }
 
     if (!serverPath) {
-      throw new Error(vscode.l10n.t('scrcpy-server not found.\n\nPlease install scrcpy first:\n- macOS: brew install scrcpy\n- Linux: sudo apt install scrcpy\n- Windows: scoop install scrcpy\n\nOr download from: https://github.com/Genymobile/scrcpy/releases'));
+      throw new Error(
+        vscode.l10n.t(
+          'scrcpy-server not found.\n\nPlease install scrcpy first:\n- macOS: brew install scrcpy\n- Linux: sudo apt install scrcpy\n- Windows: scoop install scrcpy\n\nOr download from: https://github.com/Genymobile/scrcpy/releases'
+        )
+      );
     }
 
     this.onStatus(vscode.l10n.t('Pushing scrcpy server to device...'));
@@ -410,9 +438,14 @@ export class ScrcpyConnection {
       while (buffer.length > 0) {
         if (!headerReceived) {
           // First, receive device name (64 bytes)
-          if (buffer.length < ScrcpyProtocol.DEVICE_NAME_LENGTH) break;
+          if (buffer.length < ScrcpyProtocol.DEVICE_NAME_LENGTH) {
+            break;
+          }
 
-          const deviceName = buffer.subarray(0, ScrcpyProtocol.DEVICE_NAME_LENGTH).toString('utf8').replace(/\0+$/, '');
+          const deviceName = buffer
+            .subarray(0, ScrcpyProtocol.DEVICE_NAME_LENGTH)
+            .toString('utf8')
+            .replace(/\0+$/, '');
           console.log('Device name:', deviceName);
           buffer = buffer.subarray(ScrcpyProtocol.DEVICE_NAME_LENGTH);
           headerReceived = true;
@@ -421,13 +454,17 @@ export class ScrcpyConnection {
 
         if (!codecReceived) {
           // Video codec metadata: codec_id (4) + width (4) + height (4) = 12 bytes
-          if (buffer.length < 12) break;
+          if (buffer.length < 12) {
+            break;
+          }
 
           const codecId = buffer.readUInt32BE(0);
           this.deviceWidth = buffer.readUInt32BE(4);
           this.deviceHeight = buffer.readUInt32BE(8);
 
-          console.log(`Video: codec=0x${codecId.toString(16)}, ${this.deviceWidth}x${this.deviceHeight}`);
+          console.log(
+            `Video: codec=0x${codecId.toString(16)}, ${this.deviceWidth}x${this.deviceHeight}`
+          );
           buffer = buffer.subarray(12);
           codecReceived = true;
 
@@ -454,7 +491,13 @@ export class ScrcpyConnection {
                 buffer = buffer.subarray(12);
 
                 // Notify webview of new dimensions
-                this.onVideoFrame(new Uint8Array(0), true, false, this.deviceWidth, this.deviceHeight);
+                this.onVideoFrame(
+                  new Uint8Array(0),
+                  true,
+                  false,
+                  this.deviceWidth,
+                  this.deviceHeight
+                );
                 continue;
               }
             }
@@ -462,12 +505,16 @@ export class ScrcpyConnection {
         }
 
         // Video packets: pts_flags (8) + packet_size (4) + data
-        if (buffer.length < 12) break;
+        if (buffer.length < 12) {
+          break;
+        }
 
         const ptsFlags = buffer.readBigUInt64BE(0);
         const packetSize = buffer.readUInt32BE(8);
 
-        if (buffer.length < 12 + packetSize) break;
+        if (buffer.length < 12 + packetSize) {
+          break;
+        }
 
         const isConfig = (ptsFlags & (1n << 63n)) !== 0n;
         const isKeyFrame = (ptsFlags & (1n << 62n)) !== 0n;
@@ -515,7 +562,9 @@ export class ScrcpyConnection {
       while (buffer.length > 0) {
         if (!codecReceived) {
           // Audio codec metadata: codec_id (4 bytes only)
-          if (buffer.length < 4) break;
+          if (buffer.length < 4) {
+            break;
+          }
 
           const codecId = buffer.readUInt32BE(0);
           console.log(`Audio: codec=0x${codecId.toString(16)} (opus=0x6f707573)`);
@@ -530,12 +579,16 @@ export class ScrcpyConnection {
         }
 
         // Audio packets: pts_flags (8) + packet_size (4) + data
-        if (buffer.length < 12) break;
+        if (buffer.length < 12) {
+          break;
+        }
 
         const ptsFlags = buffer.readBigUInt64BE(0);
         const packetSize = buffer.readUInt32BE(8);
 
-        if (buffer.length < 12 + packetSize) break;
+        if (buffer.length < 12 + packetSize) {
+          break;
+        }
 
         const isConfig = (ptsFlags & (1n << 63n)) !== 0n;
         const packetData = buffer.subarray(12, 12 + packetSize);
@@ -544,7 +597,9 @@ export class ScrcpyConnection {
         // Log first few audio packets for debugging
         this._audioPacketCount++;
         if (this._audioPacketCount <= 5) {
-          console.log(`Audio packet #${this._audioPacketCount}: size=${packetSize}, isConfig=${isConfig}`);
+          console.log(
+            `Audio packet #${this._audioPacketCount}: size=${packetSize}, isConfig=${isConfig}`
+          );
         }
 
         // Send to webview
@@ -591,9 +646,15 @@ export class ScrcpyConnection {
     // Action
     let actionCode: number;
     switch (action) {
-      case 'down': actionCode = ScrcpyProtocol.MotionEventAction.DOWN; break; // AMOTION_EVENT_ACTION_DOWN
-      case 'move': actionCode = ScrcpyProtocol.MotionEventAction.MOVE; break; // AMOTION_EVENT_ACTION_MOVE
-      case 'up': actionCode = ScrcpyProtocol.MotionEventAction.UP; break;   // AMOTION_EVENT_ACTION_UP
+      case 'down':
+        actionCode = ScrcpyProtocol.MotionEventAction.DOWN;
+        break; // AMOTION_EVENT_ACTION_DOWN
+      case 'move':
+        actionCode = ScrcpyProtocol.MotionEventAction.MOVE;
+        break; // AMOTION_EVENT_ACTION_MOVE
+      case 'up':
+        actionCode = ScrcpyProtocol.MotionEventAction.UP;
+        break; // AMOTION_EVENT_ACTION_UP
     }
     msg.writeUInt8(actionCode, 1);
 
@@ -609,7 +670,7 @@ export class ScrcpyConnection {
     msg.writeUInt16BE(this.deviceHeight, 20);
 
     // Pressure (16-bit, 0xFFFF for full pressure, 0 for up)
-    msg.writeUInt16BE(action === 'up' ? 0 : 0xFFFF, 22);
+    msg.writeUInt16BE(action === 'up' ? 0 : 0xffff, 22);
 
     // Action button (4 bytes)
     msg.writeUInt32BE(0, 24);
@@ -628,12 +689,7 @@ export class ScrcpyConnection {
    * Send scroll event to device.
    * Handles large deltas by splitting them into multiple valid packets.
    */
-  sendScroll(
-    normalizedX: number,
-    normalizedY: number,
-    deltaX: number,
-    deltaY: number
-  ): void {
+  sendScroll(normalizedX: number, normalizedY: number, deltaX: number, deltaY: number): void {
     if (!this.controlSocket || !this.isConnected) {
       return;
     }
@@ -837,15 +893,22 @@ export class ScrcpyConnection {
    */
   private parseDeviceMessages(): void {
     while (this.deviceMsgBuffer.length > 0) {
-      if (this.deviceMsgBuffer.length < 1) break;
+      if (this.deviceMsgBuffer.length < 1) {
+        break;
+      }
 
       const msgType = this.deviceMsgBuffer.readUInt8(0);
 
       switch (msgType) {
-        case ScrcpyProtocol.DeviceMessageType.CLIPBOARD: { // DEVICE_MSG_TYPE_CLIPBOARD
-          if (this.deviceMsgBuffer.length < 5) return; // Need type + length
+        case ScrcpyProtocol.DeviceMessageType.CLIPBOARD: {
+          // DEVICE_MSG_TYPE_CLIPBOARD
+          if (this.deviceMsgBuffer.length < 5) {
+            return;
+          } // Need type + length
           const textLength = this.deviceMsgBuffer.readUInt32BE(1);
-          if (this.deviceMsgBuffer.length < 5 + textLength) return; // Need full message
+          if (this.deviceMsgBuffer.length < 5 + textLength) {
+            return;
+          } // Need full message
 
           const text = this.deviceMsgBuffer.subarray(5, 5 + textLength).toString('utf8');
           this.deviceMsgBuffer = this.deviceMsgBuffer.subarray(5 + textLength);
@@ -854,17 +917,25 @@ export class ScrcpyConnection {
           break;
         }
 
-        case ScrcpyProtocol.DeviceMessageType.ACK_CLIPBOARD: { // DEVICE_MSG_TYPE_ACK_CLIPBOARD
-          if (this.deviceMsgBuffer.length < 9) return; // Need type + sequence
+        case ScrcpyProtocol.DeviceMessageType.ACK_CLIPBOARD: {
+          // DEVICE_MSG_TYPE_ACK_CLIPBOARD
+          if (this.deviceMsgBuffer.length < 9) {
+            return;
+          } // Need type + sequence
           this.deviceMsgBuffer = this.deviceMsgBuffer.subarray(9);
           // ACK received, clipboard set successfully
           break;
         }
 
-        case ScrcpyProtocol.DeviceMessageType.UHID_OUTPUT: { // DEVICE_MSG_TYPE_UHID_OUTPUT
-          if (this.deviceMsgBuffer.length < 5) return; // Need type + id + length
+        case ScrcpyProtocol.DeviceMessageType.UHID_OUTPUT: {
+          // DEVICE_MSG_TYPE_UHID_OUTPUT
+          if (this.deviceMsgBuffer.length < 5) {
+            return;
+          } // Need type + id + length
           const dataLength = this.deviceMsgBuffer.readUInt16BE(3);
-          if (this.deviceMsgBuffer.length < 5 + dataLength) return;
+          if (this.deviceMsgBuffer.length < 5 + dataLength) {
+            return;
+          }
           this.deviceMsgBuffer = this.deviceMsgBuffer.subarray(5 + dataLength);
           // Ignore UHID messages
           break;
@@ -883,7 +954,9 @@ export class ScrcpyConnection {
    */
   private handleDeviceClipboard(text: string): void {
     // Avoid sync loop - don't sync back if we just sent this
-    if (text === this.lastHostClipboard) return;
+    if (text === this.lastHostClipboard) {
+      return;
+    }
 
     this.lastDeviceClipboard = text;
     // Update lastHostClipboard synchronously to prevent race condition with polling
@@ -897,8 +970,12 @@ export class ScrcpyConnection {
     // Update host clipboard if API available
     if (this.clipboardAPI && this.config.clipboardSync) {
       this.clipboardAPI.writeText(text).then(
-        () => { /* already updated synchronously */ },
-        (err) => { console.error('Failed to write to host clipboard:', err); }
+        () => {
+          /* already updated synchronously */
+        },
+        (err) => {
+          console.error('Failed to write to host clipboard:', err);
+        }
       );
     }
   }
@@ -908,7 +985,9 @@ export class ScrcpyConnection {
    * Called when user wants to paste on the device
    */
   async pasteFromHost(): Promise<void> {
-    if (!this.clipboardAPI || !this.isConnected || !this.config.clipboardSync) return;
+    if (!this.clipboardAPI || !this.isConnected || !this.config.clipboardSync) {
+      return;
+    }
 
     try {
       const text = await this.clipboardAPI.readText();
@@ -925,7 +1004,9 @@ export class ScrcpyConnection {
    * Called when user wants to copy on the device
    */
   async copyToHost(): Promise<void> {
-    if (!this.clipboardAPI || !this.isConnected || !this.config.clipboardSync) return;
+    if (!this.clipboardAPI || !this.isConnected || !this.config.clipboardSync) {
+      return;
+    }
 
     // Send Ctrl+C to device to trigger copy, then device will send clipboard update
     // The handleDeviceClipboard will update the host clipboard when device sends it
@@ -937,11 +1018,13 @@ export class ScrcpyConnection {
    * Send SET_CLIPBOARD message to device
    */
   private sendSetClipboard(text: string, paste: boolean = false): void {
-    if (!this.controlSocket || !this.isConnected) return;
+    if (!this.controlSocket || !this.isConnected) {
+      return;
+    }
 
     const textBuffer = Buffer.from(text, 'utf8');
     // Max clipboard size: 256KB - 14 bytes header
-    const maxTextLength = (256 * 1024) - 14;
+    const maxTextLength = 256 * 1024 - 14;
 
     const textLength = Math.min(textBuffer.length, maxTextLength);
 
@@ -981,7 +1064,7 @@ export class ScrcpyConnection {
     if (filePaths.length === 0) {
       return;
     }
-    const quotedPaths = filePaths.map(p => `"${p}"`).join(' ');
+    const quotedPaths = filePaths.map((p) => `"${p}"`).join(' ');
     await this.execAdb(`push ${quotedPaths} "${destPath}"`);
   }
 

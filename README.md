@@ -72,37 +72,37 @@ Display and control your Android device screen directly within VS Code, similar 
 
 ## Commands
 
-| Command | Description |
-|---------|-------------|
-| `Scrcpy: Start Device Mirroring` | Focus the view and connect to device |
-| `Scrcpy: Stop Device Mirroring` | Disconnect from device |
+| Command                               | Description                                       |
+| ------------------------------------- | ------------------------------------------------- |
+| `Scrcpy: Start Device Mirroring`      | Focus the view and connect to device              |
+| `Scrcpy: Stop Device Mirroring`       | Disconnect from device                            |
 | `Scrcpy: Connect to Device over WiFi` | Connect wirelessly (supports Android 11+ pairing) |
-| `Scrcpy: Install APK` | Select and install an APK file on the device |
-| `Scrcpy: Upload Files to Device` | Upload files or folders to /sdcard/Download/ |
-| `Scrcpy: Open Settings` | Open extension settings |
+| `Scrcpy: Install APK`                 | Select and install an APK file on the device      |
+| `Scrcpy: Upload Files to Device`      | Upload files or folders to /sdcard/Download/      |
+| `Scrcpy: Open Settings`               | Open extension settings                           |
 
 ## Settings
 
 Click the **gear icon** in the scrcpy view toolbar to access settings.
 
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `scrcpy.path` | (empty) | Path to scrcpy installation directory |
+| Setting                        | Default | Description                                                |
+| ------------------------------ | ------- | ---------------------------------------------------------- |
+| `scrcpy.path`                  | (empty) | Path to scrcpy installation directory                      |
 | `scrcpy.apkInstallDefaultPath` | (empty) | Default folder for APK file picker (defaults to Downloads) |
-| `scrcpy.screenOff` | `false` | Turn device screen off while mirroring |
-| `scrcpy.stayAwake` | `true` | Keep device awake during mirroring |
-| `scrcpy.maxSize` | `1920` | Maximum screen dimension in pixels |
-| `scrcpy.bitRate` | `8` | Video bitrate in Mbps |
-| `scrcpy.maxFps` | `60` | Maximum frames per second |
-| `scrcpy.showTouches` | `false` | Show visual touch feedback on device |
-| `scrcpy.audio` | `true` | Enable audio streaming (requires scrcpy 2.0+) |
-| `scrcpy.clipboardSync` | `true` | Enable clipboard sync |
-| `scrcpy.autoConnect` | `true` | Auto-connect when devices are plugged in |
-| `scrcpy.autoReconnect` | `true` | Auto-reconnect when connection is lost |
-| `scrcpy.reconnectRetries` | `2` | Number of reconnection attempts |
-| `scrcpy.lockVideoOrientation` | `false` | Lock video orientation |
-| `scrcpy.scrollSensitivity` | `1.0` | Mouse wheel scroll sensitivity (0.1-5.0) |
-| `scrcpy.showStats` | `false` | Show FPS statistics overlay |
+| `scrcpy.screenOff`             | `false` | Turn device screen off while mirroring                     |
+| `scrcpy.stayAwake`             | `true`  | Keep device awake during mirroring                         |
+| `scrcpy.maxSize`               | `1920`  | Maximum screen dimension in pixels                         |
+| `scrcpy.bitRate`               | `8`     | Video bitrate in Mbps                                      |
+| `scrcpy.maxFps`                | `60`    | Maximum frames per second                                  |
+| `scrcpy.showTouches`           | `false` | Show visual touch feedback on device                       |
+| `scrcpy.audio`                 | `true`  | Enable audio streaming (requires scrcpy 2.0+)              |
+| `scrcpy.clipboardSync`         | `true`  | Enable clipboard sync                                      |
+| `scrcpy.autoConnect`           | `true`  | Auto-connect when devices are plugged in                   |
+| `scrcpy.autoReconnect`         | `true`  | Auto-reconnect when connection is lost                     |
+| `scrcpy.reconnectRetries`      | `2`     | Number of reconnection attempts                            |
+| `scrcpy.lockVideoOrientation`  | `false` | Lock video orientation                                     |
+| `scrcpy.scrollSensitivity`     | `1.0`   | Mouse wheel scroll sensitivity (0.1-5.0)                   |
+| `scrcpy.showStats`             | `false` | Show FPS statistics overlay                                |
 
 ## Troubleshooting
 

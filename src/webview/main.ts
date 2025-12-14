@@ -106,7 +106,9 @@ function initialize() {
 
     buttons.forEach((button) => {
       const keycode = parseInt((button as HTMLElement).dataset.keycode || '0', 10);
-      if (!keycode) return;
+      if (!keycode) {
+        return;
+      }
 
       const isVolumeButton = volumeKeycodes.includes(keycode);
       let repeatTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -208,7 +210,9 @@ function initialize() {
  * Update rotate button icon based on current orientation
  */
 function updateRotateButton(width: number, height: number): void {
-  if (!rotateBtn) return;
+  if (!rotateBtn) {
+    return;
+  }
 
   isPortrait = height > width;
 
@@ -234,7 +238,9 @@ function toggleMute(): void {
  * Take a screenshot of the active device (via ADB screencap for original resolution)
  */
 function takeScreenshot(): void {
-  if (!activeDeviceId || !screenshotBtn) return;
+  if (!activeDeviceId || !screenshotBtn) {
+    return;
+  }
 
   // Show loading state on button
   screenshotBtn.classList.add('loading');
@@ -248,7 +254,9 @@ function takeScreenshot(): void {
  * Reset screenshot button to normal state
  */
 function resetScreenshotButton(): void {
-  if (!screenshotBtn) return;
+  if (!screenshotBtn) {
+    return;
+  }
 
   screenshotBtn.classList.remove('loading');
   screenshotBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>`;
@@ -261,7 +269,7 @@ function updateAudioState(audioEnabled: boolean): void {
   isMuted = !audioEnabled;
 
   // Update all audio renderers
-  sessions.forEach(session => {
+  sessions.forEach((session) => {
     session.audioRenderer.setMuted(isMuted);
   });
 
@@ -321,7 +329,9 @@ function handleVideoFrame(message: {
   height?: number;
 }) {
   const session = sessions.get(message.deviceId);
-  if (!session) return;
+  if (!session) {
+    return;
+  }
 
   // Configure renderer with dimensions (only sent with first frame)
   if (message.width && message.height) {
@@ -353,11 +363,7 @@ function handleVideoFrame(message: {
 /**
  * Handle audio frame from extension
  */
-function handleAudioFrame(message: {
-  deviceId: string;
-  data: number[];
-  isConfig: boolean;
-}) {
+function handleAudioFrame(message: { deviceId: string; data: number[]; isConfig: boolean }) {
   const session = sessions.get(message.deviceId);
   if (!session) {
     console.warn('AudioFrame: no session found for device', message.deviceId);
@@ -399,7 +405,7 @@ function handleSettings(message: { showStats?: boolean; audioEnabled?: boolean }
   if (message.showStats !== undefined) {
     showStats = message.showStats;
     // Update all existing renderers
-    sessions.forEach(session => {
+    sessions.forEach((session) => {
       session.videoRenderer.setStatsEnabled(showStats);
     });
     // Hide stats element if disabled
@@ -428,7 +434,7 @@ function updateSessionList(sessionList: SessionInfo[]) {
   }
 
   // Remove sessions that no longer exist
-  const currentIds = new Set(sessionList.map(s => s.deviceId));
+  const currentIds = new Set(sessionList.map((s) => s.deviceId));
   for (const [deviceId] of sessions) {
     if (!currentIds.has(deviceId)) {
       removeDeviceSession(deviceId);
@@ -436,7 +442,7 @@ function updateSessionList(sessionList: SessionInfo[]) {
   }
 
   // Switch to the active device (always call to ensure proper state)
-  const activeSession = sessionList.find(s => s.isActive);
+  const activeSession = sessionList.find((s) => s.isActive);
   if (activeSession) {
     switchToDevice(activeSession.deviceId);
   }
@@ -467,7 +473,9 @@ function createDeviceSession(
     canvas,
     (fps, frames) => {
       if (deviceId === activeDeviceId && showStats) {
-        statsElement.textContent = window.l10n.statsFormat.replace('{0}', fps.toString()).replace('{1}', frames.toString());
+        statsElement.textContent = window.l10n.statsFormat
+          .replace('{0}', fps.toString())
+          .replace('{1}', frames.toString());
         statsElement.classList.remove('hidden');
       }
     },
@@ -481,7 +489,7 @@ function createDeviceSession(
         type: 'dimensionsChanged',
         deviceId,
         width,
-        height
+        height,
       });
     }
   );
@@ -503,7 +511,7 @@ function createDeviceSession(
           y,
           action,
           screenWidth: canvas.width,
-          screenHeight: canvas.height
+          screenHeight: canvas.height,
         });
       }
     },
@@ -517,7 +525,7 @@ function createDeviceSession(
           deltaX,
           deltaY,
           screenWidth: canvas.width,
-          screenHeight: canvas.height
+          screenHeight: canvas.height,
         });
       }
     }
@@ -532,7 +540,7 @@ function createDeviceSession(
         vscode.postMessage({
           type: 'injectText',
           deviceId,
-          text
+          text,
         });
       }
     },
@@ -544,7 +552,7 @@ function createDeviceSession(
           deviceId,
           keycode,
           metastate,
-          action
+          action,
         });
       }
     },
@@ -569,8 +577,8 @@ function createDeviceSession(
 
   // Determine connection type and icon
   const isWifi = /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(:\d+)?$/.test(deviceInfo.serial);
-  
-  const icon = isWifi 
+
+  const icon = isWifi
     ? `<svg class="tab-icon" width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12,21L15.6,16.2C14.6,15.45 13.35,15 12,15C10.65,15 9.4,15.45 8.4,16.2L12,21M12,3C7.95,3 4.21,4.34 1.2,6.6L3,9C5.5,7.12 8.62,6 12,6C15.38,6 18.5,7.12 21,9L22.8,6.6C19.79,4.34 16.05,3 12,3M12,9C9.3,9 6.81,9.89 4.8,11.4L6.6,13.8C8.1,12.67 9.97,12 12,12C14.03,12 15.9,12.67 17.4,13.8L19.2,11.4C17.19,9.89 14.7,9 12,9Z" /></svg>`
     : `<svg class="tab-icon" width="14" height="14" viewBox="0 0 193 193" fill="currentColor"><path d="M81.114 37.464l16.415-28.96 16.834 28.751-12.164.077-.174 70.181c.988-.552 2.027-1.09 3.096-1.643 6.932-3.586 15.674-8.11 15.998-28.05h-8.533V53.251h24.568V77.82h-7.611c-.334 25.049-11.627 30.892-20.572 35.519-3.232 1.672-6.012 3.111-6.975 5.68l-.09 36.683a14.503 14.503 0 0 1 10.68 14.02 14.5 14.5 0 0 1-14.533 14.532 14.5 14.5 0 0 1-14.533-14.532 14.504 14.504 0 0 1 9.454-13.628l.057-22.801c-2.873-1.613-5.62-2.704-8.139-3.705-11.142-4.43-18.705-7.441-18.857-33.4a14.381 14.381 0 0 1-10.43-13.869c0-7.946 6.482-14.428 14.428-14.428 7.946 0 14.428 6.482 14.428 14.428 0 6.488-4.21 11.889-10.004 13.74.116 20.396 5.54 22.557 13.528 25.732 1.61.641 3.303 1.312 5.069 2.114l.214-86.517-12.154.076z"/></svg>`;
 
@@ -604,7 +612,7 @@ function createDeviceSession(
     audioRenderer,
     inputHandler,
     keyboardHandler,
-    tabElement: tab
+    tabElement: tab,
   };
 
   sessions.set(deviceId, session);
@@ -616,7 +624,9 @@ function createDeviceSession(
  */
 function removeDeviceSession(deviceId: string) {
   const session = sessions.get(deviceId);
-  if (!session) return;
+  if (!session) {
+    return;
+  }
 
   // Cleanup
   session.videoRenderer.dispose();
@@ -647,7 +657,9 @@ function removeDeviceSession(deviceId: string) {
  */
 function switchToDevice(deviceId: string) {
   const newSession = sessions.get(deviceId);
-  if (!newSession) return;
+  if (!newSession) {
+    return;
+  }
 
   // Pause and hide ALL other canvases (not just the previous active one)
   sessions.forEach((s, id) => {
@@ -715,7 +727,7 @@ function showError(text: string) {
   statusTextElement.classList.add('error');
 
   // Hide canvases and control toolbar
-  sessions.forEach(s => s.canvas.classList.add('hidden'));
+  sessions.forEach((s) => s.canvas.classList.add('hidden'));
   if (controlToolbar) {
     controlToolbar.classList.add('hidden');
   }
@@ -761,7 +773,8 @@ function showError(text: string) {
   // Create button container with only reconnect button
   btnContainer = document.createElement('div');
   btnContainer.className = 'button-container';
-  btnContainer.style.cssText = 'display: flex; gap: 8px; justify-content: center; margin-top: 12px;';
+  btnContainer.style.cssText =
+    'display: flex; gap: 8px; justify-content: center; margin-top: 12px;';
   statusElement.appendChild(btnContainer);
 
   const reconnectBtn = document.createElement('button');
@@ -826,7 +839,8 @@ function showEmptyState() {
   // Create button container with add device button
   btnContainer = document.createElement('div');
   btnContainer.className = 'button-container';
-  btnContainer.style.cssText = 'display: flex; gap: 8px; justify-content: center; margin-top: 12px;';
+  btnContainer.style.cssText =
+    'display: flex; gap: 8px; justify-content: center; margin-top: 12px;';
   statusElement.appendChild(btnContainer);
 
   const addBtn = document.createElement('button');

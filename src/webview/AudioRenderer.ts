@@ -28,7 +28,9 @@ export class AudioRenderer {
    * Called once when AudioContext is created in suspended state
    */
   private setupUserGestureResume(): void {
-    if (this.resumePending) return;
+    if (this.resumePending) {
+      return;
+    }
     this.resumePending = true;
 
     const resumeAudio = () => {
@@ -51,7 +53,9 @@ export class AudioRenderer {
    * Called when first audio config is received
    */
   async initialize(): Promise<void> {
-    if (this.isInitialized) return;
+    if (this.isInitialized) {
+      return;
+    }
     this.isInitialized = true;
 
     // Create AudioContext (may be suspended due to autoplay policy)
@@ -71,7 +75,9 @@ export class AudioRenderer {
 
       await this.decoder.ready;
       this.isReady = true;
-      console.log(`AudioRenderer initialized: opus-decoder, ${this.SAMPLE_RATE}Hz, ${this.CHANNELS} channels`);
+      console.log(
+        `AudioRenderer initialized: opus-decoder, ${this.SAMPLE_RATE}Hz, ${this.CHANNELS} channels`
+      );
     } catch (error) {
       console.error('Failed to initialize Opus decoder:', error);
       this.decoder = null;

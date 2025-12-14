@@ -99,13 +99,19 @@ export class VideoRenderer {
    * Fit canvas to container while maintaining aspect ratio
    */
   private fitToContainer() {
-    if (this.width === 0 || this.height === 0) return;
+    if (this.width === 0 || this.height === 0) {
+      return;
+    }
 
     const container = this.canvas.parentElement;
-    if (!container) return;
+    if (!container) {
+      return;
+    }
 
     const rect = container.getBoundingClientRect();
-    if (rect.width === 0 || rect.height === 0) return;
+    if (rect.width === 0 || rect.height === 0) {
+      return;
+    }
 
     const aspectRatio = this.width / this.height;
 
@@ -137,7 +143,7 @@ export class VideoRenderer {
 
     this.decoder = new VideoDecoder({
       output: (frame) => this.handleDecodedFrame(frame),
-      error: (error) => console.error('Decoder error:', error)
+      error: (error) => console.error('Decoder error:', error),
     });
 
     this.codecConfigured = false;
@@ -210,7 +216,7 @@ export class VideoRenderer {
       const chunk = new EncodedVideoChunk({
         type: isKey ? 'key' : 'delta',
         timestamp: performance.now() * 1000, // microseconds
-        data: frameData
+        data: frameData,
       });
 
       this.decoder.decode(chunk);
@@ -226,11 +232,14 @@ export class VideoRenderer {
     // Look for IDR NAL unit (type 5) in the data
     for (let i = 0; i < data.length - 4; i++) {
       // Find start code
-      if ((data[i] === 0 && data[i + 1] === 0 && data[i + 2] === 1) ||
-          (data[i] === 0 && data[i + 1] === 0 && data[i + 2] === 0 && data[i + 3] === 1)) {
+      if (
+        (data[i] === 0 && data[i + 1] === 0 && data[i + 2] === 1) ||
+        (data[i] === 0 && data[i + 1] === 0 && data[i + 2] === 0 && data[i + 3] === 1)
+      ) {
         const offset = data[i + 2] === 1 ? 3 : 4;
-        const nalType = data[i + offset] & 0x1F;
-        if (nalType === NALUnitType.IDR) { // IDR
+        const nalType = data[i + offset] & 0x1f;
+        if (nalType === NALUnitType.IDR) {
+          // IDR
           return true;
         }
       }
@@ -271,10 +280,6 @@ export class VideoRenderer {
       console.error('Failed to configure codec:', error);
     }
   }
-
-
-
-
 
   /**
    * Merge config packet with frame data (like sc_packet_merger_merge)
@@ -384,4 +389,3 @@ export class VideoRenderer {
     this.pendingConfig = null;
   }
 }
-

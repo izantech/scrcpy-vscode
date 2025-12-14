@@ -23,6 +23,32 @@ npm run watch
 # Run extension (press F5 in VS Code)
 ```
 
+## Code Formatting & Linting
+
+The project uses **Prettier** for code formatting and **ESLint** for linting TypeScript files.
+
+```bash
+# Format all files
+npm run format
+
+# Check formatting without changes (for CI)
+npm run format:check
+
+# Run ESLint
+npm run lint
+```
+
+**Pre-commit hook**: Husky + lint-staged automatically formats and lints staged files before each commit.
+
+**VS Code integration**: Format-on-save is enabled via `.vscode/settings.json`. Install the Prettier extension (`esbenp.prettier-vscode`) for best experience.
+
+**Configuration files**:
+
+- `.prettierrc.json` - Prettier settings (single quotes, trailing commas, 100 char width)
+- `.prettierignore` - Files to skip formatting
+- `.eslintrc.json` - ESLint rules with TypeScript support
+- `.editorconfig` - Cross-editor settings for consistent formatting
+
 ## Project Structure
 
 ```
@@ -109,15 +135,18 @@ src/
 ## Protocol Notes
 
 ### Video Stream (from scrcpy server)
+
 1. Device name: 64 bytes (UTF-8, null-padded)
 2. Codec metadata: 12 bytes (codec_id + width + height)
 3. Packets: 12-byte header (pts_flags + size) + data
 
 ### Audio Stream (from scrcpy server, when audio=true)
+
 1. Codec ID: 4 bytes (0x6f707573 = "opus")
 2. Packets: 12-byte header (pts_flags + size) + Opus data
 
 ### Control Messages (to scrcpy server)
+
 - Touch events: 32 bytes (type=2, action, pointer_id, x, y, dimensions, pressure, buttons)
 - Scroll events: 21 bytes (type=3, x, y, dimensions, hScroll, vScroll, buttons)
 - Key events: 14 bytes (type=0, action, keycode, repeat, metastate)
@@ -125,10 +154,12 @@ src/
 - Rotate device: 1 byte (type=11)
 
 ### Device Messages (from scrcpy server via control socket)
+
 - Clipboard: variable (type=0, length 4 bytes, UTF-8 text)
 - ACK clipboard: 9 bytes (type=1, sequence 8 bytes)
 
 ### Connection Setup
+
 1. `adb reverse localabstract:scrcpy_XXXX tcp:PORT`
 2. Start server via `adb shell app_process`
 3. Accept 2 connections (audio=false) or 3 connections (audio=true): video, [audio], control
@@ -148,23 +179,28 @@ The main scrcpy repository is at `/Users/izan/Dev/Projects/scrcpy/`. Key referen
 ## Common Tasks
 
 ### Adding a new setting
+
 1. Add to `contributes.configuration` in `package.json`
 2. Add to `ScrcpyConfig` interface in `ScrcpyConnection.ts`
 3. Add to `_getConfig()` in `ScrcpyViewProvider.ts`
 4. Use in `serverArgs` array in `ScrcpyConnection.ts`
 
 ### Adding a new server parameter (without UI)
+
 1. Check `Options.java` in scrcpy for available parameters
 2. Add to `serverArgs` array in `ScrcpyConnection.ts`
 
 ### Adding new control buttons
+
 1. Add button HTML in `_getHtmlForWebview()` in `ScrcpyViewProvider.ts` with `data-keycode` attribute
 2. The pointer event handlers in `webview/main.ts` automatically pick up new buttons
 3. Buttons support long press (sends KEY_DOWN on press, KEY_UP on release)
 4. Android keycodes: HOME=3, BACK=4, VOL_UP=24, VOL_DOWN=25, POWER=26, MENU=82, APP_SWITCH=187
 
 ### Adding text/keyboard input
+
 Text/keyboard input is implemented via `KeyboardHandler.ts`:
+
 - Click on canvas to enable keyboard input (blue outline indicates focus)
 - Regular typing uses INJECT_TEXT (type 1) for efficient text injection
 - Special keys (Enter, Backspace, Tab, arrows) use INJECT_KEYCODE (type 0)
@@ -174,6 +210,7 @@ Text/keyboard input is implemented via `KeyboardHandler.ts`:
 ### Audio Implementation Notes
 
 Audio support is implemented using:
+
 1. `audio=true` and `audio_codec=opus` in server args (configured via `scrcpy.audio` setting)
 2. 3rd socket connection for audio stream
 3. `opus-decoder` WASM library for decoding (WebCodecs Opus is not supported in VS Code webviews)
@@ -190,6 +227,7 @@ Audio support is implemented using:
 ## Testing
 
 No automated tests yet. Manual testing:
+
 1. Connect Android device(s)
 2. Run extension (F5)
 3. Click the scrcpy icon in the Activity Bar (left sidebar)

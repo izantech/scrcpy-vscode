@@ -30,7 +30,7 @@ export function getHtmlForWebview(webview: vscode.Webview, extensionUri: vscode.
     reconnect: vscode.l10n.t('Reconnect'),
     noDevicesConnected: vscode.l10n.t('No devices connected'),
     addDevice: vscode.l10n.t('Add Device'),
-    statsFormat: vscode.l10n.t('{0} FPS | {1} frames')
+    statsFormat: vscode.l10n.t('{0} FPS | {1} frames'),
   };
 
   return `<!DOCTYPE html>

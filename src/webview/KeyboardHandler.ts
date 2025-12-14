@@ -5,7 +5,6 @@ import { ANDROID_KEYCODES, AMETA, KEY_TO_KEYCODE } from './AndroidKeys';
  */
 const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
 
-
 /**
  * Callback for text input (INJECT_TEXT)
  */
@@ -37,7 +36,7 @@ export class KeyboardHandler {
   private textBuffer = '';
   private textBufferTimeout: ReturnType<typeof setTimeout> | null = null;
   private readonly TEXT_BUFFER_DELAY = 50; // ms to batch text input
-  private readonly MAX_TEXT_LENGTH = 300;  // scrcpy protocol limit
+  private readonly MAX_TEXT_LENGTH = 300; // scrcpy protocol limit
 
   // Track pressed keys to release on focus loss
   private pressedKeys = new Map<string, number>(); // key -> keycode
@@ -84,7 +83,9 @@ export class KeyboardHandler {
    * Set keyboard focus state
    */
   setFocused(focused: boolean) {
-    if (this.focused === focused) return;
+    if (this.focused === focused) {
+      return;
+    }
 
     this.focused = focused;
 
@@ -126,14 +127,16 @@ export class KeyboardHandler {
    * On others: Ctrl only
    */
   private hasPrimaryModifier(event: KeyboardEvent): boolean {
-    return isMac ? (event.metaKey || event.ctrlKey) : event.ctrlKey;
+    return isMac ? event.metaKey || event.ctrlKey : event.ctrlKey;
   }
 
   /**
    * Handle key down event
    */
   private onKeyDown(event: KeyboardEvent) {
-    if (!this.focused) return;
+    if (!this.focused) {
+      return;
+    }
 
     // Prevent default browser behavior
     event.preventDefault();
@@ -204,10 +207,16 @@ export class KeyboardHandler {
    */
   private buildMetastate(event: KeyboardEvent): number {
     let metastate = AMETA.NONE;
-    if (event.shiftKey) metastate |= AMETA.SHIFT_ON;
-    if (event.altKey) metastate |= AMETA.ALT_ON;
+    if (event.shiftKey) {
+      metastate |= AMETA.SHIFT_ON;
+    }
+    if (event.altKey) {
+      metastate |= AMETA.ALT_ON;
+    }
     // Map Cmd (Mac) or Ctrl (others) to Android Ctrl
-    if (this.hasPrimaryModifier(event)) metastate |= AMETA.CTRL_ON;
+    if (this.hasPrimaryModifier(event)) {
+      metastate |= AMETA.CTRL_ON;
+    }
     return metastate;
   }
 

@@ -128,7 +128,10 @@ export class InputHandler {
     event.preventDefault();
 
     // Only handle our tracked pointer
-    if (!this.isPointerDown || (event.pointerId !== this.pointerId && event.type !== 'pointerleave')) {
+    if (
+      !this.isPointerDown ||
+      (event.pointerId !== this.pointerId && event.type !== 'pointerleave')
+    ) {
       return;
     }
 
@@ -203,12 +206,7 @@ export class InputHandler {
     const THRESHOLD = 0.0001;
 
     if (Math.abs(this.scrollBufferX) > THRESHOLD || Math.abs(this.scrollBufferY) > THRESHOLD) {
-      this.onScroll!(
-        this.lastScrollX,
-        this.lastScrollY,
-        this.scrollBufferX,
-        this.scrollBufferY
-      );
+      this.onScroll!(this.lastScrollX, this.lastScrollY, this.scrollBufferX, this.scrollBufferY);
 
       // Reset buffer
       this.scrollBufferX = 0;

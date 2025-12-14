@@ -157,9 +157,9 @@
         "properties": {
           "scrcpy.scrollSensitivity": {
             "type": "number",
-            "default": 1.0,
+            "default": 1,
             "minimum": 0.1,
-            "maximum": 5.0,
+            "maximum": 5,
             "markdownDescription": "%config.scrcpy.scrollSensitivity%"
           }
         }
@@ -310,7 +310,19 @@
     "compile": "webpack",
     "watch": "webpack --watch",
     "package": "webpack --mode production --devtool hidden-source-map",
-    "lint": "eslint src --ext ts"
+    "lint": "eslint src --ext ts",
+    "format": "prettier --write \"**/*.{ts,js,json,md,yml,yaml,html,css}\"",
+    "format:check": "prettier --check \"**/*.{ts,js,json,md,yml,yaml,html,css}\"",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "*.{ts,js}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{json,md,yml,yaml,html,css}": [
+      "prettier --write"
+    ]
   },
   "dependencies": {
     "buffer": "^6.0.3",
@@ -323,6 +335,9 @@
     "@typescript-eslint/eslint-plugin": "^6.15.0",
     "@typescript-eslint/parser": "^6.15.0",
     "eslint": "^8.56.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.2.7",
+    "prettier": "^3.7.4",
     "ts-loader": "^9.5.1",
     "typescript": "^5.3.3",
     "webpack": "^5.89.0",

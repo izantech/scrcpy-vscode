@@ -10,15 +10,11 @@ export function activate(context: vscode.ExtensionContext) {
 
   // Register the webview view provider
   context.subscriptions.push(
-    vscode.window.registerWebviewViewProvider(
-      ScrcpyViewProvider.viewType,
-      provider,
-      {
-        webviewOptions: {
-          retainContextWhenHidden: true
-        }
-      }
-    )
+    vscode.window.registerWebviewViewProvider(ScrcpyViewProvider.viewType, provider, {
+      webviewOptions: {
+        retainContextWhenHidden: true,
+      },
+    })
   );
 
   // Register start command
@@ -51,7 +47,14 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.executeCommand('workbench.action.openSettings', '@ext:izan.scrcpy-vscode');
   });
 
-  context.subscriptions.push(startCommand, stopCommand, wifiCommand, installApkCommand, uploadFilesCommand, settingsCommand);
+  context.subscriptions.push(
+    startCommand,
+    stopCommand,
+    wifiCommand,
+    installApkCommand,
+    uploadFilesCommand,
+    settingsCommand
+  );
 }
 
 export async function deactivate() {
