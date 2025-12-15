@@ -96,6 +96,105 @@ export class ScrcpyConnection {
   // Detected video codec from stream
   private detectedCodec: VideoCodecType = 'h264';
 
+  /**
+   * Simple growable byte buffer with read/write cursors.
+   * Avoids per-chunk Buffer.concat by compacting/growing occasionally.
+   */
+  private static CursorBuffer = class {
+    private buf: Buffer;
+    private readPos = 0;
+    private writePos = 0;
+
+    constructor(initialCapacity = 64 * 1024) {
+      this.buf = Buffer.allocUnsafe(initialCapacity);
+    }
+
+    available(): number {
+      return this.writePos - this.readPos;
+    }
+
+    append(chunk: Buffer): void {
+      if (chunk.length === 0) {
+        return;
+      }
+      this.ensureWritable(chunk.length);
+      chunk.copy(this.buf, this.writePos);
+      this.writePos += chunk.length;
+    }
+
+    peekUInt32BE(relOffset = 0): number {
+      return this.buf.readUInt32BE(this.readPos + relOffset);
+    }
+
+    peekBigUInt64BE(relOffset = 0): bigint {
+      return this.buf.readBigUInt64BE(this.readPos + relOffset);
+    }
+
+    readUInt32BE(): number {
+      const v = this.buf.readUInt32BE(this.readPos);
+      this.readPos += 4;
+      this.maybeReset();
+      return v;
+    }
+
+    readBigUInt64BE(): bigint {
+      const v = this.buf.readBigUInt64BE(this.readPos);
+      this.readPos += 8;
+      this.maybeReset();
+      return v;
+    }
+
+    readBytes(length: number): Buffer {
+      const out = this.buf.subarray(this.readPos, this.readPos + length);
+      this.readPos += length;
+      this.maybeReset();
+      return out;
+    }
+
+    discard(length: number): void {
+      this.readPos += length;
+      this.maybeReset();
+    }
+
+    private ensureWritable(length: number): void {
+      const freeTail = this.buf.length - this.writePos;
+      if (freeTail >= length) {
+        return;
+      }
+
+      // Compact unread bytes to the front if it helps.
+      if (this.readPos > 0) {
+        this.buf.copy(this.buf, 0, this.readPos, this.writePos);
+        this.writePos -= this.readPos;
+        this.readPos = 0;
+      }
+
+      if (this.buf.length - this.writePos >= length) {
+        return;
+      }
+
+      // Grow buffer capacity (doubling).
+      const required = this.writePos + length;
+      let newCap = this.buf.length === 0 ? 1024 : this.buf.length;
+      while (newCap < required) {
+        newCap *= 2;
+      }
+
+      const next = Buffer.allocUnsafe(newCap);
+      if (this.writePos > 0) {
+        this.buf.copy(next, 0, 0, this.writePos);
+      }
+      this.buf = next;
+    }
+
+    private maybeReset(): void {
+      if (this.readPos === this.writePos) {
+        this.readPos = 0;
+        this.writePos = 0;
+      }
+    }
+  };
+
   constructor(
     private onVideoFrame: VideoFrameCallback,
     private onStatus: StatusCallback,
@@ -479,40 +578,39 @@ export class ScrcpyConnection {
   private handleScrcpyStream(socket: net.Socket): void {
     this.videoSocket = socket;
 
-    let buffer = Buffer.alloc(0);
+    const buffer = new ScrcpyConnection.CursorBuffer(256 * 1024);
     let headerReceived = false;
     let codecReceived = false;
 
     socket.on('data', (chunk: Buffer) => {
-      buffer = Buffer.concat([buffer, chunk]);
+      buffer.append(chunk);
 
       // Parse scrcpy protocol
-      while (buffer.length > 0) {
+      while (buffer.available() > 0) {
         if (!headerReceived) {
           // First, receive device name (64 bytes)
-          if (buffer.length < ScrcpyProtocol.DEVICE_NAME_LENGTH) {
+          if (buffer.available() < ScrcpyProtocol.DEVICE_NAME_LENGTH) {
             break;
           }
 
           const deviceName = buffer
-            .subarray(0, ScrcpyProtocol.DEVICE_NAME_LENGTH)
+            .readBytes(ScrcpyProtocol.DEVICE_NAME_LENGTH)
             .toString('utf8')
             .replace(/\0+$/, '');
           console.log('Device name:', deviceName);
-          buffer = buffer.subarray(ScrcpyProtocol.DEVICE_NAME_LENGTH);
           headerReceived = true;
           continue;
         }
 
         if (!codecReceived) {
           // Video codec metadata: codec_id (4) + width (4) + height (4) = 12 bytes
-          if (buffer.length < 12) {
+          if (buffer.available() < 12) {
             break;
           }
 
-          const codecId = buffer.readUInt32BE(0);
-          this.deviceWidth = buffer.readUInt32BE(4);
-          this.deviceHeight = buffer.readUInt32BE(8);
+          const codecId = buffer.readUInt32BE();
+          this.deviceWidth = buffer.readUInt32BE();
+          this.deviceHeight = buffer.readUInt32BE();
 
           // Determine codec type from codec ID
           if (codecId === ScrcpyProtocol.VIDEO_CODEC_ID_H265) {
@@ -526,7 +624,6 @@ export class ScrcpyConnection {
           console.log(
             `Video: codec=0x${codecId.toString(16)} (${this.detectedCodec}), ${this.deviceWidth}x${this.deviceHeight}`
           );
-          buffer = buffer.subarray(12);
           codecReceived = true;
 
           // Notify webview of video dimensions and codec
@@ -546,15 +643,15 @@ export class ScrcpyConnection {
         // H.264 codec_id = 0x68323634 ("h264")
         // H.265 codec_id = 0x68323635 ("h265")
         // AV1 codec_id = 0x00617631 ("av1")
-        if (buffer.length >= 12) {
-          const possibleCodecId = buffer.readUInt32BE(0);
+        if (buffer.available() >= 12) {
+          const possibleCodecId = buffer.peekUInt32BE(0);
           if (
             possibleCodecId === ScrcpyProtocol.VIDEO_CODEC_ID_H264 ||
             possibleCodecId === ScrcpyProtocol.VIDEO_CODEC_ID_H265 ||
             possibleCodecId === ScrcpyProtocol.VIDEO_CODEC_ID_AV1
           ) {
-            const newWidth = buffer.readUInt32BE(4);
-            const newHeight = buffer.readUInt32BE(8);
+            const newWidth = buffer.peekUInt32BE(4);
+            const newHeight = buffer.peekUInt32BE(8);
 
             // Sanity check dimensions
             if (newWidth > 0 && newWidth < 10000 && newHeight > 0 && newHeight < 10000) {
@@ -562,7 +659,7 @@ export class ScrcpyConnection {
                 this.deviceWidth = newWidth;
                 this.deviceHeight = newHeight;
                 console.log(`Video reconfigured: ${this.deviceWidth}x${this.deviceHeight}`);
-                buffer = buffer.subarray(12);
+                buffer.discard(12);
 
                 // Notify webview of new dimensions
                 this.onVideoFrame(
@@ -580,23 +677,25 @@ export class ScrcpyConnection {
         }
 
         // Video packets: pts_flags (8) + packet_size (4) + data
-        if (buffer.length < 12) {
+        if (buffer.available() < 12) {
           break;
         }
 
-        const ptsFlags = buffer.readBigUInt64BE(0);
-        const packetSize = buffer.readUInt32BE(8);
+        const ptsFlags = buffer.peekBigUInt64BE(0);
+        const packetSize = buffer.peekUInt32BE(8);
 
-        if (buffer.length < 12 + packetSize) {
+        if (buffer.available() < 12 + packetSize) {
           break;
         }
+
+        // Consume header
+        buffer.discard(12);
 
         const isConfig = (ptsFlags & (1n << 63n)) !== 0n;
         const isKeyFrame = (ptsFlags & (1n << 62n)) !== 0n;
         // const pts = ptsFlags & ((1n << 62n) - 1n);
 
-        const packetData = buffer.subarray(12, 12 + packetSize);
-        buffer = buffer.subarray(12 + packetSize);
+        const packetData = buffer.readBytes(packetSize);
 
         // Send to webview with codec info
         this.onVideoFrame(
@@ -634,23 +733,22 @@ export class ScrcpyConnection {
   private handleAudioStream(socket: net.Socket): void {
     this.audioSocket = socket;
 
-    let buffer = Buffer.alloc(0);
+    const buffer = new ScrcpyConnection.CursorBuffer(64 * 1024);
     let codecReceived = false;
 
     socket.on('data', (chunk: Buffer) => {
-      buffer = Buffer.concat([buffer, chunk]);
+      buffer.append(chunk);
 
       // Parse audio protocol
-      while (buffer.length > 0) {
+      while (buffer.available() > 0) {
         if (!codecReceived) {
           // Audio codec metadata: codec_id (4 bytes only)
-          if (buffer.length < 4) {
+          if (buffer.available() < 4) {
             break;
           }
 
-          const codecId = buffer.readUInt32BE(0);
+          const codecId = buffer.readUInt32BE();
           console.log(`Audio: codec=0x${codecId.toString(16)} (opus=0x6f707573)`);
-          buffer = buffer.subarray(4);
           codecReceived = true;
 
           // Notify webview to initialize audio decoder
@@ -661,20 +759,20 @@ export class ScrcpyConnection {
         }
 
         // Audio packets: pts_flags (8) + packet_size (4) + data
-        if (buffer.length < 12) {
+        if (buffer.available() < 12) {
           break;
         }
 
-        const ptsFlags = buffer.readBigUInt64BE(0);
-        const packetSize = buffer.readUInt32BE(8);
+        const ptsFlags = buffer.peekBigUInt64BE(0);
+        const packetSize = buffer.peekUInt32BE(8);
 
-        if (buffer.length < 12 + packetSize) {
+        if (buffer.available() < 12 + packetSize) {
           break;
         }
 
+        buffer.discard(12);
         const isConfig = (ptsFlags & (1n << 63n)) !== 0n;
-        const packetData = buffer.subarray(12, 12 + packetSize);
-        buffer = buffer.subarray(12 + packetSize);
+        const packetData = buffer.readBytes(packetSize);
 
         // Log first few audio packets for debugging
         this._audioPacketCount++;
