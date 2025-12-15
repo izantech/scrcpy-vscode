@@ -62,6 +62,15 @@ export function activate(context: vscode.ExtensionContext) {
     provider?.listCameras();
   });
 
+  // Register tab switching commands (for keyboard shortcuts)
+  const tabCommands = [];
+  for (let i = 1; i <= 9; i++) {
+    const cmd = vscode.commands.registerCommand(`scrcpy.switchToTab${i}`, () => {
+      provider?.switchToTab(i - 1); // Convert to 0-indexed
+    });
+    tabCommands.push(cmd);
+  }
+
   context.subscriptions.push(
     startCommand,
     stopCommand,
@@ -71,7 +80,8 @@ export function activate(context: vscode.ExtensionContext) {
     launchAppCommand,
     settingsCommand,
     toggleRecordingCommand,
-    listCamerasCommand
+    listCamerasCommand,
+    ...tabCommands
   );
 }
 

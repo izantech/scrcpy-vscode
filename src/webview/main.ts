@@ -244,6 +244,28 @@ function initialize() {
   recordingIndicator = document.getElementById('recording-indicator');
   recordingTime = document.getElementById('recording-time');
 
+  // Add keyboard shortcuts for tab switching (Alt+1 to Alt+9)
+  document.addEventListener('keydown', (e) => {
+    // Alt+1 through Alt+9 (and Alt+0 for 10th tab)
+    if (e.altKey && !e.ctrlKey && !e.shiftKey && !e.metaKey) {
+      const key = e.key;
+      if (key >= '1' && key <= '9') {
+        e.preventDefault();
+        e.stopPropagation();
+        const tabIndex = parseInt(key, 10) - 1; // Convert to 0-indexed
+        switchToTabByIndex(tabIndex);
+      } else if (key === '0') {
+        e.preventDefault();
+        e.stopPropagation();
+        // Alt+0 switches to 10th tab or last tab
+        const tabCount = sessions.size;
+        if (tabCount > 0) {
+          switchToTabByIndex(Math.min(9, tabCount - 1));
+        }
+      }
+    }
+  });
+
   vscode.postMessage({ type: 'ready' });
   console.log('WebView initialized');
 }
@@ -492,6 +514,12 @@ function handleMessage(event: MessageEvent) {
 
     case 'toggleRecording':
       toggleRecording();
+      break;
+
+    case 'switchToTabByIndex':
+      if (message.index !== undefined) {
+        switchToTabByIndex(message.index);
+      }
       break;
   }
 }
@@ -883,6 +911,30 @@ function switchToDevice(deviceId: string) {
       controlToolbar.classList.remove('hidden');
     }
   }
+}
+
+/**
+ * Switch to a tab by index (0-based)
+ */
+function switchToTabByIndex(index: number) {
+  // Get array of device IDs in tab order
+  const deviceIds: string[] = [];
+  const tabs = tabBar.querySelectorAll('.tab');
+  tabs.forEach((tab) => {
+    const deviceId = (tab as HTMLElement).dataset.deviceId;
+    if (deviceId) {
+      deviceIds.push(deviceId);
+    }
+  });
+
+  // Check if index is valid
+  if (index < 0 || index >= deviceIds.length) {
+    return;
+  }
+
+  // Switch to the tab at the specified index
+  const targetDeviceId = deviceIds[index];
+  vscode.postMessage({ type: 'switchTab', deviceId: targetDeviceId });
 }
 
 /**

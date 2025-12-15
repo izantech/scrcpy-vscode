@@ -1159,6 +1159,19 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
     }
   }
 
+  /**
+   * Switch to a tab by index (0-based)
+   */
+  public switchToTab(index: number): void {
+    if (!this._view) {
+      return;
+    }
+    this._view.webview.postMessage({
+      type: 'switchToTabByIndex',
+      index,
+    });
+  }
+
   private async _takeAndSaveScreenshot(): Promise<void> {
     const notifyComplete = () => {
       this._view?.webview.postMessage({ type: 'screenshotComplete' });

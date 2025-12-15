@@ -393,6 +393,89 @@
         "command": "scrcpy.listCameras",
         "title": "%command.listCameras%",
         "icon": "$(device-camera-video)"
+      },
+      {
+        "command": "scrcpy.switchToTab1",
+        "title": "%command.switchToTab1%"
+      },
+      {
+        "command": "scrcpy.switchToTab2",
+        "title": "%command.switchToTab2%"
+      },
+      {
+        "command": "scrcpy.switchToTab3",
+        "title": "%command.switchToTab3%"
+      },
+      {
+        "command": "scrcpy.switchToTab4",
+        "title": "%command.switchToTab4%"
+      },
+      {
+        "command": "scrcpy.switchToTab5",
+        "title": "%command.switchToTab5%"
+      },
+      {
+        "command": "scrcpy.switchToTab6",
+        "title": "%command.switchToTab6%"
+      },
+      {
+        "command": "scrcpy.switchToTab7",
+        "title": "%command.switchToTab7%"
+      },
+      {
+        "command": "scrcpy.switchToTab8",
+        "title": "%command.switchToTab8%"
+      },
+      {
+        "command": "scrcpy.switchToTab9",
+        "title": "%command.switchToTab9%"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "scrcpy.switchToTab1",
+        "key": "alt+1",
+        "when": "activeViewlet == 'scrcpy' || activeView == 'scrcpy.deviceView'"
+      },
+      {
+        "command": "scrcpy.switchToTab2",
+        "key": "alt+2",
+        "when": "activeViewlet == 'scrcpy' || activeView == 'scrcpy.deviceView'"
+      },
+      {
+        "command": "scrcpy.switchToTab3",
+        "key": "alt+3",
+        "when": "activeViewlet == 'scrcpy' || activeView == 'scrcpy.deviceView'"
+      },
+      {
+        "command": "scrcpy.switchToTab4",
+        "key": "alt+4",
+        "when": "activeViewlet == 'scrcpy' || activeView == 'scrcpy.deviceView'"
+      },
+      {
+        "command": "scrcpy.switchToTab5",
+        "key": "alt+5",
+        "when": "activeViewlet == 'scrcpy' || activeView == 'scrcpy.deviceView'"
+      },
+      {
+        "command": "scrcpy.switchToTab6",
+        "key": "alt+6",
+        "when": "activeViewlet == 'scrcpy' || activeView == 'scrcpy.deviceView'"
+      },
+      {
+        "command": "scrcpy.switchToTab7",
+        "key": "alt+7",
+        "when": "activeViewlet == 'scrcpy' || activeView == 'scrcpy.deviceView'"
+      },
+      {
+        "command": "scrcpy.switchToTab8",
+        "key": "alt+8",
+        "when": "activeViewlet == 'scrcpy' || activeView == 'scrcpy.deviceView'"
+      },
+      {
+        "command": "scrcpy.switchToTab9",
+        "key": "alt+9",
+        "when": "activeViewlet == 'scrcpy' || activeView == 'scrcpy.deviceView'"
       }
     ],
     "menus": {

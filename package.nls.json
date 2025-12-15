@@ -67,6 +67,15 @@
   "command.uploadFiles": "Scrcpy: Upload Files to Device",
   "command.openSettings": "Scrcpy: Open Settings",
   "command.listCameras": "Scrcpy: List Available Cameras",
+  "command.switchToTab1": "Scrcpy: Switch to Tab 1",
+  "command.switchToTab2": "Scrcpy: Switch to Tab 2",
+  "command.switchToTab3": "Scrcpy: Switch to Tab 3",
+  "command.switchToTab4": "Scrcpy: Switch to Tab 4",
+  "command.switchToTab5": "Scrcpy: Switch to Tab 5",
+  "command.switchToTab6": "Scrcpy: Switch to Tab 6",
+  "command.switchToTab7": "Scrcpy: Switch to Tab 7",
+  "command.switchToTab8": "Scrcpy: Switch to Tab 8",
+  "command.switchToTab9": "Scrcpy: Switch to Tab 9",
   "view.scrcpy": "scrcpy",
   "view.deviceView": "Screen"
 }
