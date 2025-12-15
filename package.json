@@ -619,27 +619,27 @@
         },
         {
           "command": "scrcpy.uploadFiles",
-          "when": "view == scrcpy.deviceView",
+          "when": "view == scrcpy.deviceView && scrcpy.activeDevicePlatform == 'android'",
           "group": "1_files@1"
         },
         {
           "command": "scrcpy.installApk",
-          "when": "view == scrcpy.deviceView",
+          "when": "view == scrcpy.deviceView && scrcpy.activeDevicePlatform == 'android'",
           "group": "1_files@2"
         },
         {
           "command": "scrcpy.launchApp",
-          "when": "view == scrcpy.deviceView",
+          "when": "view == scrcpy.deviceView && scrcpy.activeDevicePlatform == 'android'",
           "group": "2_device@1"
         },
         {
           "command": "scrcpy.selectDisplay",
-          "when": "view == scrcpy.deviceView",
+          "when": "view == scrcpy.deviceView && scrcpy.activeDevicePlatform == 'android'",
           "group": "2_device@2"
         },
         {
           "command": "scrcpy.listCameras",
-          "when": "view == scrcpy.deviceView",
+          "when": "view == scrcpy.deviceView && scrcpy.activeDevicePlatform == 'android'",
           "group": "2_device@3"
         }
       ]

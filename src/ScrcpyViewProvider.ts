@@ -304,6 +304,13 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
           text: status,
           deviceId: deviceId || undefined,
         });
+        // Update platform context for menu visibility
+        const activeSession = sessions.find((s) => s.isActive);
+        vscode.commands.executeCommand(
+          'setContext',
+          'scrcpy.activeDevicePlatform',
+          activeSession?.platform ?? null
+        );
       },
       // Error callback
       (deviceId, message, error) => {
@@ -1262,6 +1269,8 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
     this._isDisposed = true;
     this._abortController?.abort();
     await this._disconnect();
+    // Clear platform context when view is disposed
+    vscode.commands.executeCommand('setContext', 'scrcpy.activeDevicePlatform', null);
     while (this._disposables.length) {
       const disposable = this._disposables.pop();
       disposable?.dispose();
