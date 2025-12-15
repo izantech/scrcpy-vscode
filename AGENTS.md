@@ -2,7 +2,7 @@
 
 This file provides guidance to AI coding assistants when working with this repository.
 
-For protocol details, architecture diagrams, and low-level implementation notes, see [INTERNALS.md](./INTERNALS.md).
+For protocol details, architecture diagrams, and low-level implementation notes, see [docs/internals.md](./docs/internals.md).
 
 ## Project Overview
 
