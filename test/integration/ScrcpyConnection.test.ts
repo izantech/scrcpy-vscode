@@ -9,8 +9,8 @@ vi.mock('net', () => import('../mocks/net'));
 vi.mock('vscode', () => import('../mocks/vscode'));
 
 // Import after mocks are set up
-import { ScrcpyConnection, ScrcpyConfig } from '../../src/ScrcpyConnection';
-import { ControlMessageType, MotionEventAction, KeyAction } from '../../src/ScrcpyProtocol';
+import { ScrcpyConnection, ScrcpyConfig } from '../../src/android/ScrcpyConnection';
+import { ControlMessageType, MotionEventAction, KeyAction } from '../../src/android/ScrcpyProtocol';
 
 describe('ScrcpyConnection', () => {
   let connection: ScrcpyConnection;

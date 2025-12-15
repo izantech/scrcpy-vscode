@@ -5,6 +5,11 @@
  * The extension host owns this state and sends snapshots to the webview.
  */
 
+import { DevicePlatform, PlatformCapabilities } from '../PlatformCapabilities';
+
+// Re-export platform types for convenience
+export type { DevicePlatform, PlatformCapabilities };
+
 /**
  * Error codes for tool-related errors
  */
@@ -43,6 +48,7 @@ export interface DeviceInfo {
   serial: string;
   name: string;
   model?: string;
+  platform: DevicePlatform;
 }
 
 /**
@@ -70,6 +76,8 @@ export interface DeviceState {
   serial: string;
   name: string;
   model?: string;
+  platform: DevicePlatform;
+  capabilities: PlatformCapabilities;
   connectionState: ConnectionState;
   isActive: boolean;
   videoDimensions?: {

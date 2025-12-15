@@ -10,7 +10,7 @@ import {
   MotionEventAction,
   KeyAction,
   ScrcpyProtocol,
-} from '../../src/ScrcpyProtocol';
+} from '../../src/android/ScrcpyProtocol';
 
 describe('ScrcpyProtocol', () => {
   describe('codec IDs (protocol documentation)', () => {

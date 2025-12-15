@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import * as os from 'os';
 import * as path from 'path';
 import { getHtmlForWebview } from './webview/WebviewTemplate';
-import { ScrcpyConfig } from './ScrcpyConnection';
+import { ScrcpyConfig } from './android/ScrcpyConnection';
 import { DeviceService } from './DeviceService';
 import { AppStateManager, Unsubscribe } from './AppStateManager';
 import { ToolCheckResult } from './ToolChecker';

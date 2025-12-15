@@ -8,10 +8,11 @@
 
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { ScrcpyConnection, ScrcpyConfig, ClipboardAPI, VideoCodecType } from './ScrcpyConnection';
+import { ScrcpyConnection, ScrcpyConfig, ClipboardAPI, VideoCodecType } from './android/ScrcpyConnection';
 import { execFile, execFileSync, spawn, ChildProcess } from 'child_process';
 import { AppStateManager } from './AppStateManager';
 import { DeviceInfo, DeviceDetailedInfo, ConnectionState, VideoCodec } from './types/AppState';
+import { DevicePlatform, getCapabilities } from './PlatformCapabilities';
 
 // Re-export types for backward compatibility
 export type { DeviceInfo, DeviceDetailedInfo, ConnectionState };
@@ -144,6 +145,7 @@ export class DeviceService {
               serial,
               name: model || serial,
               model,
+              platform: 'android',
             });
           }
         }
@@ -437,12 +439,14 @@ export class DeviceService {
               serial: address,
               name: modelOutput || address,
               model: modelOutput || undefined,
+              platform: 'android',
             });
           } catch {
             resolve({
               serial: address,
               name: address,
               model: undefined,
+              platform: 'android',
             });
           }
         } else if (
@@ -464,6 +468,7 @@ export class DeviceService {
             serial: address,
             name: address,
             model: undefined,
+            platform: 'android',
           });
         }
       });
@@ -531,6 +536,8 @@ export class DeviceService {
       serial: deviceInfo.serial,
       name: deviceInfo.name,
       model: deviceInfo.model,
+      platform: deviceInfo.platform,
+      capabilities: getCapabilities(deviceInfo.platform),
       connectionState: 'connecting',
       isActive: true,
     });
@@ -1192,6 +1199,7 @@ export class DeviceService {
           serial,
           name: serial,
           model: undefined,
+          platform: 'android',
         });
       }
     }

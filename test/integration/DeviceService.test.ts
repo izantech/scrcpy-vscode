@@ -11,7 +11,7 @@ vi.mock('vscode', () => import('../mocks/vscode'));
 // Import after mocks are set up
 import { DeviceService } from '../../src/DeviceService';
 import { AppStateManager } from '../../src/AppStateManager';
-import { ScrcpyConfig } from '../../src/ScrcpyConnection';
+import { ScrcpyConfig } from '../../src/android/ScrcpyConnection';
 
 describe('DeviceService', () => {
   let service: DeviceService;
