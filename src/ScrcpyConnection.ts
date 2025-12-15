@@ -26,6 +26,10 @@ type ErrorCallback = (message: string) => void;
 // Scrcpy configuration options
 export interface ScrcpyConfig {
   scrcpyPath: string;
+  displayMode: 'mirror' | 'virtual';
+  virtualDisplayWidth: number;
+  virtualDisplayHeight: number;
+  virtualDisplayDpi: number;
   screenOff: boolean;
   stayAwake: boolean;
   maxSize: number;
@@ -230,6 +234,20 @@ export class ScrcpyConnection {
 
     server.listen(localPort, '127.0.0.1');
 
+    // Build new_display parameter for virtual display mode
+    let newDisplayArg: string | null = null;
+    if (this.config.displayMode === 'virtual') {
+      const width = this.config.virtualDisplayWidth;
+      const height = this.config.virtualDisplayHeight;
+      const dpi = this.config.virtualDisplayDpi;
+
+      if (dpi > 0) {
+        newDisplayArg = `new_display=${width}x${height}/${dpi}`;
+      } else {
+        newDisplayArg = `new_display=${width}x${height}`;
+      }
+    }
+
     // Start scrcpy server on device
     const serverArgs = [
       '-s',
@@ -263,6 +281,7 @@ export class ScrcpyConnection {
             ...(this.config.cameraFps > 0 ? [`camera_fps=${this.config.cameraFps}`] : []),
           ]
         : []),
+      ...(newDisplayArg ? [newDisplayArg] : []),
       'send_device_meta=true',
       'send_frame_meta=true',
       'send_codec_meta=true',

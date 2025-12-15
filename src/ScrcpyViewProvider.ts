@@ -96,6 +96,10 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
           // Reconnect for scrcpy options that affect the stream
           const reconnectSettings = [
             'scrcpy.path',
+            'scrcpy.displayMode',
+            'scrcpy.virtualDisplayWidth',
+            'scrcpy.virtualDisplayHeight',
+            'scrcpy.virtualDisplayDpi',
             'scrcpy.screenOff',
             'scrcpy.stayAwake',
             'scrcpy.maxSize',
@@ -137,6 +141,10 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
     const config = vscode.workspace.getConfiguration('scrcpy');
     return {
       scrcpyPath: config.get<string>('path', ''),
+      displayMode: config.get<'mirror' | 'virtual'>('displayMode', 'mirror'),
+      virtualDisplayWidth: config.get<number>('virtualDisplayWidth', 1080),
+      virtualDisplayHeight: config.get<number>('virtualDisplayHeight', 1920),
+      virtualDisplayDpi: config.get<number>('virtualDisplayDpi', 0),
       screenOff: config.get<boolean>('screenOff', false),
       stayAwake: config.get<boolean>('stayAwake', true),
       maxSize: config.get<number>('maxSize', 1920),
