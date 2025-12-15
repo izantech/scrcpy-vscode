@@ -306,6 +306,12 @@
             "default": false,
             "order": 1,
             "markdownDescription": "%config.scrcpy.screenshotShowSaveDialog%"
+          },
+          "scrcpy.screenshotPreview": {
+            "type": "boolean",
+            "default": true,
+            "order": 2,
+            "markdownDescription": "%config.scrcpy.screenshotPreview%"
           }
         }
       },
@@ -513,39 +519,39 @@
     "menus": {
       "view/title": [
         {
-          "command": "scrcpy.uploadFiles",
+          "command": "scrcpy.connectWifi",
           "when": "view == scrcpy.deviceView",
           "group": "navigation@1"
         },
         {
-          "command": "scrcpy.installApk",
+          "command": "scrcpy.openSettings",
           "when": "view == scrcpy.deviceView",
           "group": "navigation@2"
         },
         {
-          "command": "scrcpy.launchApp",
+          "command": "scrcpy.uploadFiles",
           "when": "view == scrcpy.deviceView",
-          "group": "navigation@3"
+          "group": "1_files@1"
         },
         {
-          "command": "scrcpy.connectWifi",
+          "command": "scrcpy.installApk",
           "when": "view == scrcpy.deviceView",
-          "group": "navigation@4"
+          "group": "1_files@2"
+        },
+        {
+          "command": "scrcpy.launchApp",
+          "when": "view == scrcpy.deviceView",
+          "group": "2_device@1"
         },
         {
           "command": "scrcpy.selectDisplay",
           "when": "view == scrcpy.deviceView",
-          "group": "navigation@5"
+          "group": "2_device@2"
         },
         {
           "command": "scrcpy.listCameras",
           "when": "view == scrcpy.deviceView",
-          "group": "navigation@6"
-        },
-        {
-          "command": "scrcpy.openSettings",
-          "when": "view == scrcpy.deviceView",
-          "group": "navigation@7"
+          "group": "2_device@3"
         }
       ]
     },

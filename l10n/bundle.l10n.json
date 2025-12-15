@@ -121,5 +121,11 @@
   "Failed to list displays: {0}": "Failed to list displays: {0}",
   "Device not connected": "Device not connected",
   "config.scrcpy.displayId": "Display ID to mirror (0 = main display, 1+ = secondary displays)",
-  "command.selectDisplay": "Select Display to Mirror"
+  "command.selectDisplay": "Select Display to Mirror",
+  "Screenshot Preview": "Screenshot Preview",
+  "Save": "Save",
+  "Copy to Clipboard": "Copy to Clipboard",
+  "Dismiss": "Dismiss",
+  "config.scrcpy.screenshotPreview": "Show a preview overlay with save/copy options after taking a screenshot. If disabled, screenshots are saved immediately.",
+  "Failed to save screenshot: {0}": "Failed to save screenshot: {0}"
 }

@@ -193,7 +193,7 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
 
     this._deviceManager = new DeviceManager(
       // Video frame callback
-      (deviceId, frameData, isConfig, isKeyFrame, width, height) => {
+      (deviceId, frameData, isConfig, isKeyFrame, width, height, codec) => {
         if (this._isDisposed || !this._view) {
           return;
         }
@@ -205,6 +205,7 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
           isKeyFrame,
           width,
           height,
+          codec,
         });
       },
       // Audio frame callback
@@ -339,6 +340,10 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
     metastate?: number;
     deltaX?: number;
     deltaY?: number;
+    base64Data?: string;
+    data?: number[];
+    mimeType?: string;
+    duration?: number;
   }) {
     switch (message.type) {
       case 'touch':
@@ -460,6 +465,12 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
         await this._takeAndSaveScreenshot();
         break;
 
+      case 'saveScreenshot':
+        if (message.base64Data) {
+          await this._saveScreenshotFromBase64(message.base64Data);
+        }
+        break;
+
       case 'toggleAudio':
         {
           const config = vscode.workspace.getConfiguration('scrcpy');
@@ -509,7 +520,13 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
         break;
 
       case 'saveRecording':
-        await this._saveRecording(message);
+        if (message.data && message.mimeType && message.duration !== undefined) {
+          await this._saveRecording({
+            data: message.data,
+            mimeType: message.mimeType,
+            duration: message.duration,
+          });
+        }
         break;
 
       case 'ready':
@@ -1186,13 +1203,9 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
     const config = vscode.workspace.getConfiguration('scrcpy');
     const format = config.get<'webm' | 'mp4'>('recordingFormat', 'webm');
 
-    // Check if currently recording (by checking active device manager)
-    const isRecording = false; // RecordingManager tracks this internally in webview
-
     this._view?.webview.postMessage({
       type: 'recordingSettings',
       format,
-      isRecording,
     });
   }
 
@@ -1296,47 +1309,75 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
       // Take screenshot from device (original resolution, lossless PNG)
       const pngBuffer = await this._deviceManager.takeScreenshot();
 
-      // Generate filename with timestamp
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-      const filename = `screenshot-${timestamp}.png`;
-
       // Get settings
       const config = vscode.workspace.getConfiguration('scrcpy');
-      const showSaveDialog = config.get<boolean>('screenshotShowSaveDialog', false);
-      const customPath = config.get<string>('screenshotSavePath', '');
+      const showPreview = config.get<boolean>('screenshotPreview', true);
 
-      let uri: vscode.Uri | undefined;
-
-      if (showSaveDialog) {
-        // Show save dialog
-        uri = await vscode.window.showSaveDialog({
-          defaultUri: vscode.Uri.file(filename),
-          filters: {
-            'PNG Image': ['png'],
-          },
-          title: vscode.l10n.t('Save Screenshot'),
+      if (showPreview) {
+        // Send preview to webview
+        const base64Data = pngBuffer.toString('base64');
+        this._view?.webview.postMessage({
+          type: 'screenshotPreview',
+          base64Data,
         });
-
-        if (!uri) {
-          notifyComplete();
-          return; // User cancelled
-        }
       } else {
-        // Save directly to configured path or Downloads folder
-        const saveDir = customPath || path.join(os.homedir(), 'Downloads');
-        uri = vscode.Uri.file(path.join(saveDir, filename));
+        // Save immediately (legacy behavior)
+        await this._saveScreenshotDirect(pngBuffer);
+        notifyComplete();
       }
-
-      // Write to file
-      await vscode.workspace.fs.writeFile(uri, pngBuffer);
-
-      // Open the screenshot in the main editor panel
-      await vscode.commands.executeCommand('vscode.open', uri);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       vscode.window.showErrorMessage(vscode.l10n.t('Failed to take screenshot: {0}', message));
-    } finally {
       notifyComplete();
+    }
+  }
+
+  private async _saveScreenshotDirect(pngBuffer: Uint8Array): Promise<void> {
+    // Generate filename with timestamp
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const filename = `screenshot-${timestamp}.png`;
+
+    // Get settings
+    const config = vscode.workspace.getConfiguration('scrcpy');
+    const showSaveDialog = config.get<boolean>('screenshotShowSaveDialog', false);
+    const customPath = config.get<string>('screenshotSavePath', '');
+
+    let uri: vscode.Uri | undefined;
+
+    if (showSaveDialog) {
+      // Show save dialog
+      uri = await vscode.window.showSaveDialog({
+        defaultUri: vscode.Uri.file(filename),
+        filters: {
+          'PNG Image': ['png'],
+        },
+        title: vscode.l10n.t('Save Screenshot'),
+      });
+
+      if (!uri) {
+        return; // User cancelled
+      }
+    } else {
+      // Save directly to configured path or Downloads folder
+      const saveDir = customPath || path.join(os.homedir(), 'Downloads');
+      uri = vscode.Uri.file(path.join(saveDir, filename));
+    }
+
+    // Write to file
+    await vscode.workspace.fs.writeFile(uri, pngBuffer);
+
+    // Open the screenshot in the main editor panel
+    await vscode.commands.executeCommand('vscode.open', uri);
+  }
+
+  private async _saveScreenshotFromBase64(base64Data: string): Promise<void> {
+    try {
+      // Convert base64 to buffer
+      const pngBuffer = Buffer.from(base64Data, 'base64');
+      await this._saveScreenshotDirect(pngBuffer);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      vscode.window.showErrorMessage(vscode.l10n.t('Failed to save screenshot: {0}', message));
     }
   }
 

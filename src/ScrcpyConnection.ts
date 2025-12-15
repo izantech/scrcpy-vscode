@@ -5,13 +5,17 @@ import * as path from 'path';
 import { exec, spawn, ChildProcess } from 'child_process';
 import { ScrcpyProtocol } from './ScrcpyProtocol';
 
+// Video codec type
+export type VideoCodecType = 'h264' | 'h265' | 'av1';
+
 // Type for video frame callback
 type VideoFrameCallback = (
   data: Uint8Array,
   isConfig: boolean,
   isKeyFrame: boolean,
   width?: number,
-  height?: number
+  height?: number,
+  codec?: VideoCodecType
 ) => void;
 
 // Type for audio frame callback
@@ -85,6 +89,9 @@ export class ScrcpyConnection {
   private lastDeviceClipboard = '';
   private clipboardSequence = 0n;
   private deviceMsgBuffer = Buffer.alloc(0);
+
+  // Detected video codec from stream
+  private detectedCodec: VideoCodecType = 'h264';
 
   constructor(
     private onVideoFrame: VideoFrameCallback,
@@ -500,14 +507,30 @@ export class ScrcpyConnection {
           this.deviceWidth = buffer.readUInt32BE(4);
           this.deviceHeight = buffer.readUInt32BE(8);
 
+          // Determine codec type from codec ID
+          if (codecId === ScrcpyProtocol.VIDEO_CODEC_ID_H265) {
+            this.detectedCodec = 'h265';
+          } else if (codecId === ScrcpyProtocol.VIDEO_CODEC_ID_AV1) {
+            this.detectedCodec = 'av1';
+          } else {
+            this.detectedCodec = 'h264';
+          }
+
           console.log(
-            `Video: codec=0x${codecId.toString(16)}, ${this.deviceWidth}x${this.deviceHeight}`
+            `Video: codec=0x${codecId.toString(16)} (${this.detectedCodec}), ${this.deviceWidth}x${this.deviceHeight}`
           );
           buffer = buffer.subarray(12);
           codecReceived = true;
 
-          // Notify webview of video dimensions
-          this.onVideoFrame(new Uint8Array(0), true, false, this.deviceWidth, this.deviceHeight);
+          // Notify webview of video dimensions and codec
+          this.onVideoFrame(
+            new Uint8Array(0),
+            true,
+            false,
+            this.deviceWidth,
+            this.deviceHeight,
+            this.detectedCodec
+          );
           continue;
         }
 
@@ -534,7 +557,8 @@ export class ScrcpyConnection {
                   true,
                   false,
                   this.deviceWidth,
-                  this.deviceHeight
+                  this.deviceHeight,
+                  this.detectedCodec
                 );
                 continue;
               }
@@ -561,8 +585,15 @@ export class ScrcpyConnection {
         const packetData = buffer.subarray(12, 12 + packetSize);
         buffer = buffer.subarray(12 + packetSize);
 
-        // Send to webview
-        this.onVideoFrame(new Uint8Array(packetData), isConfig, isKeyFrame);
+        // Send to webview with codec info
+        this.onVideoFrame(
+          new Uint8Array(packetData),
+          isConfig,
+          isKeyFrame,
+          undefined,
+          undefined,
+          this.detectedCodec
+        );
       }
     });
 
@@ -1400,12 +1431,16 @@ export class ScrcpyConnection {
       }
 
       const packageName = match[1].trim();
-      // Use package name as label for now
-      apps.push({ packageName, label: packageName });
+      // Use package name as label - extracting app labels one-by-one is too slow
+      // The last part of the package name is usually a readable app identifier
+      const nameParts = packageName.split('.');
+      const label = nameParts[nameParts.length - 1] || packageName;
+
+      apps.push({ packageName, label });
     }
 
-    // Sort by package name
-    apps.sort((a, b) => a.packageName.localeCompare(b.packageName));
+    // Sort by label for better UX
+    apps.sort((a, b) => a.label.localeCompare(b.label));
 
     return apps;
   }

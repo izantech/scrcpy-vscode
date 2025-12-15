@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { ScrcpyConnection, ScrcpyConfig, ClipboardAPI } from './ScrcpyConnection';
+import { ScrcpyConnection, ScrcpyConfig, ClipboardAPI, VideoCodecType } from './ScrcpyConnection';
 import { exec, execSync, spawn, ChildProcess } from 'child_process';
 
 /**
@@ -52,7 +52,8 @@ type VideoFrameCallback = (
   isConfig: boolean,
   isKeyFrame: boolean,
   width?: number,
-  height?: number
+  height?: number,
+  codec?: VideoCodecType
 ) => void;
 
 type AudioFrameCallback = (deviceId: string, data: Uint8Array, isConfig: boolean) => void;
@@ -78,11 +79,22 @@ class DeviceSession {
   private isDisposed = false;
   private static readonly RETRY_DELAY_MS = 1500;
 
+  // Codec fallback chain: av1 -> h265 -> h264
+  private static readonly CODEC_FALLBACK: Record<string, 'h264' | 'h265' | 'av1' | null> = {
+    av1: 'h265',
+    h265: 'h264',
+    h264: null, // No fallback for h264
+  };
+
   // Store last video dimensions and config for replay on resume
   private lastWidth = 0;
   private lastHeight = 0;
   private lastConfigData: Uint8Array | null = null;
   private lastKeyFrameData: Uint8Array | null = null;
+  private lastCodec: VideoCodecType = 'h264';
+
+  // Track the effective codec being used (may differ from config after fallback)
+  private effectiveCodec: 'h264' | 'h265' | 'av1';
 
   constructor(
     deviceInfo: DeviceInfo,
@@ -97,18 +109,37 @@ class DeviceSession {
   ) {
     this.deviceId = `device_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
     this.deviceInfo = deviceInfo;
+    this.effectiveCodec = config.videoCodec;
   }
 
   async connect(): Promise<void> {
     this.connectionState = 'connecting';
     this.connectionStateCallback(this.deviceId, 'connecting');
 
+    // Try connecting with codec fallback
+    await this.connectWithCodecFallback();
+  }
+
+  /**
+   * Attempt connection with codec fallback on failure
+   * Falls back: av1 -> h265 -> h264
+   */
+  private async connectWithCodecFallback(): Promise<void> {
+    // Create config with effective codec
+    const effectiveConfig: ScrcpyConfig = {
+      ...this.config,
+      videoCodec: this.effectiveCodec,
+    };
+
     this.connection = new ScrcpyConnection(
-      (data, isConfig, isKeyFrame, width, height) => {
-        // Store dimensions and config data for replay on resume
+      (data, isConfig, isKeyFrame, width, height, codec) => {
+        // Store dimensions, config data, and codec for replay on resume
         if (width && height) {
           this.lastWidth = width;
           this.lastHeight = height;
+        }
+        if (codec) {
+          this.lastCodec = codec;
         }
         if (isConfig && data.length > 0) {
           this.lastConfigData = data;
@@ -119,11 +150,11 @@ class DeviceSession {
 
         // Only forward frames if not paused
         if (!this.isPaused) {
-          this.videoFrameCallback(this.deviceId, data, isConfig, isKeyFrame, width, height);
+          this.videoFrameCallback(this.deviceId, data, isConfig, isKeyFrame, width, height, codec);
         }
       },
       (status) => this.statusCallback(this.deviceId, status),
-      this.config,
+      effectiveConfig,
       this.deviceInfo.serial,
       undefined, // onClipboard callback (handled internally by ScrcpyConnection)
       this.clipboardAPI,
@@ -143,8 +174,46 @@ class DeviceSession {
       this.retryCount = 0;
       this.connectionState = 'connected';
       this.connectionStateCallback(this.deviceId, 'connected');
+
+      // Notify if we fell back to a different codec
+      if (this.effectiveCodec !== this.config.videoCodec) {
+        this.statusCallback(
+          this.deviceId,
+          vscode.l10n.t(
+            'Using {0} codec (fallback from {1})',
+            this.effectiveCodec,
+            this.config.videoCodec
+          )
+        );
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
+
+      // Check if we can fall back to another codec
+      const fallbackCodec = DeviceSession.CODEC_FALLBACK[this.effectiveCodec];
+      if (fallbackCodec) {
+        this.statusCallback(
+          this.deviceId,
+          vscode.l10n.t(
+            '{0} codec failed, trying {1}...',
+            this.effectiveCodec.toUpperCase(),
+            fallbackCodec.toUpperCase()
+          )
+        );
+        this.effectiveCodec = fallbackCodec;
+
+        // Clean up failed connection
+        if (this.connection) {
+          await this.connection.disconnect();
+          this.connection = null;
+        }
+
+        // Retry with fallback codec
+        await this.connectWithCodecFallback();
+        return;
+      }
+
+      // No more fallbacks available
       this.connectionState = 'disconnected';
       this.connectionStateCallback(this.deviceId, 'disconnected');
       this.errorCallback(this.deviceId, message);
@@ -222,7 +291,7 @@ class DeviceSession {
     // The canvas retains its last rendered frame, and fresh frames from server
     // will update it (delta frames are discarded until next keyframe)
     if (this.lastWidth && this.lastHeight) {
-      // First re-send config/dimensions
+      // First re-send config/dimensions with codec
       if (this.lastConfigData) {
         this.videoFrameCallback(
           this.deviceId,
@@ -230,23 +299,33 @@ class DeviceSession {
           true,
           false,
           this.lastWidth,
-          this.lastHeight
+          this.lastHeight,
+          this.lastCodec
         );
       } else {
-        // Just dimensions
+        // Just dimensions with codec
         this.videoFrameCallback(
           this.deviceId,
           new Uint8Array(0),
           true,
           false,
           this.lastWidth,
-          this.lastHeight
+          this.lastHeight,
+          this.lastCodec
         );
       }
 
       // Then re-send last keyframe to ensure immediate display
       if (this.lastKeyFrameData) {
-        this.videoFrameCallback(this.deviceId, this.lastKeyFrameData, false, true);
+        this.videoFrameCallback(
+          this.deviceId,
+          this.lastKeyFrameData,
+          false,
+          true,
+          undefined,
+          undefined,
+          this.lastCodec
+        );
       }
     }
   }

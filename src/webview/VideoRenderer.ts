@@ -36,6 +36,7 @@ export class VideoRenderer {
   // Config packet storage (like sc_packet_merger in scrcpy)
   private pendingConfig: Uint8Array | null = null;
   private codecConfigured = false;
+  private needsKeyframe = true; // After configure(), decoder needs a keyframe first
   private isPaused = false;
   private resizeObserver: ResizeObserver | null = null;
 
@@ -111,6 +112,18 @@ export class VideoRenderer {
   }
 
   /**
+   * Set video codec (called when codec info is received from backend)
+   * This overrides auto-detection which may fail for some codecs
+   */
+  setCodec(codec: VideoCodec) {
+    if (this.codec !== codec) {
+      console.log(`Setting video codec to: ${codec}`);
+      this.codec = codec;
+      this.codecDetected = true;
+    }
+  }
+
+  /**
    * Fit canvas to container while maintaining aspect ratio
    */
   private fitToContainer() {
@@ -162,6 +175,7 @@ export class VideoRenderer {
     });
 
     this.codecConfigured = false;
+    this.needsKeyframe = true;
   }
 
   /**
@@ -202,7 +216,10 @@ export class VideoRenderer {
     if (isConfig) {
       // Store config packet (SPS/PPS) to prepend to next keyframe
       // This matches sc_packet_merger behavior in scrcpy
-      this.pendingConfig = data;
+      // Only store if data is not empty (dimensions-only messages have empty data)
+      if (data.length > 0) {
+        this.pendingConfig = data;
+      }
 
       // Parse SPS for dimensions (rotation sends new SPS with new dimensions)
       const dims = H264Utils.parseSPSDimensions(data);
@@ -219,6 +236,26 @@ export class VideoRenderer {
     // Configure codec on first keyframe with config
     if (!this.codecConfigured && isKey && this.pendingConfig) {
       this.configureCodec();
+      // For AV1, config is in description, don't merge with frame
+      // For H.264/H.265, merge config with frame data
+      const frameData =
+        this.codec === 'av1' ? data : this.mergeConfigWithFrame(this.pendingConfig, data);
+      this.pendingConfig = null;
+      // Decode the keyframe on next tick to ensure configure() completes
+      queueMicrotask(() => {
+        try {
+          const chunk = new EncodedVideoChunk({
+            type: 'key',
+            timestamp: performance.now() * 1000,
+            data: frameData,
+          });
+          this.decoder?.decode(chunk);
+          this.needsKeyframe = false;
+        } catch (error) {
+          console.error('Failed to decode initial keyframe:', error);
+        }
+      });
+      return;
     }
 
     if (!this.codecConfigured) {
@@ -226,10 +263,17 @@ export class VideoRenderer {
       return;
     }
 
+    // After configure(), decoder requires a keyframe first
+    // Skip delta frames until we get a keyframe
+    if (this.needsKeyframe && !isKey) {
+      return;
+    }
+
     try {
       // Merge config with keyframe (like sc_packet_merger_merge)
+      // For AV1, config is in description, so don't merge
       let frameData = data;
-      if (isKey && this.pendingConfig) {
+      if (isKey && this.pendingConfig && this.codec !== 'av1') {
         frameData = this.mergeConfigWithFrame(this.pendingConfig, data);
         this.pendingConfig = null;
       }
@@ -246,6 +290,11 @@ export class VideoRenderer {
       });
 
       this.decoder.decode(chunk);
+
+      // After successfully decoding a keyframe, we can accept delta frames
+      if (isKey) {
+        this.needsKeyframe = false;
+      }
     } catch (error) {
       console.error('Failed to decode frame:', error);
     }
@@ -292,16 +341,44 @@ export class VideoRenderer {
 
       console.log(`Configuring codec: ${codecString}, ${this.width}x${this.height}`);
 
-      // Configure WITHOUT description - use Annex B format like FFmpeg
-      this.decoder.configure({
+      // Check if codec is supported
+      if (typeof VideoDecoder.isConfigSupported === 'function') {
+        VideoDecoder.isConfigSupported({
+          codec: codecString,
+          codedWidth: this.width,
+          codedHeight: this.height,
+        }).then(
+          (result) => {
+            if (!result.supported) {
+              console.error(`Codec ${codecString} is not supported by this browser`);
+              console.error(
+                `Browser support: H.264 (widely supported), H.265 (Safari, some Chrome), AV1 (modern browsers)`
+              );
+            }
+          },
+          (err) => console.warn('Could not check codec support:', err)
+        );
+      }
+
+      // Configure decoder
+      // For AV1, include the sequence header in description
+      // For H.264/H.265, use Annex B format (no description needed)
+      const config: VideoDecoderConfig = {
         codec: codecString,
         codedWidth: this.width,
         codedHeight: this.height,
-        // No description - data will be in Annex B format
-      });
+      };
+
+      // For AV1, add the sequence header as description
+      if (this.codec === 'av1' && this.pendingConfig) {
+        config.description = this.pendingConfig;
+      }
+
+      this.decoder.configure(config);
 
       this.codecConfigured = true;
-      console.log('Codec configured successfully (Annex B mode)');
+      this.needsKeyframe = true; // Decoder needs keyframe after configure()
+      console.log(`Codec configured successfully: ${this.codec}`);
     } catch (error) {
       console.error('Failed to configure codec:', error);
     }

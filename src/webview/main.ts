@@ -30,6 +30,9 @@ declare global {
       startRecording: string;
       stopRecording: string;
       recording: string;
+      screenshotPreview: string;
+      save: string;
+      copy: string;
     };
   }
 }
@@ -93,6 +96,12 @@ let statusTextElement: HTMLElement;
 let statsElement: HTMLElement;
 let controlToolbar: HTMLElement;
 let addDeviceBtn: HTMLElement;
+let screenshotPreviewOverlay: HTMLElement;
+let screenshotPreviewTitle: HTMLElement;
+let screenshotPreviewImage: HTMLImageElement;
+let screenshotSaveBtn: HTMLElement;
+let screenshotCopyBtn: HTMLElement;
+let screenshotCloseBtn: HTMLElement;
 
 // Device sessions
 const sessions = new Map<string, DeviceSessionUI>();
@@ -101,12 +110,15 @@ let showStats = false;
 let showExtendedStats = false;
 let isMuted = false;
 let muteBtn: HTMLElement | null = null;
+let muteBtnText: HTMLElement | null = null;
+let leftDropdownContent: HTMLElement | null = null;
 let rotateBtn: HTMLElement | null = null;
 let screenshotBtn: HTMLElement | null = null;
 let recordBtn: HTMLElement | null = null;
 let recordingIndicator: HTMLElement | null = null;
 let recordingTime: HTMLElement | null = null;
 let isPortrait = true;
+let currentScreenshotData: string | null = null;
 
 // Device info tooltip
 let deviceInfoTooltip: HTMLElement | null = null;
@@ -128,6 +140,12 @@ function initialize() {
   controlToolbar = document.getElementById('control-toolbar') as HTMLElement;
   addDeviceBtn = document.getElementById('add-device-btn') as HTMLElement;
   deviceInfoTooltip = document.getElementById('device-info-tooltip') as HTMLElement;
+  screenshotPreviewOverlay = document.getElementById('screenshot-preview-overlay') as HTMLElement;
+  screenshotPreviewTitle = document.getElementById('screenshot-preview-title') as HTMLElement;
+  screenshotPreviewImage = document.getElementById('screenshot-preview-image') as HTMLImageElement;
+  screenshotSaveBtn = document.getElementById('screenshot-save-btn') as HTMLElement;
+  screenshotCopyBtn = document.getElementById('screenshot-copy-btn') as HTMLElement;
+  screenshotCloseBtn = document.getElementById('screenshot-close-btn') as HTMLElement;
 
   if (!canvasContainer || !tabBar || !statusElement || !statusTextElement) {
     console.error('Required DOM elements not found');
@@ -217,11 +235,61 @@ function initialize() {
     });
   }
 
-  // Mute button
+  // Left dropdown setup
+  leftDropdownContent = document.getElementById('left-dropdown-content');
+  const leftDropdownBtn = document.getElementById('left-dropdown-btn');
+
+  if (leftDropdownBtn && leftDropdownContent) {
+    leftDropdownBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      leftDropdownContent!.classList.toggle('show');
+    });
+
+    // Close dropdown when clicking outside
+    document.addEventListener('click', () => {
+      if (leftDropdownContent) {
+        leftDropdownContent.classList.remove('show');
+      }
+    });
+
+    // Prevent dropdown closing when clicking inside
+    leftDropdownContent.addEventListener('click', (e) => {
+      e.stopPropagation();
+    });
+  }
+
+  // Mute button (now inside dropdown)
   muteBtn = document.getElementById('mute-btn');
+  muteBtnText = document.getElementById('mute-btn-text');
   if (muteBtn) {
     muteBtn.addEventListener('click', () => {
       toggleMute();
+      // Close dropdown after action
+      if (leftDropdownContent) {
+        leftDropdownContent.classList.remove('show');
+      }
+    });
+  }
+
+  // Volume buttons inside dropdown
+  if (leftDropdownContent) {
+    const volumeButtons = leftDropdownContent.querySelectorAll('.dropdown-item[data-keycode]');
+    volumeButtons.forEach((button) => {
+      const keycode = parseInt((button as HTMLElement).dataset.keycode || '0', 10);
+      if (!keycode) {
+        return;
+      }
+
+      button.addEventListener('click', () => {
+        vscode.postMessage({ type: 'keyDown', keycode });
+        setTimeout(() => {
+          vscode.postMessage({ type: 'keyUp', keycode });
+        }, 50);
+        // Close dropdown after action
+        if (leftDropdownContent) {
+          leftDropdownContent.classList.remove('show');
+        }
+      });
     });
   }
 
@@ -253,19 +321,64 @@ function initialize() {
   recordingIndicator = document.getElementById('recording-indicator');
   recordingTime = document.getElementById('recording-time');
 
-  // Notification panel button
+  // Notification panel button (now inside dropdown)
   const notificationPanelBtn = document.getElementById('notification-panel-btn');
   if (notificationPanelBtn) {
     notificationPanelBtn.addEventListener('click', () => {
       vscode.postMessage({ type: 'expandNotificationPanel' });
+      // Close dropdown after action
+      if (leftDropdownContent) {
+        leftDropdownContent.classList.remove('show');
+      }
     });
   }
 
-  // Settings panel button
+  // Settings panel button (now inside dropdown)
   const settingsPanelBtn = document.getElementById('settings-panel-btn');
   if (settingsPanelBtn) {
     settingsPanelBtn.addEventListener('click', () => {
       vscode.postMessage({ type: 'expandSettingsPanel' });
+      // Close dropdown after action
+      if (leftDropdownContent) {
+        leftDropdownContent.classList.remove('show');
+      }
+    });
+  }
+
+  // Screenshot preview buttons
+  if (screenshotPreviewTitle) {
+    screenshotPreviewTitle.textContent = window.l10n.screenshotPreview;
+  }
+  if (screenshotSaveBtn) {
+    const saveText = document.getElementById('screenshot-save-text');
+    if (saveText) {
+      saveText.textContent = window.l10n.save;
+    }
+    screenshotSaveBtn.addEventListener('click', () => {
+      saveScreenshot();
+    });
+  }
+  if (screenshotCopyBtn) {
+    const copyText = document.getElementById('screenshot-copy-text');
+    if (copyText) {
+      copyText.textContent = window.l10n.copy;
+    }
+    screenshotCopyBtn.addEventListener('click', () => {
+      copyScreenshotToClipboard();
+    });
+  }
+  if (screenshotCloseBtn) {
+    screenshotCloseBtn.addEventListener('click', () => {
+      dismissScreenshotPreview();
+    });
+  }
+
+  // Close preview when clicking outside the container
+  if (screenshotPreviewOverlay) {
+    screenshotPreviewOverlay.addEventListener('click', (e) => {
+      if (e.target === screenshotPreviewOverlay) {
+        dismissScreenshotPreview();
+      }
     });
   }
 
@@ -441,9 +554,9 @@ function updateRecordingUI(isRecording: boolean, duration: number): void {
     const seconds = Math.floor(duration % 60);
     recordingTime.textContent = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
   } else {
-    // Update button to show record icon (circle)
+    // Update button to show record icon (video-box)
     recordBtn.classList.remove('recording');
-    recordBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="8"/></svg>`;
+    recordBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M18,16L14,12.8V16H6V8H14V11.2L18,8M20,4H4A2,2 0 0,0 2,6V18A2,2 0 0,0 4,20H20A2,2 0 0,0 22,18V6C22,4.89 21.1,4 20,4Z"/></svg>`;
     recordBtn.title = window.l10n.startRecording;
 
     // Hide recording indicator
@@ -455,7 +568,7 @@ function updateRecordingUI(isRecording: boolean, duration: number): void {
 /**
  * Handle recording settings from extension
  */
-function handleRecordingSettings(message: { format: 'webm' | 'mp4'; isRecording: boolean }): void {
+function handleRecordingSettings(message: { format: 'webm' | 'mp4' }): void {
   if (!activeDeviceId) {
     return;
   }
@@ -465,8 +578,8 @@ function handleRecordingSettings(message: { format: 'webm' | 'mp4'; isRecording:
     return;
   }
 
-  // Toggle recording based on current state
-  if (message.isRecording) {
+  // Toggle recording based on current state (check local state, not message)
+  if (session.recordingManager.isCurrentlyRecording()) {
     // Already recording, stop it
     stopRecording();
   } else {
@@ -504,10 +617,18 @@ function updateAudioState(audioEnabled: boolean): void {
     session.audioRenderer.setMuted(isMuted);
   });
 
-  // Update button icon
-  if (muteBtn) {
-    muteBtn.innerHTML = audioEnabled ? '&#x1F50A;' : '&#x1F507;'; // 🔊 : 🔇
-    muteBtn.title = audioEnabled ? window.l10n.disableAudio : window.l10n.enableAudio;
+  // Update button text and icon (now in dropdown)
+  if (muteBtn && muteBtnText) {
+    // Update SVG icon
+    const iconPath = audioEnabled
+      ? 'M14,3.23V5.29C16.89,6.15 19,8.83 19,12C19,15.17 16.89,17.84 14,18.7V20.77C18,19.86 21,16.28 21,12C21,7.72 18,4.14 14,3.23M16.5,12C16.5,10.23 15.5,8.71 14,7.97V16C15.5,15.29 16.5,13.76 16.5,12M3,9V15H7L12,20V4L7,9H3Z'
+      : 'M12,4L9.91,6.09L12,8.18M4.27,3L3,4.27L7.73,9H3V15H7L12,20V13.27L16.25,17.53C15.58,18.04 14.83,18.46 14,18.7V20.77C15.38,20.45 16.63,19.82 17.68,18.96L19.73,21L21,19.73L12,10.73M19,12C19,12.94 18.8,13.82 18.46,14.64L19.97,16.15C20.62,14.91 21,13.5 21,12C21,7.72 18,4.14 14,3.23V5.29C16.89,6.15 19,8.83 19,12M16.5,12C16.5,10.23 15.5,8.71 14,7.97V10.18L16.45,12.63C16.5,12.43 16.5,12.21 16.5,12Z';
+    const svg = muteBtn.querySelector('svg');
+    if (svg) {
+      svg.innerHTML = `<path d="${iconPath}"/>`;
+    }
+    // Update text
+    muteBtnText.textContent = audioEnabled ? window.l10n.disableAudio : window.l10n.enableAudio;
   }
 }
 
@@ -567,6 +688,10 @@ function handleMessage(event: MessageEvent) {
     case 'connectionStateChanged':
       handleConnectionStateChanged(message);
       break;
+
+    case 'screenshotPreview':
+      handleScreenshotPreview(message);
+      break;
   }
 }
 
@@ -580,10 +705,16 @@ function handleVideoFrame(message: {
   isKeyFrame: boolean;
   width?: number;
   height?: number;
+  codec?: 'h264' | 'h265' | 'av1';
 }) {
   const session = sessions.get(message.deviceId);
   if (!session) {
     return;
+  }
+
+  // Set codec if provided (sent with config frames)
+  if (message.codec) {
+    session.videoRenderer.setCodec(message.codec);
   }
 
   // Configure renderer with dimensions (only sent with first frame)
@@ -921,18 +1052,13 @@ function createDeviceSession(
   tab.className = 'tab';
   tab.dataset.deviceId = deviceId;
 
-  // Determine connection type and icon
-  const isWifi = /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(:\d+)?$/.test(deviceInfo.serial);
-
-  const icon = isWifi
-    ? `<svg class="tab-icon" width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12,21L15.6,16.2C14.6,15.45 13.35,15 12,15C10.65,15 9.4,15.45 8.4,16.2L12,21M12,3C7.95,3 4.21,4.34 1.2,6.6L3,9C5.5,7.12 8.62,6 12,6C15.38,6 18.5,7.12 21,9L22.8,6.6C19.79,4.34 16.05,3 12,3M12,9C9.3,9 6.81,9.89 4.8,11.4L6.6,13.8C8.1,12.67 9.97,12 12,12C14.03,12 15.9,12.67 17.4,13.8L19.2,11.4C17.19,9.89 14.7,9 12,9Z" /></svg>`
-    : `<svg class="tab-icon" width="14" height="14" viewBox="0 0 193 193" fill="currentColor"><path d="M81.114 37.464l16.415-28.96 16.834 28.751-12.164.077-.174 70.181c.988-.552 2.027-1.09 3.096-1.643 6.932-3.586 15.674-8.11 15.998-28.05h-8.533V53.251h24.568V77.82h-7.611c-.334 25.049-11.627 30.892-20.572 35.519-3.232 1.672-6.012 3.111-6.975 5.68l-.09 36.683a14.503 14.503 0 0 1 10.68 14.02 14.5 14.5 0 0 1-14.533 14.532 14.5 14.5 0 0 1-14.533-14.532 14.504 14.504 0 0 1 9.454-13.628l.057-22.801c-2.873-1.613-5.62-2.704-8.139-3.705-11.142-4.43-18.705-7.441-18.857-33.4a14.381 14.381 0 0 1-10.43-13.869c0-7.946 6.482-14.428 14.428-14.428 7.946 0 14.428 6.482 14.428 14.428 0 6.488-4.21 11.889-10.004 13.74.116 20.396 5.54 22.557 13.528 25.732 1.61.641 3.303 1.312 5.069 2.114l.214-86.517-12.154.076z"/></svg>`;
+  // Info icon (ⓘ) for connection status - changes color based on state
+  const infoIcon = `<svg class="tab-status-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M13,9H11V7H13M13,17H11V11H13M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2Z"/></svg>`;
 
   tab.innerHTML = `
     <div class="tab-status tab-status-connecting">
-      <div class="tab-status-dot"></div>
+      ${infoIcon}
     </div>
-    ${icon}
     <span class="tab-label">${escapeHtml(deviceInfo.name)}</span>
     <span class="tab-close">&times;</span>
   `;
@@ -1322,8 +1448,13 @@ function updateTooltipContent(serial: string, info: DeviceDetailedInfo) {
     ipAddress,
   } = info;
 
+  // Determine connection type
+  const isWifi = /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(:\d+)?$/.test(serial);
+  const connectionType = isWifi ? 'WiFi' : 'USB';
+  const connectionIcon = isWifi ? '📶' : '🔌';
+
   // Format battery icon
-  const batteryIcon = batteryCharging ? '🔌' : '🔋';
+  const batteryIcon = batteryCharging ? '⚡' : '🔋';
 
   // Format storage as human-readable
   const storageUsedGB = (storageUsed / (1024 * 1024 * 1024)).toFixed(1);
@@ -1335,6 +1466,9 @@ function updateTooltipContent(serial: string, info: DeviceDetailedInfo) {
   if (manufacturer && model) {
     content += `<div class="info-row"><strong>${escapeHtml(manufacturer)} ${escapeHtml(model)}</strong></div>`;
   }
+
+  // Connection type
+  content += `<div class="info-row">${connectionIcon} ${connectionType}</div>`;
 
   if (androidVersion) {
     content += `<div class="info-row">Android ${escapeHtml(androidVersion)}`;
@@ -1396,6 +1530,88 @@ function escapeHtml(text: string): string {
   const div = document.createElement('div');
   div.textContent = text;
   return div.innerHTML;
+}
+
+/**
+ * Handle screenshot preview message from extension
+ */
+function handleScreenshotPreview(message: { base64Data: string }) {
+  if (!message.base64Data) {
+    resetScreenshotButton();
+    return;
+  }
+
+  currentScreenshotData = message.base64Data;
+
+  // Set image source
+  if (screenshotPreviewImage) {
+    screenshotPreviewImage.src = `data:image/png;base64,${message.base64Data}`;
+  }
+
+  // Show overlay
+  if (screenshotPreviewOverlay) {
+    screenshotPreviewOverlay.classList.add('visible');
+  }
+
+  // Reset screenshot button
+  resetScreenshotButton();
+}
+
+/**
+ * Save screenshot via extension
+ */
+function saveScreenshot() {
+  if (!currentScreenshotData) {
+    return;
+  }
+
+  vscode.postMessage({
+    type: 'saveScreenshot',
+    base64Data: currentScreenshotData,
+  });
+
+  dismissScreenshotPreview();
+}
+
+/**
+ * Copy screenshot to clipboard
+ */
+async function copyScreenshotToClipboard() {
+  if (!currentScreenshotData) {
+    return;
+  }
+
+  try {
+    // Convert base64 to blob
+    const byteString = atob(currentScreenshotData);
+    const arrayBuffer = new ArrayBuffer(byteString.length);
+    const uint8Array = new Uint8Array(arrayBuffer);
+    for (let i = 0; i < byteString.length; i++) {
+      uint8Array[i] = byteString.charCodeAt(i);
+    }
+    const blob = new Blob([arrayBuffer], { type: 'image/png' });
+
+    // Copy to clipboard using Clipboard API
+    await navigator.clipboard.write([
+      new ClipboardItem({
+        'image/png': blob,
+      }),
+    ]);
+
+    dismissScreenshotPreview();
+  } catch (error) {
+    console.error('Failed to copy screenshot to clipboard:', error);
+  }
+}
+
+/**
+ * Dismiss screenshot preview overlay
+ */
+function dismissScreenshotPreview() {
+  if (screenshotPreviewOverlay) {
+    screenshotPreviewOverlay.classList.remove('visible');
+  }
+  currentScreenshotData = null;
 }
 
 // Initialize when DOM is ready
