@@ -12,6 +12,23 @@ export interface DeviceInfo {
 }
 
 /**
+ * Detailed device information from ADB
+ */
+export interface DeviceDetailedInfo {
+  serial: string;
+  model: string;
+  manufacturer: string;
+  androidVersion: string;
+  sdkVersion: number;
+  batteryLevel: number;
+  batteryCharging: boolean;
+  storageTotal: number; // bytes
+  storageUsed: number; // bytes
+  screenResolution: string; // e.g., "1080x2400"
+  ipAddress?: string;
+}
+
+/**
  * Session information sent to webview
  */
 export interface SessionInfo {
@@ -299,6 +316,9 @@ export class DeviceManager {
   private trackDevicesProcess: ChildProcess | null = null;
   private knownDeviceSerials = new Set<string>();
   private isMonitoring = false;
+  private deviceInfoCache = new Map<string, { info: DeviceDetailedInfo; timestamp: number }>();
+  private deviceInfoRefreshInterval: NodeJS.Timeout | null = null;
+  private static readonly INFO_CACHE_TTL = 30000; // 30 seconds
 
   constructor(
     private videoFrameCallback: VideoFrameCallback,
@@ -345,6 +365,202 @@ export class DeviceManager {
         resolve(devices);
       });
     });
+  }
+
+  /**
+   * Get detailed device information via ADB commands
+   */
+  async getDeviceInfo(serial: string): Promise<DeviceDetailedInfo> {
+    const execAdb = (command: string): Promise<string> => {
+      return new Promise((resolve, reject) => {
+        exec(`adb -s ${serial} ${command}`, { timeout: 5000 }, (error, stdout, stderr) => {
+          if (error) {
+            reject(new Error(stderr || error.message));
+          } else {
+            resolve(stdout.trim());
+          }
+        });
+      });
+    };
+
+    try {
+      // Fetch all device properties in parallel for better performance
+      const [
+        model,
+        manufacturer,
+        androidVersion,
+        sdkVersion,
+        batteryInfo,
+        storageInfo,
+        resolutionInfo,
+        ipInfo,
+      ] = await Promise.all([
+        execAdb('shell getprop ro.product.model').catch(() => 'Unknown'),
+        execAdb('shell getprop ro.product.manufacturer').catch(() => 'Unknown'),
+        execAdb('shell getprop ro.build.version.release').catch(() => 'Unknown'),
+        execAdb('shell getprop ro.build.version.sdk').catch(() => '0'),
+        execAdb('shell dumpsys battery').catch(() => ''),
+        execAdb('shell df /data').catch(() => ''),
+        execAdb('shell wm size').catch(() => ''),
+        execAdb('shell ip route | grep wlan').catch(() => ''),
+      ]);
+
+      // Parse battery info
+      let batteryLevel = 0;
+      let batteryCharging = false;
+      if (batteryInfo) {
+        const levelMatch = batteryInfo.match(/level:\s*(\d+)/);
+        if (levelMatch) {
+          batteryLevel = parseInt(levelMatch[1], 10);
+        }
+        // Check if charging (status: 2 = charging, 5 = full)
+        const statusMatch = batteryInfo.match(/status:\s*(\d+)/);
+        if (statusMatch) {
+          const status = parseInt(statusMatch[1], 10);
+          batteryCharging = status === 2 || status === 5;
+        }
+      }
+
+      // Parse storage info (df output format: Filesystem Size Used Avail Use% Mounted)
+      let storageTotal = 0;
+      let storageUsed = 0;
+      if (storageInfo) {
+        const lines = storageInfo.split('\n');
+        // Find the line with /data (usually the second line)
+        for (const line of lines) {
+          if (line.includes('/data')) {
+            const parts = line.trim().split(/\s+/);
+            if (parts.length >= 3) {
+              // Convert from KB to bytes (df uses 1K blocks by default)
+              storageTotal = this.parseStorageSize(parts[1]);
+              storageUsed = this.parseStorageSize(parts[2]);
+              break;
+            }
+          }
+        }
+      }
+
+      // Parse screen resolution
+      let screenResolution = 'Unknown';
+      if (resolutionInfo) {
+        const match = resolutionInfo.match(/Physical size:\s*(\d+)x(\d+)/);
+        if (match) {
+          screenResolution = `${match[1]}x${match[2]}`;
+        }
+      }
+
+      // Parse IP address (extract IP from wlan route)
+      let ipAddress: string | undefined;
+      if (ipInfo) {
+        const match = ipInfo.match(/src\s+(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})/);
+        if (match) {
+          ipAddress = match[1];
+        }
+      }
+
+      return {
+        serial,
+        model,
+        manufacturer,
+        androidVersion,
+        sdkVersion: parseInt(sdkVersion, 10) || 0,
+        batteryLevel,
+        batteryCharging,
+        storageTotal,
+        storageUsed,
+        screenResolution,
+        ipAddress,
+      };
+    } catch (error) {
+      // Return partial info if commands fail
+      return {
+        serial,
+        model: 'Unknown',
+        manufacturer: 'Unknown',
+        androidVersion: 'Unknown',
+        sdkVersion: 0,
+        batteryLevel: 0,
+        batteryCharging: false,
+        storageTotal: 0,
+        storageUsed: 0,
+        screenResolution: 'Unknown',
+        ipAddress: undefined,
+      };
+    }
+  }
+
+  /**
+   * Parse storage size from df output (handles K, M, G suffixes)
+   */
+  private parseStorageSize(sizeStr: string): number {
+    const match = sizeStr.match(/^(\d+(?:\.\d+)?)([KMG])?$/);
+    if (!match) {
+      return 0;
+    }
+
+    const value = parseFloat(match[1]);
+    const unit = match[2] || 'K'; // Default to KB
+
+    switch (unit) {
+      case 'K':
+        return value * 1024;
+      case 'M':
+        return value * 1024 * 1024;
+      case 'G':
+        return value * 1024 * 1024 * 1024;
+      default:
+        return value;
+    }
+  }
+
+  /**
+   * Get cached device info or fetch if not cached/expired
+   */
+  async getCachedDeviceInfo(
+    serial: string,
+    forceRefresh: boolean = false
+  ): Promise<DeviceDetailedInfo> {
+    const now = Date.now();
+    const cached = this.deviceInfoCache.get(serial);
+
+    if (!forceRefresh && cached && now - cached.timestamp < DeviceManager.INFO_CACHE_TTL) {
+      return cached.info;
+    }
+
+    // Fetch fresh info
+    const info = await this.getDeviceInfo(serial);
+    this.deviceInfoCache.set(serial, { info, timestamp: now });
+    return info;
+  }
+
+  /**
+   * Start periodic refresh of device info for active sessions
+   */
+  private startDeviceInfoRefresh(): void {
+    if (this.deviceInfoRefreshInterval) {
+      return;
+    }
+
+    this.deviceInfoRefreshInterval = setInterval(async () => {
+      // Refresh info for all connected devices
+      for (const session of this.sessions.values()) {
+        try {
+          await this.getCachedDeviceInfo(session.deviceInfo.serial, true);
+        } catch (error) {
+          // Ignore errors during refresh
+        }
+      }
+    }, DeviceManager.INFO_CACHE_TTL);
+  }
+
+  /**
+   * Stop periodic refresh of device info
+   */
+  private stopDeviceInfoRefresh(): void {
+    if (this.deviceInfoRefreshInterval) {
+      clearInterval(this.deviceInfoRefreshInterval);
+      this.deviceInfoRefreshInterval = null;
+    }
   }
 
   /**
@@ -742,6 +958,8 @@ export class DeviceManager {
     await Promise.all(Array.from(this.sessions.values()).map((s) => s.disconnect()));
     this.sessions.clear();
     this.activeDeviceId = null;
+    this.deviceInfoCache.clear();
+    this.stopDeviceInfoRefresh();
     this.notifySessionListChanged();
   }
 
@@ -809,6 +1027,9 @@ export class DeviceManager {
 
     // Start adb track-devices process
     this.startTrackDevices();
+
+    // Start periodic device info refresh
+    this.startDeviceInfoRefresh();
   }
 
   /**
@@ -943,6 +1164,7 @@ export class DeviceManager {
       this.trackDevicesProcess = null;
     }
     this.knownDeviceSerials.clear();
+    this.stopDeviceInfoRefresh();
   }
 
   /**

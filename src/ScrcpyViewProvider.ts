@@ -456,6 +456,27 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
       case 'resetScrcpyPath':
         await vscode.workspace.getConfiguration('scrcpy').update('path', undefined, true);
         break;
+
+      case 'getDeviceInfo':
+        if (this._deviceManager && message.serial) {
+          try {
+            const deviceInfo = await this._deviceManager.getCachedDeviceInfo(message.serial);
+            this._view?.webview.postMessage({
+              type: 'deviceInfo',
+              serial: message.serial,
+              info: deviceInfo,
+            });
+          } catch (error) {
+            console.error('Failed to get device info:', error);
+            // Send empty response on error
+            this._view?.webview.postMessage({
+              type: 'deviceInfo',
+              serial: message.serial,
+              info: null,
+            });
+          }
+        }
+        break;
     }
   }
 

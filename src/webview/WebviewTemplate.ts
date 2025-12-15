@@ -147,6 +147,45 @@ export function getHtmlForWebview(webview: vscode.Webview, extensionUri: vscode.
       background: var(--vscode-toolbar-hoverBackground, rgba(90, 93, 94, 0.31));
     }
 
+    /* Device info tooltip */
+    .device-info-tooltip {
+      position: absolute;
+      top: 40px;
+      left: 0;
+      background: var(--vscode-editorHoverWidget-background, #252526);
+      color: var(--vscode-editorHoverWidget-foreground, #ccc);
+      border: 1px solid var(--vscode-editorHoverWidget-border, #454545);
+      border-radius: 4px;
+      padding: 8px 12px;
+      font-size: 12px;
+      font-family: var(--vscode-font-family);
+      line-height: 1.5;
+      white-space: pre-line;
+      z-index: 1000;
+      pointer-events: none;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+      min-width: 200px;
+      display: none;
+    }
+
+    .device-info-tooltip.visible {
+      display: block;
+    }
+
+    .device-info-tooltip .info-row {
+      margin: 2px 0;
+    }
+
+    .device-info-tooltip .info-label {
+      color: var(--vscode-descriptionForeground, #999);
+      font-weight: 500;
+    }
+
+    .device-info-loading {
+      font-style: italic;
+      color: var(--vscode-descriptionForeground, #999);
+    }
+
     .tab-add {
       display: flex;
       align-items: center;
@@ -367,6 +406,8 @@ export function getHtmlForWebview(webview: vscode.Webview, extensionUri: vscode.
     <!-- Tab bar - fixed at top -->
     <div id="tab-bar" class="tab-bar hidden">
       <button class="tab-add" id="add-device-btn" title="${addDevice}">+</button>
+      <!-- Device info tooltip -->
+      <div id="device-info-tooltip" class="device-info-tooltip"></div>
     </div>
 
     <!-- Canvas container - centered -->

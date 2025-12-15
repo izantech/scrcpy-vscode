@@ -55,6 +55,22 @@ interface DeviceSessionUI {
   tabElement: HTMLElement;
 }
 
+/**
+ * Detailed device information from extension
+ */
+interface DeviceDetailedInfo {
+  model: string;
+  manufacturer: string;
+  androidVersion: string;
+  sdkVersion: number;
+  batteryLevel: number;
+  batteryCharging: boolean;
+  storageTotal: number;
+  storageUsed: number;
+  screenResolution: string;
+  ipAddress?: string;
+}
+
 // Global state
 let vscode: VSCodeAPI;
 let canvasContainer: HTMLElement;
@@ -75,6 +91,11 @@ let rotateBtn: HTMLElement | null = null;
 let screenshotBtn: HTMLElement | null = null;
 let isPortrait = true;
 
+// Device info tooltip
+let deviceInfoTooltip: HTMLElement | null = null;
+const deviceInfoCache = new Map<string, DeviceDetailedInfo>();
+let tooltipHideTimeout: ReturnType<typeof setTimeout> | null = null;
+
 /**
  * Initialize the WebView
  */
@@ -89,6 +110,7 @@ function initialize() {
   statsElement = document.getElementById('stats') as HTMLElement;
   controlToolbar = document.getElementById('control-toolbar') as HTMLElement;
   addDeviceBtn = document.getElementById('add-device-btn') as HTMLElement;
+  deviceInfoTooltip = document.getElementById('device-info-tooltip') as HTMLElement;
 
   if (!canvasContainer || !tabBar || !statusElement || !statusTextElement) {
     console.error('Required DOM elements not found');
@@ -313,6 +335,10 @@ function handleMessage(event: MessageEvent) {
 
     case 'screenshotComplete':
       resetScreenshotButton();
+      break;
+
+    case 'deviceInfo':
+      handleDeviceInfo(message);
       break;
   }
 }
@@ -601,6 +627,9 @@ function createDeviceSession(
     }
   });
 
+  // Attach tooltip handlers
+  attachTooltipHandlers(tab, deviceInfo.serial);
+
   // Insert tab before add button
   tabBar.insertBefore(tab, addDeviceBtn);
 
@@ -852,6 +881,162 @@ function showEmptyState() {
   btnContainer.appendChild(addBtn);
 
   statusElement.classList.remove('hidden');
+}
+
+/**
+ * Handle device info response from extension
+ */
+function handleDeviceInfo(message: { serial: string; info: DeviceDetailedInfo | null }) {
+  // Store in cache
+  if (message.info) {
+    deviceInfoCache.set(message.serial, message.info);
+
+    // If tooltip is visible for this device, update it
+    if (deviceInfoTooltip && !deviceInfoTooltip.classList.contains('hidden')) {
+      const visibleSerial = deviceInfoTooltip.dataset.serial;
+      if (visibleSerial === message.serial) {
+        updateTooltipContent(message.serial, message.info);
+      }
+    }
+  }
+}
+
+/**
+ * Show device info tooltip for a tab
+ */
+function showDeviceInfoTooltip(tab: HTMLElement, serial: string) {
+  if (!deviceInfoTooltip) {
+    return;
+  }
+
+  // Clear hide timeout
+  if (tooltipHideTimeout) {
+    clearTimeout(tooltipHideTimeout);
+    tooltipHideTimeout = null;
+  }
+
+  // Position tooltip below tab
+  const tabRect = tab.getBoundingClientRect();
+  const containerRect = tabBar.getBoundingClientRect();
+  deviceInfoTooltip.style.left = `${tabRect.left - containerRect.left}px`;
+  deviceInfoTooltip.dataset.serial = serial;
+
+  // Check cache first
+  const cached = deviceInfoCache.get(serial);
+  if (cached) {
+    updateTooltipContent(serial, cached);
+    deviceInfoTooltip.classList.add('visible');
+  } else {
+    // Show loading state
+    deviceInfoTooltip.innerHTML = '<div class="device-info-loading">Loading device info...</div>';
+    deviceInfoTooltip.classList.add('visible');
+
+    // Request device info from extension
+    vscode.postMessage({ type: 'getDeviceInfo', serial });
+  }
+}
+
+/**
+ * Hide device info tooltip
+ */
+function hideDeviceInfoTooltip() {
+  if (!deviceInfoTooltip) {
+    return;
+  }
+
+  // Delay hiding to allow moving mouse to tooltip
+  tooltipHideTimeout = setTimeout(() => {
+    deviceInfoTooltip!.classList.remove('visible');
+    deviceInfoTooltip!.dataset.serial = '';
+  }, 200);
+}
+
+/**
+ * Update tooltip content with device info
+ */
+function updateTooltipContent(serial: string, info: DeviceDetailedInfo) {
+  if (!deviceInfoTooltip) {
+    return;
+  }
+
+  const {
+    model,
+    manufacturer,
+    androidVersion,
+    sdkVersion,
+    batteryLevel,
+    batteryCharging,
+    storageTotal,
+    storageUsed,
+    screenResolution,
+    ipAddress,
+  } = info;
+
+  // Format battery icon
+  const batteryIcon = batteryCharging ? '🔌' : '🔋';
+
+  // Format storage as human-readable
+  const storageUsedGB = (storageUsed / (1024 * 1024 * 1024)).toFixed(1);
+  const storageTotalGB = (storageTotal / (1024 * 1024 * 1024)).toFixed(1);
+
+  // Build tooltip content
+  let content = '<div class="device-info-content">';
+
+  if (manufacturer && model) {
+    content += `<div class="info-row"><strong>${escapeHtml(manufacturer)} ${escapeHtml(model)}</strong></div>`;
+  }
+
+  if (androidVersion) {
+    content += `<div class="info-row">Android ${escapeHtml(androidVersion)}`;
+    if (sdkVersion) {
+      content += ` (SDK ${sdkVersion})`;
+    }
+    content += `</div>`;
+  }
+
+  if (batteryLevel > 0) {
+    content += `<div class="info-row">${batteryIcon} ${batteryLevel}%`;
+    if (batteryCharging) {
+      content += ' (charging)';
+    }
+    content += `</div>`;
+  }
+
+  if (storageTotal > 0) {
+    content += `<div class="info-row">Storage: ${storageUsedGB} GB / ${storageTotalGB} GB</div>`;
+  }
+
+  if (screenResolution && screenResolution !== 'Unknown') {
+    // Parse resolution and format with × symbol
+    const match = screenResolution.match(/(\d+)x(\d+)/);
+    if (match) {
+      content += `<div class="info-row">${match[1]} × ${match[2]}</div>`;
+    }
+  }
+
+  if (ipAddress) {
+    content += `<div class="info-row">${escapeHtml(ipAddress)}</div>`;
+  }
+
+  content += '</div>';
+  deviceInfoTooltip.innerHTML = content;
+}
+
+/**
+ * Attach tooltip handlers to a tab
+ */
+function attachTooltipHandlers(tab: HTMLElement, serial: string) {
+  // Show tooltip on hover (but not on close button)
+  tab.addEventListener('mouseenter', (e) => {
+    const target = e.target as HTMLElement;
+    if (!target.classList.contains('tab-close')) {
+      showDeviceInfoTooltip(tab, serial);
+    }
+  });
+
+  tab.addEventListener('mouseleave', () => {
+    hideDeviceInfoTooltip();
+  });
 }
 
 /**
