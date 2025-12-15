@@ -251,6 +251,17 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
           message,
         });
       },
+      // Connection state callback
+      (deviceId, state) => {
+        if (this._isDisposed || !this._view) {
+          return;
+        }
+        this._view.webview.postMessage({
+          type: 'connectionStateChanged',
+          deviceId,
+          state,
+        });
+      },
       config,
       // Pass VS Code clipboard API for clipboard sync
       vscode.env.clipboard

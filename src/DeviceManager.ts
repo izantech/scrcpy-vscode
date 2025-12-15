@@ -29,12 +29,18 @@ export interface DeviceDetailedInfo {
 }
 
 /**
+ * Connection state for a device
+ */
+export type ConnectionState = 'connecting' | 'connected' | 'disconnected' | 'reconnecting';
+
+/**
  * Session information sent to webview
  */
 export interface SessionInfo {
   deviceId: string;
   deviceInfo: DeviceInfo;
   isActive: boolean;
+  connectionState: ConnectionState;
 }
 
 /**
@@ -54,6 +60,7 @@ type AudioFrameCallback = (deviceId: string, data: Uint8Array, isConfig: boolean
 type StatusCallback = (deviceId: string, status: string) => void;
 type SessionListCallback = (sessions: SessionInfo[]) => void;
 type ErrorCallback = (deviceId: string, message: string) => void;
+type ConnectionStateCallback = (deviceId: string, state: ConnectionState) => void;
 
 /**
  * Manages a single device session
@@ -63,6 +70,7 @@ class DeviceSession {
   public readonly deviceInfo: DeviceInfo;
   public isActive = false;
   public isPaused = false;
+  public connectionState: ConnectionState = 'connecting';
 
   private connection: ScrcpyConnection | null = null;
   private retryCount = 0;
@@ -82,6 +90,7 @@ class DeviceSession {
     private audioFrameCallback: AudioFrameCallback,
     private statusCallback: StatusCallback,
     private errorCallback: ErrorCallback,
+    private connectionStateCallback: ConnectionStateCallback,
     private config: ScrcpyConfig,
     private clipboardAPI?: ClipboardAPI,
     private onSessionFailed?: (deviceId: string) => void
@@ -91,6 +100,9 @@ class DeviceSession {
   }
 
   async connect(): Promise<void> {
+    this.connectionState = 'connecting';
+    this.connectionStateCallback(this.deviceId, 'connecting');
+
     this.connection = new ScrcpyConnection(
       (data, isConfig, isKeyFrame, width, height) => {
         // Store dimensions and config data for replay on resume
@@ -129,8 +141,12 @@ class DeviceSession {
       await this.connection.startScrcpy();
       // Reset retry count on successful connection
       this.retryCount = 0;
+      this.connectionState = 'connected';
+      this.connectionStateCallback(this.deviceId, 'connected');
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
+      this.connectionState = 'disconnected';
+      this.connectionStateCallback(this.deviceId, 'disconnected');
       this.errorCallback(this.deviceId, message);
       throw error;
     }
@@ -151,6 +167,8 @@ class DeviceSession {
     while (this.retryCount < maxRetries && !this.isDisposed) {
       this.isReconnecting = true;
       this.retryCount++;
+      this.connectionState = 'reconnecting';
+      this.connectionStateCallback(this.deviceId, 'reconnecting');
 
       this.statusCallback(
         this.deviceId,
@@ -184,6 +202,8 @@ class DeviceSession {
     }
 
     // All retries exhausted (or auto-reconnect disabled), show error
+    this.connectionState = 'disconnected';
+    this.connectionStateCallback(this.deviceId, 'disconnected');
     this.errorCallback(this.deviceId, error);
     // Notify that session has failed so it can be removed
     if (this.onSessionFailed) {
@@ -380,6 +400,7 @@ export class DeviceManager {
     private statusCallback: StatusCallback,
     private sessionListCallback: SessionListCallback,
     private errorCallback: ErrorCallback,
+    private connectionStateCallback: ConnectionStateCallback,
     private config: ScrcpyConfig,
     private clipboardAPI?: ClipboardAPI
   ) {}
@@ -772,6 +793,7 @@ export class DeviceManager {
       this.audioFrameCallback,
       this.statusCallback,
       this.errorCallback,
+      this.connectionStateCallback,
       this.config,
       this.clipboardAPI,
       (deviceId) => this.handleSessionFailed(deviceId)
@@ -1315,6 +1337,7 @@ export class DeviceManager {
       deviceId: s.deviceId,
       deviceInfo: s.deviceInfo,
       isActive: s.isActive,
+      connectionState: s.connectionState,
     }));
     this.sessionListCallback(sessionList);
   }

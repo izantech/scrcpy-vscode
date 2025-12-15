@@ -109,6 +109,52 @@ export function getHtmlForWebview(webview: vscode.Webview, extensionUri: vscode.
       position: relative;
     }
 
+    .tab-status {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 12px;
+      height: 12px;
+      flex-shrink: 0;
+    }
+
+    .tab-status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      transition: background-color 0.2s;
+    }
+
+    /* Connection states */
+    .tab-status-connecting .tab-status-dot {
+      background-color: #0078d4;
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+
+    .tab-status-connected .tab-status-dot {
+      background-color: #4ec9b0;
+    }
+
+    .tab-status-disconnected .tab-status-dot {
+      background-color: #808080;
+    }
+
+    .tab-status-reconnecting .tab-status-dot {
+      background-color: #ce9178;
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% {
+        opacity: 1;
+        transform: scale(1);
+      }
+      50% {
+        opacity: 0.5;
+        transform: scale(0.8);
+      }
+    }
+
     .tab.active {
       background: var(--vscode-tab-activeBackground, #1e1e1e);
       color: var(--vscode-tab-activeForeground, #ffffff);

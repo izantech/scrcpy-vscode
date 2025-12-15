@@ -35,6 +35,11 @@ declare global {
 }
 
 /**
+ * Connection state for a device
+ */
+type ConnectionState = 'connecting' | 'connected' | 'disconnected' | 'reconnecting';
+
+/**
  * Session info from extension
  */
 interface SessionInfo {
@@ -44,6 +49,7 @@ interface SessionInfo {
     name: string;
   };
   isActive: boolean;
+  connectionState: ConnectionState;
 }
 
 /**
@@ -59,6 +65,7 @@ interface DeviceSessionUI {
   keyboardHandler: KeyboardHandler;
   recordingManager: RecordingManager;
   tabElement: HTMLElement;
+  connectionState: ConnectionState;
 }
 
 /**
@@ -556,6 +563,10 @@ function handleMessage(event: MessageEvent) {
         switchToTabByIndex(message.index);
       }
       break;
+
+    case 'connectionStateChanged':
+      handleConnectionStateChanged(message);
+      break;
   }
 }
 
@@ -641,6 +652,40 @@ function handleError(message: { deviceId?: string; message: string }) {
 }
 
 /**
+ * Handle connection state change
+ */
+function handleConnectionStateChanged(message: { deviceId: string; state: ConnectionState }) {
+  const session = sessions.get(message.deviceId);
+  if (!session) {
+    return;
+  }
+
+  session.connectionState = message.state;
+  updateTabConnectionState(session.tabElement, message.state);
+}
+
+/**
+ * Update tab element to show connection state
+ */
+function updateTabConnectionState(tabElement: HTMLElement, state: ConnectionState) {
+  const statusElement = tabElement.querySelector('.tab-status');
+  if (!statusElement) {
+    return;
+  }
+
+  // Remove all state classes
+  statusElement.classList.remove(
+    'tab-status-connecting',
+    'tab-status-connected',
+    'tab-status-disconnected',
+    'tab-status-reconnecting'
+  );
+
+  // Add current state class
+  statusElement.classList.add(`tab-status-${state}`);
+}
+
+/**
  * Handle settings update from extension
  */
 function handleSettings(message: {
@@ -686,6 +731,12 @@ function updateSessionList(sessionList: SessionInfo[]) {
     if (!session) {
       // Create new session UI
       session = createDeviceSession(sessionInfo.deviceId, sessionInfo.deviceInfo);
+    }
+
+    // Update connection state
+    if (session.connectionState !== sessionInfo.connectionState) {
+      session.connectionState = sessionInfo.connectionState;
+      updateTabConnectionState(session.tabElement, sessionInfo.connectionState);
     }
   }
 
@@ -878,6 +929,9 @@ function createDeviceSession(
     : `<svg class="tab-icon" width="14" height="14" viewBox="0 0 193 193" fill="currentColor"><path d="M81.114 37.464l16.415-28.96 16.834 28.751-12.164.077-.174 70.181c.988-.552 2.027-1.09 3.096-1.643 6.932-3.586 15.674-8.11 15.998-28.05h-8.533V53.251h24.568V77.82h-7.611c-.334 25.049-11.627 30.892-20.572 35.519-3.232 1.672-6.012 3.111-6.975 5.68l-.09 36.683a14.503 14.503 0 0 1 10.68 14.02 14.5 14.5 0 0 1-14.533 14.532 14.5 14.5 0 0 1-14.533-14.532 14.504 14.504 0 0 1 9.454-13.628l.057-22.801c-2.873-1.613-5.62-2.704-8.139-3.705-11.142-4.43-18.705-7.441-18.857-33.4a14.381 14.381 0 0 1-10.43-13.869c0-7.946 6.482-14.428 14.428-14.428 7.946 0 14.428 6.482 14.428 14.428 0 6.488-4.21 11.889-10.004 13.74.116 20.396 5.54 22.557 13.528 25.732 1.61.641 3.303 1.312 5.069 2.114l.214-86.517-12.154.076z"/></svg>`;
 
   tab.innerHTML = `
+    <div class="tab-status tab-status-connecting">
+      <div class="tab-status-dot"></div>
+    </div>
     ${icon}
     <span class="tab-label">${escapeHtml(deviceInfo.name)}</span>
     <span class="tab-close">&times;</span>
@@ -912,6 +966,7 @@ function createDeviceSession(
     keyboardHandler,
     recordingManager,
     tabElement: tab,
+    connectionState: 'connecting',
   };
 
   sessions.set(deviceId, session);
