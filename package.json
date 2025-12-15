@@ -232,6 +232,20 @@
             "default": true,
             "order": 0,
             "markdownDescription": "%config.scrcpy.audio%"
+          },
+          "scrcpy.audioSource": {
+            "type": "string",
+            "default": "output",
+            "order": 1,
+            "enum": [
+              "output",
+              "mic"
+            ],
+            "enumDescriptions": [
+              "%config.scrcpy.audioSource.output%",
+              "%config.scrcpy.audioSource.mic%"
+            ],
+            "markdownDescription": "%config.scrcpy.audioSource%"
           }
         }
       },
