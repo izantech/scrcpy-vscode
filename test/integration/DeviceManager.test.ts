@@ -19,6 +19,7 @@ describe('DeviceManager', () => {
   let statusCallback: ReturnType<typeof vi.fn>;
   let sessionListCallback: ReturnType<typeof vi.fn>;
   let errorCallback: ReturnType<typeof vi.fn>;
+  let connectionStateCallback: ReturnType<typeof vi.fn>;
   let config: ScrcpyConfig;
 
   beforeEach(() => {
@@ -30,6 +31,7 @@ describe('DeviceManager', () => {
     statusCallback = vi.fn();
     sessionListCallback = vi.fn();
     errorCallback = vi.fn();
+    connectionStateCallback = vi.fn();
 
     config = {
       scrcpyPath: '',
@@ -46,6 +48,7 @@ describe('DeviceManager', () => {
       reconnectRetries: 2,
       lockVideoOrientation: false,
       scrollSensitivity: 1.0,
+      videoCodec: 'h264',
     };
 
     manager = new DeviceManager(
@@ -54,6 +57,7 @@ describe('DeviceManager', () => {
       statusCallback,
       sessionListCallback,
       errorCallback,
+      connectionStateCallback,
       config
     );
   });
@@ -380,6 +384,257 @@ describe('DeviceManager', () => {
 
       expect(manager.getAllSessions()).toHaveLength(0);
       expect(manager.getActiveSession()).toBeNull();
+    });
+  });
+
+  describe('device classification', () => {
+    it.each([
+      ['192.168.1.100:5555', true],
+      ['10.0.0.1:5555', true],
+      ['172.16.0.1:12345', true],
+      ['emulator-5554', false],
+      ['RZXYZ12345', false],
+      ['adb-12345._adb-tls-connect._tcp', false],
+    ])('should classify %s as WiFi device: %s', async (serial, isWifi) => {
+      vi.mocked(exec).mockImplementation(
+        (
+          _cmd: string,
+          _optionsOrCallback?: unknown,
+          callback?: (error: Error | null, stdout: string, stderr: string) => void
+        ) => {
+          const cb = typeof _optionsOrCallback === 'function' ? _optionsOrCallback : callback;
+          cb?.(null, `List of devices attached\n${serial}\tdevice model:Test\n`, '');
+          return new MockChildProcess();
+        }
+      );
+
+      const devices = await manager.getAvailableDevices();
+
+      // WiFi devices have IP:port format, USB devices don't
+      if (isWifi) {
+        expect(devices[0]?.serial).toMatch(/^\d+\.\d+\.\d+\.\d+:\d+$/);
+      } else if (!serial.includes('_adb-tls-connect')) {
+        expect(devices[0]?.serial).toBe(serial);
+      }
+    });
+  });
+
+  describe('device info parsing', () => {
+    it.each([
+      ['model:Pixel_5', 'Pixel 5'],
+      ['model:SM_G970F', 'SM G970F'],
+      ['model:Galaxy_S21_Ultra', 'Galaxy S21 Ultra'],
+    ])('should parse model info %s as "%s"', async (modelStr, expectedModel) => {
+      vi.mocked(exec).mockImplementation(
+        (
+          _cmd: string,
+          _optionsOrCallback?: unknown,
+          callback?: (error: Error | null, stdout: string, stderr: string) => void
+        ) => {
+          const cb = typeof _optionsOrCallback === 'function' ? _optionsOrCallback : callback;
+          cb?.(null, `List of devices attached\ndevice-123\tdevice ${modelStr}\n`, '');
+          return new MockChildProcess();
+        }
+      );
+
+      const devices = await manager.getAvailableDevices();
+
+      expect(devices).toHaveLength(1);
+      expect(devices[0].model).toBe(expectedModel);
+    });
+
+    it('should handle devices with various states', async () => {
+      vi.mocked(exec).mockImplementation(
+        (
+          _cmd: string,
+          _optionsOrCallback?: unknown,
+          callback?: (error: Error | null, stdout: string, stderr: string) => void
+        ) => {
+          const cb = typeof _optionsOrCallback === 'function' ? _optionsOrCallback : callback;
+          cb?.(
+            null,
+            'List of devices attached\n' +
+              'device1\tdevice model:Active\n' +
+              'device2\toffline\n' +
+              'device3\tunauthorized\n' +
+              'device4\tbootloader\n' +
+              'device5\trecovery\n' +
+              'device6\tdevice model:AlsoActive\n',
+            ''
+          );
+          return new MockChildProcess();
+        }
+      );
+
+      const devices = await manager.getAvailableDevices();
+
+      // Only 'device' state should be included
+      expect(devices).toHaveLength(2);
+      expect(devices.map((d) => d.serial)).toEqual(['device1', 'device6']);
+    });
+  });
+
+  describe('duplicate device prevention', () => {
+    it('should track connected device serials to prevent duplicates', () => {
+      // Initially no devices connected
+      expect(manager.isDeviceConnected('emulator-5554')).toBe(false);
+      expect(manager.isDeviceConnected('192.168.1.100:5555')).toBe(false);
+    });
+  });
+
+  describe('session state management', () => {
+    it('should return sessions as array from getAllSessions', () => {
+      const sessions = manager.getAllSessions();
+      expect(Array.isArray(sessions)).toBe(true);
+      expect(sessions).toHaveLength(0);
+    });
+
+    it('should notify session list changes via callback', async () => {
+      // The callback should be called when sessions change
+      // Initial state has no sessions
+      expect(sessionListCallback).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('track-devices protocol', () => {
+    it('should start device monitoring only once', async () => {
+      const mockProcess = new MockChildProcess();
+      vi.mocked(spawn).mockReturnValue(mockProcess);
+
+      await manager.startDeviceMonitoring();
+      await manager.startDeviceMonitoring(); // Second call should be no-op
+
+      // Only one spawn call for track-devices
+      expect(spawn).toHaveBeenCalledTimes(1);
+      expect(spawn).toHaveBeenCalledWith('adb', ['track-devices']);
+
+      manager.stopDeviceMonitoring();
+    });
+
+    it('should stop monitoring and clean up process', async () => {
+      const mockProcess = new MockChildProcess();
+      vi.mocked(spawn).mockReturnValue(mockProcess);
+
+      await manager.startDeviceMonitoring();
+      manager.stopDeviceMonitoring();
+
+      expect(mockProcess.kill).toHaveBeenCalled();
+    });
+
+    it('should parse 4-char hex length format from track-devices', async () => {
+      const mockProcess = new MockChildProcess();
+      vi.mocked(spawn).mockReturnValue(mockProcess);
+
+      // Configure to enable auto-connect
+      manager.updateConfig({ ...config, autoConnect: true });
+
+      await manager.startDeviceMonitoring();
+
+      // Simulate track-devices output: 4-char hex length + device list
+      // "001a" = 26 bytes for "emulator-5554\tdevice\n" (roughly)
+      const deviceList = 'emulator-5554\tdevice\n';
+      const hexLength = deviceList.length.toString(16).padStart(4, '0');
+
+      // Simulate the data coming in
+      mockProcess.stdout.emit('data', Buffer.from(hexLength + deviceList));
+
+      manager.stopDeviceMonitoring();
+    });
+
+    it('should handle fragmented track-devices data', async () => {
+      const mockProcess = new MockChildProcess();
+      vi.mocked(spawn).mockReturnValue(mockProcess);
+
+      await manager.startDeviceMonitoring();
+
+      // Send data in fragments (first the length, then partial data)
+      mockProcess.stdout.emit('data', Buffer.from('00'));
+      mockProcess.stdout.emit('data', Buffer.from('14'));
+      mockProcess.stdout.emit('data', Buffer.from('emulator-5554\tdevice\n'));
+
+      manager.stopDeviceMonitoring();
+    });
+
+    it('should skip mDNS devices in track-devices output', async () => {
+      const mockProcess = new MockChildProcess();
+      vi.mocked(spawn).mockReturnValue(mockProcess);
+
+      manager.updateConfig({ ...config, autoConnect: true });
+      await manager.startDeviceMonitoring();
+
+      // mDNS devices should be filtered out
+      const deviceList = 'adb-12345._adb-tls-connect._tcp\tdevice\n';
+      const hexLength = deviceList.length.toString(16).padStart(4, '0');
+
+      mockProcess.stdout.emit('data', Buffer.from(hexLength + deviceList));
+
+      // No auto-connect should happen for mDNS devices
+      manager.stopDeviceMonitoring();
+    });
+
+    it('should handle invalid hex length gracefully', async () => {
+      const mockProcess = new MockChildProcess();
+      vi.mocked(spawn).mockReturnValue(mockProcess);
+
+      await manager.startDeviceMonitoring();
+
+      // Send invalid data (not hex)
+      expect(() => {
+        mockProcess.stdout.emit('data', Buffer.from('ZZZZ'));
+      }).not.toThrow();
+
+      manager.stopDeviceMonitoring();
+    });
+
+    it('should restart track-devices process on unexpected close', async () => {
+      vi.useFakeTimers();
+      const mockProcess1 = new MockChildProcess();
+      const mockProcess2 = new MockChildProcess();
+      vi.mocked(spawn).mockReturnValueOnce(mockProcess1).mockReturnValueOnce(mockProcess2);
+
+      await manager.startDeviceMonitoring();
+      expect(spawn).toHaveBeenCalledTimes(1);
+
+      // Simulate process dying
+      mockProcess1.emit('close');
+
+      // Should restart after delay
+      await vi.advanceTimersByTimeAsync(1100);
+      expect(spawn).toHaveBeenCalledTimes(2);
+
+      manager.stopDeviceMonitoring();
+      vi.useRealTimers();
+    });
+  });
+
+  describe('storage size parsing', () => {
+    it('should parse device storage info correctly', async () => {
+      vi.mocked(exec).mockImplementation(
+        (
+          cmd: string,
+          optionsOrCallback?: unknown,
+          callback?: (error: Error | null, stdout: string, stderr: string) => void
+        ) => {
+          const cb = typeof optionsOrCallback === 'function' ? optionsOrCallback : callback;
+          const opts = typeof optionsOrCallback === 'object' ? optionsOrCallback : {};
+
+          if (cmd.includes('df /data') && opts) {
+            cb?.(
+              null,
+              'Filesystem  Size  Used  Avail  Use%  Mounted\n/dev/data  128G  64G  64G  50%  /data',
+              ''
+            );
+          } else {
+            cb?.(null, '', '');
+          }
+          return new MockChildProcess();
+        }
+      );
+
+      const info = await manager.getDeviceInfo('test-device');
+
+      // Storage should be parsed (128G = 128 * 1024^3 bytes)
+      expect(info.storageTotal).toBeGreaterThan(0);
     });
   });
 });

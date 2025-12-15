@@ -45,6 +45,7 @@ describe('ScrcpyConnection', () => {
       reconnectRetries: 2,
       lockVideoOrientation: false,
       scrollSensitivity: 1.0,
+      videoCodec: 'h264',
     };
 
     connection = new ScrcpyConnection(
@@ -646,6 +647,395 @@ describe('ScrcpyConnection', () => {
         expect.stringContaining('/sdcard/Custom/'),
         expect.any(Function)
       );
+    });
+  });
+
+  describe('sendMultiTouch', () => {
+    it('should send multi-touch message with two pointers', () => {
+      const conn = connection as unknown as {
+        controlSocket: MockSocket;
+        isConnected: boolean;
+        deviceWidth: number;
+        deviceHeight: number;
+      };
+
+      const mockSocket = new MockSocket();
+      conn.controlSocket = mockSocket;
+      conn.isConnected = true;
+      conn.deviceWidth = 1080;
+      conn.deviceHeight = 1920;
+
+      connection.sendMultiTouch(0.25, 0.25, 0.75, 0.75, 'down', 1080, 1920);
+
+      // Should send two touch messages (one for each pointer)
+      expect(mockSocket.write.mock.calls.length).toBe(2);
+
+      // Both should be INJECT_TOUCH_EVENT
+      const buffer1 = mockSocket.write.mock.calls[0][0] as Buffer;
+      const buffer2 = mockSocket.write.mock.calls[1][0] as Buffer;
+      expect(buffer1[0]).toBe(ControlMessageType.INJECT_TOUCH_EVENT);
+      expect(buffer2[0]).toBe(ControlMessageType.INJECT_TOUCH_EVENT);
+    });
+
+    it.each([
+      ['down', MotionEventAction.DOWN],
+      ['move', MotionEventAction.MOVE],
+      ['up', MotionEventAction.UP],
+    ])('should send correct action for multi-touch %s', (action, expectedAction) => {
+      const conn = connection as unknown as {
+        controlSocket: MockSocket;
+        isConnected: boolean;
+        deviceWidth: number;
+        deviceHeight: number;
+      };
+
+      const mockSocket = new MockSocket();
+      conn.controlSocket = mockSocket;
+      conn.isConnected = true;
+      conn.deviceWidth = 1080;
+      conn.deviceHeight = 1920;
+
+      connection.sendMultiTouch(
+        0.25,
+        0.25,
+        0.75,
+        0.75,
+        action as 'down' | 'move' | 'up',
+        1080,
+        1920
+      );
+
+      const buffer = mockSocket.write.mock.calls[0][0] as Buffer;
+      expect(buffer[1]).toBe(expectedAction);
+    });
+  });
+
+  describe('sendScroll edge cases', () => {
+    it('should handle negative scroll deltas (scroll up/left)', () => {
+      const conn = connection as unknown as {
+        controlSocket: MockSocket;
+        isConnected: boolean;
+        deviceWidth: number;
+        deviceHeight: number;
+      };
+
+      const mockSocket = new MockSocket();
+      conn.controlSocket = mockSocket;
+      conn.isConnected = true;
+      conn.deviceWidth = 1080;
+      conn.deviceHeight = 1920;
+
+      connection.sendScroll(0.5, 0.5, -0.5, -0.5);
+
+      expect(mockSocket.write).toHaveBeenCalled();
+      const buffer = mockSocket.write.mock.calls[0][0] as Buffer;
+
+      // Check that scroll message was sent
+      expect(buffer[0]).toBe(ControlMessageType.INJECT_SCROLL_EVENT);
+    });
+
+    it('should handle zero scroll delta', () => {
+      const conn = connection as unknown as {
+        controlSocket: MockSocket;
+        isConnected: boolean;
+        deviceWidth: number;
+        deviceHeight: number;
+      };
+
+      const mockSocket = new MockSocket();
+      conn.controlSocket = mockSocket;
+      conn.isConnected = true;
+      conn.deviceWidth = 1080;
+      conn.deviceHeight = 1920;
+
+      connection.sendScroll(0.5, 0.5, 0, 0);
+
+      // Zero delta might not send anything or send a zero message
+      // Just verify no crash
+      expect(() => connection.sendScroll(0.5, 0.5, 0, 0)).not.toThrow();
+    });
+
+    it('should handle horizontal scroll', () => {
+      const conn = connection as unknown as {
+        controlSocket: MockSocket;
+        isConnected: boolean;
+        deviceWidth: number;
+        deviceHeight: number;
+      };
+
+      const mockSocket = new MockSocket();
+      conn.controlSocket = mockSocket;
+      conn.isConnected = true;
+      conn.deviceWidth = 1080;
+      conn.deviceHeight = 1920;
+
+      connection.sendScroll(0.5, 0.5, 0.5, 0);
+
+      expect(mockSocket.write).toHaveBeenCalled();
+    });
+  });
+
+  describe('panel commands', () => {
+    it('should send expand notification panel command', () => {
+      const conn = connection as unknown as {
+        controlSocket: MockSocket;
+        isConnected: boolean;
+      };
+
+      const mockSocket = new MockSocket();
+      conn.controlSocket = mockSocket;
+      conn.isConnected = true;
+
+      connection.expandNotificationPanel();
+
+      expect(mockSocket.write).toHaveBeenCalled();
+      const buffer = mockSocket.write.mock.calls[0][0] as Buffer;
+      expect(buffer[0]).toBe(ControlMessageType.EXPAND_NOTIFICATION_PANEL);
+    });
+
+    it('should send expand settings panel command', () => {
+      const conn = connection as unknown as {
+        controlSocket: MockSocket;
+        isConnected: boolean;
+      };
+
+      const mockSocket = new MockSocket();
+      conn.controlSocket = mockSocket;
+      conn.isConnected = true;
+
+      connection.expandSettingsPanel();
+
+      expect(mockSocket.write).toHaveBeenCalled();
+      const buffer = mockSocket.write.mock.calls[0][0] as Buffer;
+      expect(buffer[0]).toBe(ControlMessageType.EXPAND_SETTINGS_PANEL);
+    });
+
+    it('should send collapse panels command', () => {
+      const conn = connection as unknown as {
+        controlSocket: MockSocket;
+        isConnected: boolean;
+      };
+
+      const mockSocket = new MockSocket();
+      conn.controlSocket = mockSocket;
+      conn.isConnected = true;
+
+      connection.collapsePanels();
+
+      expect(mockSocket.write).toHaveBeenCalled();
+      const buffer = mockSocket.write.mock.calls[0][0] as Buffer;
+      expect(buffer[0]).toBe(ControlMessageType.COLLAPSE_PANELS);
+    });
+  });
+
+  describe('sendKeyWithMeta', () => {
+    it('should send key with metastate for modifiers', () => {
+      const conn = connection as unknown as {
+        controlSocket: MockSocket;
+        isConnected: boolean;
+      };
+
+      const mockSocket = new MockSocket();
+      conn.controlSocket = mockSocket;
+      conn.isConnected = true;
+
+      // Ctrl+A (keycode 29 for 'A', CTRL meta)
+      connection.sendKeyWithMeta(29, 'down', 0x1000);
+
+      expect(mockSocket.write).toHaveBeenCalled();
+      const buffer = mockSocket.write.mock.calls[0][0] as Buffer;
+
+      expect(buffer[0]).toBe(ControlMessageType.INJECT_KEYCODE);
+      expect(buffer[1]).toBe(KeyAction.DOWN);
+    });
+
+    it('should send key up with metastate', () => {
+      const conn = connection as unknown as {
+        controlSocket: MockSocket;
+        isConnected: boolean;
+      };
+
+      const mockSocket = new MockSocket();
+      conn.controlSocket = mockSocket;
+      conn.isConnected = true;
+
+      connection.sendKeyWithMeta(29, 'up', 0x1000);
+
+      const buffer = mockSocket.write.mock.calls[0][0] as Buffer;
+      expect(buffer[1]).toBe(KeyAction.UP);
+    });
+  });
+
+  describe('touch coordinate mapping', () => {
+    it.each([
+      ['top-left corner', 0, 0],
+      ['bottom-right corner', 1, 1],
+      ['center', 0.5, 0.5],
+      ['arbitrary position', 0.33, 0.67],
+    ])('should send valid touch message for %s', (_name, x, y) => {
+      const conn = connection as unknown as {
+        controlSocket: MockSocket;
+        isConnected: boolean;
+        deviceWidth: number;
+        deviceHeight: number;
+      };
+
+      const mockSocket = new MockSocket();
+      conn.controlSocket = mockSocket;
+      conn.isConnected = true;
+      conn.deviceWidth = 1080;
+      conn.deviceHeight = 1920;
+
+      connection.sendTouch(x, y, 'down', 1080, 1920);
+
+      expect(mockSocket.write).toHaveBeenCalled();
+      const buffer = mockSocket.write.mock.calls[0][0] as Buffer;
+
+      // Touch message should be 32 bytes
+      expect(buffer.length).toBe(32);
+      // First byte should be INJECT_TOUCH_EVENT
+      expect(buffer[0]).toBe(ControlMessageType.INJECT_TOUCH_EVENT);
+      // Second byte should be action DOWN
+      expect(buffer[1]).toBe(MotionEventAction.DOWN);
+    });
+  });
+
+  describe('connection state', () => {
+    it('should not send commands when not connected', () => {
+      const conn = connection as unknown as {
+        controlSocket: MockSocket;
+        isConnected: boolean;
+      };
+
+      const mockSocket = new MockSocket();
+      conn.controlSocket = mockSocket;
+      conn.isConnected = false;
+
+      connection.rotateDevice();
+      connection.expandNotificationPanel();
+      connection.collapsePanels();
+      connection.sendKeyDown(66);
+      connection.sendText('test');
+
+      expect(mockSocket.write).not.toHaveBeenCalled();
+    });
+
+    it('should not send commands when socket is null', () => {
+      const conn = connection as unknown as {
+        controlSocket: MockSocket | null;
+        isConnected: boolean;
+      };
+
+      conn.controlSocket = null;
+      conn.isConnected = true;
+
+      // These should not throw
+      expect(() => connection.rotateDevice()).not.toThrow();
+      expect(() => connection.sendKeyDown(66)).not.toThrow();
+    });
+  });
+
+  describe('getInstalledApps', () => {
+    it('should execute pm list packages command', async () => {
+      const conn = connection as unknown as {
+        deviceSerial: string;
+        isConnected: boolean;
+      };
+      conn.deviceSerial = 'emulator-5554';
+      conn.isConnected = true;
+
+      vi.mocked(exec).mockImplementation(
+        (
+          cmd: string,
+          _optionsOrCallback?: unknown,
+          callback?: (error: Error | null, stdout: string, stderr: string) => void
+        ) => {
+          const cb = typeof _optionsOrCallback === 'function' ? _optionsOrCallback : callback;
+          if (cmd.includes('pm list packages')) {
+            cb?.(null, 'package:com.example.app1\npackage:com.example.app2\n', '');
+          }
+          return new MockChildProcess();
+        }
+      );
+
+      const apps = await connection.getInstalledApps();
+
+      expect(exec).toHaveBeenCalledWith(
+        expect.stringContaining('pm list packages'),
+        expect.any(Function)
+      );
+      expect(apps).toBeInstanceOf(Array);
+    });
+
+    it('should filter third-party apps only when requested', async () => {
+      const conn = connection as unknown as {
+        deviceSerial: string;
+        isConnected: boolean;
+      };
+      conn.deviceSerial = 'emulator-5554';
+      conn.isConnected = true;
+
+      vi.mocked(exec).mockImplementation(
+        (
+          cmd: string,
+          _optionsOrCallback?: unknown,
+          callback?: (error: Error | null, stdout: string, stderr: string) => void
+        ) => {
+          const cb = typeof _optionsOrCallback === 'function' ? _optionsOrCallback : callback;
+          cb?.(null, 'package:com.example.app\n', '');
+          return new MockChildProcess();
+        }
+      );
+
+      await connection.getInstalledApps(true);
+
+      expect(exec).toHaveBeenCalledWith(expect.stringContaining('-3'), expect.any(Function));
+    });
+  });
+
+  describe('listDisplays', () => {
+    it('should parse dumpsys display output', async () => {
+      const conn = connection as unknown as {
+        deviceSerial: string;
+        isConnected: boolean;
+      };
+      conn.deviceSerial = 'emulator-5554';
+      conn.isConnected = true;
+
+      vi.mocked(exec).mockImplementation(
+        (
+          cmd: string,
+          _optionsOrCallback?: unknown,
+          callback?: (error: Error | null, stdout: string, stderr: string) => void
+        ) => {
+          const cb = typeof _optionsOrCallback === 'function' ? _optionsOrCallback : callback;
+          if (cmd.includes('dumpsys display')) {
+            cb?.(
+              null,
+              'Display Devices:\n' +
+                'mDisplayId=0\n' +
+                '  mDisplayInfo: DisplayInfo{"Built-in Screen", displayId 0}\n',
+              ''
+            );
+          }
+          return new MockChildProcess();
+        }
+      );
+
+      const displays = await connection.listDisplays();
+
+      expect(displays).toBeInstanceOf(Array);
+    });
+  });
+
+  describe('listCameras', () => {
+    it('should throw when no device is connected', async () => {
+      const conn = connection as unknown as {
+        deviceSerial: string | undefined;
+      };
+      conn.deviceSerial = undefined;
+
+      await expect(connection.listCameras()).rejects.toThrow('No device connected');
     });
   });
 });
