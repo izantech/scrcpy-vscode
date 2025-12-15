@@ -54,6 +54,31 @@ let scrcpyMissing = false;
 type ConnectionState = 'connecting' | 'connected' | 'disconnected' | 'reconnecting';
 
 /**
+ * Device platform type
+ */
+type DevicePlatform = 'android' | 'ios';
+
+/**
+ * Platform capabilities - what features each platform supports
+ */
+interface PlatformCapabilities {
+  supportsTouch: boolean;
+  supportsKeyboard: boolean;
+  supportsSystemButtons: boolean;
+  supportsVolumeControl: boolean;
+  supportsRotation: boolean;
+  supportsDisplaySelection: boolean;
+  supportsVirtualDisplay: boolean;
+  supportsCameraSource: boolean;
+  supportsScreenOff: boolean;
+  supportsApkInstall: boolean;
+  supportsFileUpload: boolean;
+  supportsAppLaunch: boolean;
+  supportsAudioCapture: boolean;
+  supportedVideoCodecs: string[];
+}
+
+/**
  * Device state from extension (matches AppStateSnapshot)
  */
 interface DeviceState {
@@ -61,6 +86,8 @@ interface DeviceState {
   serial: string;
   name: string;
   model?: string;
+  platform: DevicePlatform;
+  capabilities: PlatformCapabilities;
   connectionState: ConnectionState;
   isActive: boolean;
   videoDimensions?: {
@@ -103,7 +130,7 @@ interface AppStateSnapshot {
  */
 interface DeviceSessionUI {
   deviceId: string;
-  deviceInfo: { serial: string; name: string };
+  deviceInfo: { serial: string; name: string; platform: DevicePlatform };
   canvas: HTMLCanvasElement;
   videoRenderer: VideoRenderer;
   audioRenderer: AudioRenderer;
@@ -112,6 +139,8 @@ interface DeviceSessionUI {
   recordingManager: RecordingManager;
   tabElement: HTMLElement;
   connectionState: ConnectionState;
+  platform: DevicePlatform;
+  capabilities: PlatformCapabilities;
 }
 
 /**
@@ -149,6 +178,7 @@ let screenshotCloseBtn: HTMLElement;
 // Device sessions
 const sessions = new Map<string, DeviceSessionUI>();
 let activeDeviceId: string | null = null;
+let activeCapabilities: PlatformCapabilities | null = null;
 let showStats = false;
 let showExtendedStats = false;
 let isMuted = false;
@@ -490,6 +520,42 @@ function updateRotateButton(width: number, height: number): void {
 }
 
 /**
+ * Update toolbar button visibility based on device capabilities
+ */
+function updateToolbarForCapabilities(capabilities: PlatformCapabilities | null): void {
+  // System buttons (Back=4, Home=3, Recent Apps=187)
+  const systemButtons = controlToolbar?.querySelectorAll(
+    '[data-keycode="4"], [data-keycode="3"], [data-keycode="187"]'
+  );
+  systemButtons?.forEach((btn) => {
+    (btn as HTMLElement).style.display = capabilities?.supportsSystemButtons ? '' : 'none';
+  });
+
+  // Volume buttons in dropdown (Volume Down=25, Volume Up=24)
+  const volumeItems = leftDropdownContent?.querySelectorAll(
+    '[data-keycode="25"], [data-keycode="24"]'
+  );
+  volumeItems?.forEach((item) => {
+    (item as HTMLElement).style.display = capabilities?.supportsVolumeControl ? '' : 'none';
+  });
+
+  // Rotation button
+  if (rotateBtn) {
+    rotateBtn.style.display = capabilities?.supportsRotation ? '' : 'none';
+  }
+
+  // Notification/Settings panels (Android-specific swipe gestures)
+  const notificationBtn = document.getElementById('notification-panel-btn');
+  const settingsBtn = document.getElementById('settings-panel-btn');
+  if (notificationBtn) {
+    notificationBtn.style.display = capabilities?.supportsSystemButtons ? '' : 'none';
+  }
+  if (settingsBtn) {
+    settingsBtn.style.display = capabilities?.supportsSystemButtons ? '' : 'none';
+  }
+}
+
+/**
  * Toggle audio forwarding setting
  */
 function toggleMute(): void {
@@ -730,11 +796,19 @@ function handleStateSnapshot(state: AppStateSnapshot): void {
     let session = sessions.get(deviceState.deviceId);
 
     if (!session) {
-      // Create new session UI
-      session = createDeviceSession(deviceState.deviceId, {
-        serial: deviceState.serial,
-        name: deviceState.name,
-      });
+      // Create new session UI with platform and capabilities
+      session = createDeviceSession(
+        deviceState.deviceId,
+        { serial: deviceState.serial, name: deviceState.name },
+        deviceState.platform,
+        deviceState.capabilities
+      );
+    }
+
+    // Update active capabilities when this becomes the active session
+    if (deviceState.isActive) {
+      activeCapabilities = deviceState.capabilities;
+      updateToolbarForCapabilities(activeCapabilities);
     }
 
     // Update connection state
@@ -957,12 +1031,44 @@ function updateTabConnectionState(tabElement: HTMLElement, state: ConnectionStat
 }
 
 /**
+ * Get platform icon SVG for device tabs
+ */
+function getPlatformIcon(platform: DevicePlatform): string {
+  if (platform === 'ios') {
+    // Apple logo (simplified)
+    return `<svg class="tab-platform-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M18.71,19.5C17.88,20.74 17,21.95 15.66,21.97C14.32,22 13.89,21.18 12.37,21.18C10.84,21.18 10.37,21.95 9.1,22C7.79,22.05 6.8,20.68 5.96,19.47C4.25,17 2.94,12.45 4.7,9.39C5.57,7.87 7.13,6.91 8.82,6.88C10.1,6.86 11.32,7.75 12.11,7.75C12.89,7.75 14.37,6.68 15.92,6.84C16.57,6.87 18.39,7.1 19.56,8.82C19.47,8.88 17.39,10.1 17.41,12.63C17.44,15.65 20.06,16.66 20.09,16.67C20.06,16.74 19.67,18.11 18.71,19.5M13,3.5C13.73,2.67 14.94,2.04 15.94,2C16.07,3.17 15.6,4.35 14.9,5.19C14.21,6.04 13.07,6.7 11.95,6.61C11.8,5.46 12.36,4.26 13,3.5Z"/></svg>`;
+  } else {
+    // Android robot logo
+    return `<svg class="tab-platform-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M16.61,15.15C16.15,15.15 15.77,14.78 15.77,14.32C15.77,13.86 16.15,13.5 16.61,13.5C17.07,13.5 17.45,13.86 17.45,14.32C17.45,14.78 17.07,15.15 16.61,15.15M7.41,15.15C6.95,15.15 6.57,14.78 6.57,14.32C6.57,13.86 6.95,13.5 7.41,13.5C7.87,13.5 8.24,13.86 8.24,14.32C8.24,14.78 7.87,15.15 7.41,15.15M16.91,10.14L18.58,7.26C18.67,7.09 18.61,6.88 18.45,6.79C18.28,6.69 18.07,6.75 17.97,6.92L16.29,9.83C14.95,9.22 13.5,8.9 12,8.91C10.47,8.91 9,9.24 7.73,9.82L6.04,6.91C5.95,6.74 5.74,6.68 5.57,6.78C5.4,6.87 5.35,7.08 5.44,7.25L7.1,10.13C4.25,11.69 2.29,14.58 2,18H22C21.72,14.59 19.77,11.7 16.91,10.14Z"/></svg>`;
+  }
+}
+
+/**
  * Create a new device session UI
  */
 function createDeviceSession(
   deviceId: string,
-  deviceInfo: { serial: string; name: string }
+  deviceInfo: { serial: string; name: string },
+  platform: DevicePlatform = 'android',
+  capabilities?: PlatformCapabilities
 ): DeviceSessionUI {
+  // Default capabilities for Android if not provided
+  const deviceCapabilities: PlatformCapabilities = capabilities || {
+    supportsTouch: true,
+    supportsKeyboard: true,
+    supportsSystemButtons: true,
+    supportsVolumeControl: true,
+    supportsRotation: true,
+    supportsDisplaySelection: true,
+    supportsVirtualDisplay: true,
+    supportsCameraSource: true,
+    supportsScreenOff: true,
+    supportsApkInstall: true,
+    supportsFileUpload: true,
+    supportsAppLaunch: true,
+    supportsAudioCapture: true,
+    supportedVideoCodecs: ['h264', 'h265', 'av1'],
+  };
   // Create canvas (set dimensions to 0 to prevent showing before video arrives)
   const canvas = document.createElement('canvas');
   canvas.id = `canvas-${deviceId}`;
@@ -1123,10 +1229,14 @@ function createDeviceSession(
     <path d="M13,9H11V7H13M13,17H11V11H13" fill="white"/>
   </svg>`;
 
+  // Platform icon (Android/iOS)
+  const platformIcon = getPlatformIcon(platform);
+
   tab.innerHTML = `
     <div class="tab-status tab-status-connecting">
       ${infoIcon}
     </div>
+    ${platformIcon}
     <span class="tab-label">${escapeHtml(deviceInfo.name)}</span>
     <span class="tab-close">&times;</span>
   `;
@@ -1152,7 +1262,7 @@ function createDeviceSession(
 
   const session: DeviceSessionUI = {
     deviceId,
-    deviceInfo,
+    deviceInfo: { ...deviceInfo, platform },
     canvas,
     videoRenderer,
     audioRenderer,
@@ -1161,6 +1271,8 @@ function createDeviceSession(
     recordingManager,
     tabElement: tab,
     connectionState: 'connecting',
+    platform,
+    capabilities: deviceCapabilities,
   };
 
   sessions.set(deviceId, session);
@@ -1224,9 +1336,13 @@ function switchToDevice(deviceId: string) {
 
   // Activate new session
   activeDeviceId = deviceId;
+  activeCapabilities = newSession.capabilities;
   newSession.tabElement.classList.add('active');
   newSession.videoRenderer.resume();
   newSession.audioRenderer.resume();
+
+  // Update toolbar visibility based on new device's capabilities
+  updateToolbarForCapabilities(activeCapabilities);
 
   // Show canvas if it has received video (has dimensions)
   if (newSession.canvas.width > 0 && newSession.canvas.height > 0) {

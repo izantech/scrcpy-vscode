@@ -195,6 +195,14 @@ export function getHtmlForWebview(webview: vscode.Webview, extensionUri: vscode.
       opacity: 0.7;
     }
 
+    .tab-platform-icon {
+      width: 14px;
+      height: 14px;
+      flex-shrink: 0;
+      opacity: 0.7;
+      margin-right: 4px;
+    }
+
     /* Dropdown menu */
     .dropdown {
       position: relative;
