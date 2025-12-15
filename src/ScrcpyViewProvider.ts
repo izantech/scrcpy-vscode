@@ -88,6 +88,7 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
           // Send settings updates that don't require reconnect
           if (
             e.affectsConfiguration('scrcpy.showStats') ||
+            e.affectsConfiguration('scrcpy.showExtendedStats') ||
             e.affectsConfiguration('scrcpy.audio')
           ) {
             this._sendSettings();
@@ -174,6 +175,7 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
     this._view.webview.postMessage({
       type: 'settings',
       showStats: config.get<boolean>('showStats', false),
+      showExtendedStats: config.get<boolean>('showExtendedStats', false),
       audioEnabled: config.get<boolean>('audio', true),
     });
   }

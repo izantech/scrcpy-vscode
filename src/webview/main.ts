@@ -1,4 +1,4 @@
-import { VideoRenderer } from './VideoRenderer';
+import { VideoRenderer, ExtendedStats } from './VideoRenderer';
 import { AudioRenderer } from './AudioRenderer';
 import { InputHandler } from './InputHandler';
 import { KeyboardHandler } from './KeyboardHandler';
@@ -26,6 +26,7 @@ declare global {
       noDevicesConnected: string;
       addDevice: string;
       statsFormat: string;
+      extendedStatsFormat: string;
       startRecording: string;
       stopRecording: string;
       recording: string;
@@ -90,6 +91,7 @@ let addDeviceBtn: HTMLElement;
 const sessions = new Map<string, DeviceSessionUI>();
 let activeDeviceId: string | null = null;
 let showStats = false;
+let showExtendedStats = false;
 let isMuted = false;
 let muteBtn: HTMLElement | null = null;
 let rotateBtn: HTMLElement | null = null;
@@ -284,6 +286,23 @@ function initialize() {
 
   vscode.postMessage({ type: 'ready' });
   console.log('WebView initialized');
+}
+
+/**
+ * Format bitrate for display (converts bits/second to Kbps or Mbps)
+ */
+function formatBitrate(bitsPerSecond: number): string {
+  if (bitsPerSecond === 0) {
+    return '0 Kbps';
+  }
+
+  const kbps = bitsPerSecond / 1000;
+  if (kbps < 1000) {
+    return `${kbps.toFixed(0)} Kbps`;
+  }
+
+  const mbps = kbps / 1000;
+  return `${mbps.toFixed(1)} Mbps`;
 }
 
 /**
@@ -624,7 +643,11 @@ function handleError(message: { deviceId?: string; message: string }) {
 /**
  * Handle settings update from extension
  */
-function handleSettings(message: { showStats?: boolean; audioEnabled?: boolean }) {
+function handleSettings(message: {
+  showStats?: boolean;
+  showExtendedStats?: boolean;
+  audioEnabled?: boolean;
+}) {
   if (message.showStats !== undefined) {
     showStats = message.showStats;
     // Update all existing renderers
@@ -634,6 +657,16 @@ function handleSettings(message: { showStats?: boolean; audioEnabled?: boolean }
     // Hide stats element if disabled
     if (!showStats) {
       statsElement.classList.add('hidden');
+    }
+  }
+
+  if (message.showExtendedStats !== undefined) {
+    showExtendedStats = message.showExtendedStats;
+    // Update stats display style
+    if (showExtendedStats) {
+      statsElement.classList.add('extended');
+    } else {
+      statsElement.classList.remove('extended');
     }
   }
 
@@ -696,9 +729,20 @@ function createDeviceSession(
     canvas,
     (fps, frames) => {
       if (deviceId === activeDeviceId && showStats) {
-        statsElement.textContent = window.l10n.statsFormat
-          .replace('{0}', fps.toString())
-          .replace('{1}', frames.toString());
+        if (showExtendedStats) {
+          // Display extended stats
+          const extStats: ExtendedStats = videoRenderer.getExtendedStats();
+          const bitrateFormatted = formatBitrate(extStats.bitrate);
+          statsElement.textContent = window.l10n.extendedStatsFormat
+            .replace('{0}', extStats.fps.toString())
+            .replace('{1}', bitrateFormatted)
+            .replace('{2}', `${extStats.framesDropped} frames`);
+        } else {
+          // Display basic stats
+          statsElement.textContent = window.l10n.statsFormat
+            .replace('{0}', fps.toString())
+            .replace('{1}', frames.toString());
+        }
         statsElement.classList.remove('hidden');
       }
     },

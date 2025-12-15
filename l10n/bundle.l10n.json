@@ -88,6 +88,7 @@
   "Failed": "Failed",
   "Failed to read file": "Failed to read file",
   "{0} FPS | {1} frames": "{0} FPS | {1} frames",
+  "FPS: {0} | Bitrate: {1} | Dropped: {2}": "FPS: {0} | Bitrate: {1} | Dropped: {2}",
   "Select APK to Install": "Select APK to Install",
   "Installing {0}...": "Installing {0}...",
   "APK installed successfully: {0}": "APK installed successfully: {0}",
@@ -110,5 +111,6 @@
   "command.toggleRecording": "Scrcpy: Toggle Screen Recording",
   "Start recording": "Start recording",
   "Stop recording": "Stop recording",
-  "Recording": "Recording"
+  "Recording": "Recording",
+  "config.scrcpy.showExtendedStats": "Show extended statistics (FPS, bitrate, frame drops)"
 }

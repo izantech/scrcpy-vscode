@@ -1,6 +1,15 @@
 import { H264Utils, NALUnitType } from './H264Utils';
 
 /**
+ * Extended stats returned by VideoRenderer
+ */
+export interface ExtendedStats {
+  fps: number;
+  bitrate: number; // bits per second
+  framesDropped: number;
+}
+
+/**
  * H.264 video decoder and renderer using WebCodecs API
  *
  * Follows the same approach as scrcpy client:
@@ -29,6 +38,12 @@ export class VideoRenderer {
   private codecConfigured = false;
   private isPaused = false;
   private resizeObserver: ResizeObserver | null = null;
+
+  // Extended stats tracking
+  private bytesReceived = 0;
+  private framesDropped = 0;
+  private lastBitrateUpdate = 0;
+  private bytesReceivedInInterval = 0;
 
   constructor(
     canvas: HTMLCanvasElement,
@@ -178,6 +193,12 @@ export class VideoRenderer {
       return;
     }
 
+    // Track bytes received for bitrate calculation
+    if (this.statsEnabled) {
+      this.bytesReceived += data.length;
+      this.bytesReceivedInInterval += data.length;
+    }
+
     if (isConfig) {
       // Store config packet (SPS/PPS) to prepend to next keyframe
       // This matches sc_packet_merger behavior in scrcpy
@@ -211,6 +232,11 @@ export class VideoRenderer {
       if (isKey && this.pendingConfig) {
         frameData = this.mergeConfigWithFrame(this.pendingConfig, data);
         this.pendingConfig = null;
+      }
+
+      // Track frame drops based on decode queue size
+      if (this.statsEnabled && this.decoder.decodeQueueSize > 10) {
+        this.framesDropped++;
       }
 
       const chunk = new EncodedVideoChunk({
@@ -298,8 +324,29 @@ export class VideoRenderer {
     this.statsEnabled = enabled;
     if (enabled) {
       this.lastFpsUpdate = performance.now();
+      this.lastBitrateUpdate = performance.now();
       this.frameCount = 0;
+      this.bytesReceivedInInterval = 0;
     }
+  }
+
+  /**
+   * Get extended statistics (FPS, bitrate, frame drops)
+   */
+  getExtendedStats(): ExtendedStats {
+    // Calculate bitrate (bits per second)
+    const now = performance.now();
+    const timeElapsed = (now - this.lastBitrateUpdate) / 1000; // seconds
+    let bitrate = 0;
+    if (timeElapsed > 0) {
+      bitrate = (this.bytesReceivedInInterval * 8) / timeElapsed; // bits per second
+    }
+
+    return {
+      fps: this.fps,
+      bitrate,
+      framesDropped: this.framesDropped,
+    };
   }
 
   /**
@@ -324,6 +371,10 @@ export class VideoRenderer {
         this.onStats(this.fps, this.totalFrames);
         this.frameCount = 0;
         this.lastFpsUpdate = now;
+
+        // Reset bitrate interval tracking
+        this.bytesReceivedInInterval = 0;
+        this.lastBitrateUpdate = now;
       }
     }
 

@@ -34,6 +34,7 @@ export function getHtmlForWebview(webview: vscode.Webview, extensionUri: vscode.
     noDevicesConnected: vscode.l10n.t('No devices connected'),
     addDevice: vscode.l10n.t('Add Device'),
     statsFormat: vscode.l10n.t('{0} FPS | {1} frames'),
+    extendedStatsFormat: vscode.l10n.t('FPS: {0} | Bitrate: {1} | Dropped: {2}'),
     startRecording: vscode.l10n.t('Start recording'),
     stopRecording: vscode.l10n.t('Stop recording'),
     recording: vscode.l10n.t('Recording'),
@@ -384,10 +385,16 @@ export function getHtmlForWebview(webview: vscode.Webview, extensionUri: vscode.
       padding: 2px 6px;
       border-radius: 3px;
       z-index: 5;
+      white-space: nowrap;
     }
 
     .stats.hidden {
       display: none;
+    }
+
+    .stats.extended {
+      font-size: 9px;
+      padding: 3px 7px;
     }
 
     /* Recording indicator */

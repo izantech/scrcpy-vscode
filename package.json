@@ -236,7 +236,14 @@
           "scrcpy.showStats": {
             "type": "boolean",
             "default": false,
+            "order": 0,
             "markdownDescription": "%config.scrcpy.showStats%"
+          },
+          "scrcpy.showExtendedStats": {
+            "type": "boolean",
+            "default": false,
+            "order": 1,
+            "markdownDescription": "%config.scrcpy.showExtendedStats%"
           }
         }
       },
