@@ -52,6 +52,11 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.executeCommand('workbench.action.openSettings', '@ext:izan.scrcpy-vscode');
   });
 
+  // Register toggle recording command
+  const toggleRecordingCommand = vscode.commands.registerCommand('scrcpy.toggleRecording', () => {
+    provider?.toggleRecording();
+  });
+
   context.subscriptions.push(
     startCommand,
     stopCommand,
@@ -59,7 +64,8 @@ export function activate(context: vscode.ExtensionContext) {
     installApkCommand,
     uploadFilesCommand,
     launchAppCommand,
-    settingsCommand
+    settingsCommand,
+    toggleRecordingCommand
   );
 }
 

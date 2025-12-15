@@ -100,5 +100,15 @@
   "Failed to get installed apps: {0}": "Failed to get installed apps: {0}",
   "Select an app to launch": "Select an app to launch",
   "Failed to launch app: {0}": "Failed to launch app: {0}",
-  "command.launchApp": "Launch App on Device"
+  "command.launchApp": "Launch App on Device",
+  "config.title.recording": "Screen Recording",
+  "config.scrcpy.recordingFormat": "Recording output format",
+  "config.scrcpy.recordingFormat.webm": "WebM (recommended, widely supported)",
+  "config.scrcpy.recordingFormat.mp4": "MP4 (may not work in all browsers)",
+  "config.scrcpy.recordingSavePath": "Default save directory for recordings (leave empty for Downloads folder)",
+  "config.scrcpy.recordingShowSaveDialog": "Show save dialog when stopping recording",
+  "command.toggleRecording": "Scrcpy: Toggle Screen Recording",
+  "Start recording": "Start recording",
+  "Stop recording": "Stop recording",
+  "Recording": "Recording"
 }

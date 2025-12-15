@@ -19,6 +19,7 @@ export function getHtmlForWebview(webview: vscode.Webview, extensionUri: vscode.
   const takeScreenshot = vscode.l10n.t('Take screenshot');
   const changeToLandscape = vscode.l10n.t('Change to landscape');
   const power = vscode.l10n.t('Power');
+  const startRecording = vscode.l10n.t('Start recording');
 
   // Bundle of strings for dynamic updates in main.ts
   const l10n = {
@@ -31,6 +32,9 @@ export function getHtmlForWebview(webview: vscode.Webview, extensionUri: vscode.
     noDevicesConnected: vscode.l10n.t('No devices connected'),
     addDevice: vscode.l10n.t('Add Device'),
     statsFormat: vscode.l10n.t('{0} FPS | {1} frames'),
+    startRecording: vscode.l10n.t('Start recording'),
+    stopRecording: vscode.l10n.t('Stop recording'),
+    recording: vscode.l10n.t('Recording'),
   };
 
   return `<!DOCTYPE html>
@@ -384,6 +388,50 @@ export function getHtmlForWebview(webview: vscode.Webview, extensionUri: vscode.
       display: none;
     }
 
+    /* Recording indicator */
+    .recording-indicator {
+      position: absolute;
+      top: 8px;
+      left: 8px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(0, 0, 0, 0.7);
+      color: #fff;
+      font-family: var(--vscode-editor-font-family, monospace);
+      font-size: 11px;
+      padding: 4px 8px;
+      border-radius: 4px;
+      z-index: 5;
+    }
+
+    .recording-indicator.hidden {
+      display: none;
+    }
+
+    .recording-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #f00;
+      animation: recording-pulse 1.5s ease-in-out infinite;
+    }
+
+    @keyframes recording-pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+
+    .control-btn.recording {
+      background: #c00 !important;
+      color: white !important;
+      border-color: #c00 !important;
+    }
+
+    .control-btn.recording:hover {
+      background: #d00 !important;
+    }
+
     .reconnect-btn {
       margin-top: 12px;
       padding: 6px 12px;
@@ -419,6 +467,11 @@ export function getHtmlForWebview(webview: vscode.Webview, extensionUri: vscode.
       </div>
       <!-- Stats display -->
       <div id="stats" class="stats hidden"></div>
+      <!-- Recording indicator -->
+      <div id="recording-indicator" class="recording-indicator hidden">
+        <div class="recording-dot"></div>
+        <span id="recording-time">00:00</span>
+      </div>
     </div>
 
     <!-- Control toolbar - fixed at bottom -->
@@ -434,6 +487,7 @@ export function getHtmlForWebview(webview: vscode.Webview, extensionUri: vscode.
         <button class="control-btn" data-keycode="187" title="${recentApps}"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="5" width="14" height="14"/></svg></button>
       </div>
       <div class="toolbar-group toolbar-right">
+        <button class="control-btn" id="record-btn" title="${startRecording}"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="8"/></svg></button>
         <button class="control-btn" id="screenshot-btn" title="${takeScreenshot}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></button>
         <button class="control-btn" id="rotate-btn" title="${changeToLandscape}"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M9,1H3A2,2 0 0,0 1,3V16A2,2 0 0,0 3,18H9A2,2 0 0,0 11,16V3A2,2 0 0,0 9,1M9,15H3V3H9V15M21,13H13V15H21V21H9V20H6V21A2,2 0 0,0 8,23H21A2,2 0 0,0 23,21V15A2,2 0 0,0 21,13M23,10L19,8L20.91,7.09C19.74,4.31 17,2.5 14,2.5V1A9,9 0 0,1 23,10Z"/></svg></button>
         <button class="control-btn" data-keycode="26" title="${power}"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M16.56,5.44L15.11,6.89C16.84,7.94 18,9.83 18,12A6,6 0 0,1 12,18A6,6 0 0,1 6,12C6,9.83 7.16,7.94 8.88,6.88L7.44,5.44C5.36,6.88 4,9.28 4,12A8,8 0 0,0 12,20A8,8 0 0,0 20,12C20,9.28 18.64,6.88 16.56,5.44M13,3H11V13H13"/></svg></button>

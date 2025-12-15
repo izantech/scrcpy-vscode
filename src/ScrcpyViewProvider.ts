@@ -426,6 +426,14 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
         }
         break;
 
+      case 'getRecordingSettings':
+        await this._sendRecordingSettings();
+        break;
+
+      case 'saveRecording':
+        await this._saveRecording(message);
+        break;
+
       case 'ready':
         console.log('Webview ready');
         this._sendSettings();
@@ -828,6 +836,15 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
   }
 
   /**
+   * Toggle screen recording
+   */
+  public async toggleRecording(): Promise<void> {
+    // Send message to webview to toggle recording
+    // The webview will request settings and handle the actual recording
+    this._view?.webview.postMessage({ type: 'toggleRecording' });
+  }
+
+  /**
    * Connect to a WiFi device with the given address
    */
   private async _connectWifiDeviceWithAddress(address: string): Promise<void> {
@@ -966,6 +983,95 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
       type: 'status',
       message: vscode.l10n.t('Disconnected'),
     });
+  }
+
+  /**
+   * Send recording settings to webview
+   */
+  private async _sendRecordingSettings(): Promise<void> {
+    const config = vscode.workspace.getConfiguration('scrcpy');
+    const format = config.get<'webm' | 'mp4'>('recordingFormat', 'webm');
+
+    // Check if currently recording (by checking active device manager)
+    const isRecording = false; // RecordingManager tracks this internally in webview
+
+    this._view?.webview.postMessage({
+      type: 'recordingSettings',
+      format,
+      isRecording,
+    });
+  }
+
+  /**
+   * Save recording to file
+   */
+  private async _saveRecording(message: {
+    data: number[];
+    mimeType: string;
+    duration: number;
+  }): Promise<void> {
+    if (!message.data || message.data.length === 0) {
+      vscode.window.showErrorMessage('Recording is empty');
+      return;
+    }
+
+    try {
+      // Convert array to Uint8Array
+      const videoBuffer = new Uint8Array(message.data);
+
+      // Determine file extension from MIME type
+      const extension = message.mimeType.includes('mp4') ? 'mp4' : 'webm';
+
+      // Generate filename with timestamp
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+      const filename = `recording-${timestamp}.${extension}`;
+
+      // Get settings
+      const config = vscode.workspace.getConfiguration('scrcpy');
+      const showSaveDialog = config.get<boolean>('recordingShowSaveDialog', true);
+      const customPath = config.get<string>('recordingSavePath', '');
+
+      let uri: vscode.Uri | undefined;
+
+      if (showSaveDialog) {
+        // Show save dialog
+        const filters: { [name: string]: string[] } = {};
+        if (extension === 'webm') {
+          filters['WebM Video'] = ['webm'];
+        } else {
+          filters['MP4 Video'] = ['mp4'];
+        }
+
+        uri = await vscode.window.showSaveDialog({
+          defaultUri: vscode.Uri.file(filename),
+          filters,
+          title: 'Save Recording',
+        });
+
+        if (!uri) {
+          return; // User cancelled
+        }
+      } else {
+        // Save directly to configured path or Downloads folder
+        const saveDir = customPath || path.join(os.homedir(), 'Downloads');
+        uri = vscode.Uri.file(path.join(saveDir, filename));
+      }
+
+      // Write to file
+      await vscode.workspace.fs.writeFile(uri, videoBuffer);
+
+      // Show success notification with file path
+      const durationStr = `${Math.floor(message.duration / 60)}:${String(Math.floor(message.duration % 60)).padStart(2, '0')}`;
+      vscode.window.showInformationMessage(
+        `Recording saved: ${path.basename(uri.fsPath)} (${durationStr})`
+      );
+
+      // Optionally open the video
+      // await vscode.commands.executeCommand('vscode.open', uri);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      vscode.window.showErrorMessage(`Failed to save recording: ${message}`);
+    }
   }
 
   private async _takeAndSaveScreenshot(): Promise<void> {

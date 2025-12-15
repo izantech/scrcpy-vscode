@@ -194,8 +194,40 @@
         }
       },
       {
-        "title": "%config.title.connection%",
+        "title": "%config.title.recording%",
         "order": 8,
+        "properties": {
+          "scrcpy.recordingFormat": {
+            "type": "string",
+            "default": "webm",
+            "order": 0,
+            "enum": [
+              "webm",
+              "mp4"
+            ],
+            "enumDescriptions": [
+              "%config.scrcpy.recordingFormat.webm%",
+              "%config.scrcpy.recordingFormat.mp4%"
+            ],
+            "markdownDescription": "%config.scrcpy.recordingFormat%"
+          },
+          "scrcpy.recordingSavePath": {
+            "type": "string",
+            "default": "",
+            "order": 1,
+            "markdownDescription": "%config.scrcpy.recordingSavePath%"
+          },
+          "scrcpy.recordingShowSaveDialog": {
+            "type": "boolean",
+            "default": true,
+            "order": 2,
+            "markdownDescription": "%config.scrcpy.recordingShowSaveDialog%"
+          }
+        }
+      },
+      {
+        "title": "%config.title.connection%",
+        "order": 9,
         "properties": {
           "scrcpy.autoConnect": {
             "type": "boolean",
@@ -263,6 +295,10 @@
         "command": "scrcpy.openSettings",
         "title": "%command.openSettings%",
         "icon": "$(gear)"
+      },
+      {
+        "command": "scrcpy.toggleRecording",
+        "title": "%command.toggleRecording%"
       }
     ],
     "menus": {

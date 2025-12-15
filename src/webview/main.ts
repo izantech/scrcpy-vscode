@@ -2,6 +2,7 @@ import { VideoRenderer } from './VideoRenderer';
 import { AudioRenderer } from './AudioRenderer';
 import { InputHandler } from './InputHandler';
 import { KeyboardHandler } from './KeyboardHandler';
+import { RecordingManager } from './RecordingManager';
 
 // VS Code API interface
 interface VSCodeAPI {
@@ -25,6 +26,9 @@ declare global {
       noDevicesConnected: string;
       addDevice: string;
       statsFormat: string;
+      startRecording: string;
+      stopRecording: string;
+      recording: string;
     };
   }
 }
@@ -52,6 +56,7 @@ interface DeviceSessionUI {
   audioRenderer: AudioRenderer;
   inputHandler: InputHandler;
   keyboardHandler: KeyboardHandler;
+  recordingManager: RecordingManager;
   tabElement: HTMLElement;
 }
 
@@ -89,6 +94,9 @@ let isMuted = false;
 let muteBtn: HTMLElement | null = null;
 let rotateBtn: HTMLElement | null = null;
 let screenshotBtn: HTMLElement | null = null;
+let recordBtn: HTMLElement | null = null;
+let recordingIndicator: HTMLElement | null = null;
+let recordingTime: HTMLElement | null = null;
 let isPortrait = true;
 
 // Device info tooltip
@@ -224,6 +232,18 @@ function initialize() {
     });
   }
 
+  // Record button
+  recordBtn = document.getElementById('record-btn');
+  if (recordBtn) {
+    recordBtn.addEventListener('click', () => {
+      toggleRecording();
+    });
+  }
+
+  // Recording indicator elements
+  recordingIndicator = document.getElementById('recording-indicator');
+  recordingTime = document.getElementById('recording-time');
+
   vscode.postMessage({ type: 'ready' });
   console.log('WebView initialized');
 }
@@ -285,6 +305,131 @@ function resetScreenshotButton(): void {
 }
 
 /**
+ * Toggle screen recording
+ */
+function toggleRecording(): void {
+  if (!activeDeviceId) {
+    return;
+  }
+
+  const session = sessions.get(activeDeviceId);
+  if (!session) {
+    return;
+  }
+
+  // Get recording format from settings (will be sent from extension)
+  vscode.postMessage({ type: 'getRecordingSettings' });
+}
+
+/**
+ * Start recording with settings from extension
+ */
+function startRecordingWithSettings(format: 'webm' | 'mp4'): void {
+  if (!activeDeviceId) {
+    return;
+  }
+
+  const session = sessions.get(activeDeviceId);
+  if (!session) {
+    return;
+  }
+
+  const success = session.recordingManager.startRecording(format);
+  if (success) {
+    updateRecordingUI(true, 0);
+  }
+}
+
+/**
+ * Stop recording
+ */
+function stopRecording(): void {
+  if (!activeDeviceId) {
+    return;
+  }
+
+  const session = sessions.get(activeDeviceId);
+  if (!session) {
+    return;
+  }
+
+  session.recordingManager.stopRecording();
+  updateRecordingUI(false, 0);
+}
+
+/**
+ * Update recording UI (button and indicator)
+ */
+function updateRecordingUI(isRecording: boolean, duration: number): void {
+  if (!recordBtn || !recordingIndicator || !recordingTime) {
+    return;
+  }
+
+  if (isRecording) {
+    // Update button to show stop icon (square)
+    recordBtn.classList.add('recording');
+    recordBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>`;
+    recordBtn.title = window.l10n.stopRecording;
+
+    // Show recording indicator with time
+    recordingIndicator.classList.remove('hidden');
+    const minutes = Math.floor(duration / 60);
+    const seconds = Math.floor(duration % 60);
+    recordingTime.textContent = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+  } else {
+    // Update button to show record icon (circle)
+    recordBtn.classList.remove('recording');
+    recordBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="8"/></svg>`;
+    recordBtn.title = window.l10n.startRecording;
+
+    // Hide recording indicator
+    recordingIndicator.classList.add('hidden');
+    recordingTime.textContent = '00:00';
+  }
+}
+
+/**
+ * Handle recording settings from extension
+ */
+function handleRecordingSettings(message: { format: 'webm' | 'mp4'; isRecording: boolean }): void {
+  if (!activeDeviceId) {
+    return;
+  }
+
+  const session = sessions.get(activeDeviceId);
+  if (!session) {
+    return;
+  }
+
+  // Toggle recording based on current state
+  if (message.isRecording) {
+    // Already recording, stop it
+    stopRecording();
+  } else {
+    // Not recording, start with the format from settings
+    startRecordingWithSettings(message.format);
+  }
+}
+
+/**
+ * Handle recording completion - send blob to extension for saving
+ */
+function handleRecordingComplete(blob: Blob, duration: number): void {
+  // Convert blob to array buffer
+  blob.arrayBuffer().then((buffer) => {
+    const array = new Uint8Array(buffer);
+
+    // Send to extension for saving
+    vscode.postMessage({
+      type: 'saveRecording',
+      data: Array.from(array),
+      mimeType: blob.type,
+      duration,
+    });
+  });
+}
+
+/**
  * Update audio state from settings
  */
 function updateAudioState(audioEnabled: boolean): void {
@@ -339,6 +484,14 @@ function handleMessage(event: MessageEvent) {
 
     case 'deviceInfo':
       handleDeviceInfo(message);
+      break;
+
+    case 'recordingSettings':
+      handleRecordingSettings(message);
+      break;
+
+    case 'toggleRecording':
+      toggleRecording();
       break;
   }
 }
@@ -525,6 +678,19 @@ function createDeviceSession(
   const audioRenderer = new AudioRenderer();
   audioRenderer.setMuted(isMuted);
 
+  // Create recording manager
+  const recordingManager = new RecordingManager(
+    canvas,
+    (isRecording, duration) => {
+      // Update recording UI state
+      updateRecordingUI(isRecording, duration);
+    },
+    (blob, duration) => {
+      // Send recorded blob to extension for saving
+      handleRecordingComplete(blob, duration);
+    }
+  );
+
   // Create input handler
   const inputHandler = new InputHandler(
     canvas,
@@ -641,6 +807,7 @@ function createDeviceSession(
     audioRenderer,
     inputHandler,
     keyboardHandler,
+    recordingManager,
     tabElement: tab,
   };
 
@@ -662,6 +829,7 @@ function removeDeviceSession(deviceId: string) {
   session.audioRenderer.dispose();
   session.inputHandler.dispose();
   session.keyboardHandler.dispose();
+  session.recordingManager.dispose();
   session.canvas.remove();
   session.tabElement.remove();
 
