@@ -1104,6 +1104,73 @@ export class ScrcpyConnection {
   }
 
   /**
+   * Start app on device by package name
+   * @param packageName - Package name like "com.android.settings"
+   */
+  startApp(packageName: string): void {
+    if (!packageName || packageName.trim() === '') {
+      return;
+    }
+
+    if (!this.controlSocket || !this.isConnected) {
+      return;
+    }
+
+    // START_APP message format (from ControlMessageReader.java):
+    // - Type: 1 byte (16 = TYPE_START_APP)
+    // - Name length: 1 byte (parseString(1) uses 1-byte length)
+    // - Name: UTF-8 string (package name, max 255 bytes)
+    const nameBuffer = Buffer.from(packageName, 'utf8');
+    const nameLength = Math.min(nameBuffer.length, 255);
+
+    const msg = Buffer.alloc(1 + 1 + nameLength);
+    msg.writeUInt8(ScrcpyProtocol.ControlMessageType.START_APP, 0);
+    msg.writeUInt8(nameLength, 1);
+    nameBuffer.copy(msg, 2, 0, nameLength);
+
+    try {
+      this.controlSocket.write(msg);
+    } catch (error) {
+      console.error('Failed to start app:', error);
+    }
+  }
+
+  /**
+   * Get list of installed apps from device
+   * @param thirdPartyOnly - If true, only list third-party apps (default: false)
+   * @returns Array of app info objects with package name and label
+   */
+  async getInstalledApps(
+    thirdPartyOnly: boolean = false
+  ): Promise<Array<{ packageName: string; label: string }>> {
+    if (!this.deviceSerial) {
+      throw new Error(vscode.l10n.t('No device connected'));
+    }
+
+    // List packages
+    const listCmd = thirdPartyOnly ? 'shell pm list packages -3' : 'shell pm list packages';
+    const packagesOutput = await this.execAdb(listCmd);
+    const lines = packagesOutput.trim().split('\n');
+    const apps: Array<{ packageName: string; label: string }> = [];
+
+    for (const line of lines) {
+      const match = line.match(/^package:(.+)$/);
+      if (!match) {
+        continue;
+      }
+
+      const packageName = match[1].trim();
+      // Use package name as label for now
+      apps.push({ packageName, label: packageName });
+    }
+
+    // Sort by package name
+    apps.sort((a, b) => a.packageName.localeCompare(b.packageName));
+
+    return apps;
+  }
+
+  /**
    * Disconnect from device
    */
   async disconnect(): Promise<void> {

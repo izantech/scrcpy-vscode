@@ -255,6 +255,11 @@
         "icon": "$(cloud-upload)"
       },
       {
+        "command": "scrcpy.launchApp",
+        "title": "%command.launchApp%",
+        "icon": "$(rocket)"
+      },
+      {
         "command": "scrcpy.openSettings",
         "title": "%command.openSettings%",
         "icon": "$(gear)"
@@ -273,14 +278,19 @@
           "group": "navigation@2"
         },
         {
-          "command": "scrcpy.connectWifi",
+          "command": "scrcpy.launchApp",
           "when": "view == scrcpy.deviceView",
           "group": "navigation@3"
         },
         {
-          "command": "scrcpy.openSettings",
+          "command": "scrcpy.connectWifi",
           "when": "view == scrcpy.deviceView",
           "group": "navigation@4"
+        },
+        {
+          "command": "scrcpy.openSettings",
+          "when": "view == scrcpy.deviceView",
+          "group": "navigation@5"
         }
       ]
     },

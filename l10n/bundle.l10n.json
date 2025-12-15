@@ -91,5 +91,14 @@
   "Select APK to Install": "Select APK to Install",
   "Installing {0}...": "Installing {0}...",
   "APK installed successfully: {0}": "APK installed successfully: {0}",
-  "Failed to install APK: {0}": "Failed to install APK: {0}"
+  "Failed to install APK: {0}": "Failed to install APK: {0}",
+  "Select Files or Folders to Upload": "Select Files or Folders to Upload",
+  "Uploading to device...": "Uploading to device...",
+  "Successfully uploaded to /sdcard/Download/: {0}": "Successfully uploaded to /sdcard/Download/: {0}",
+  "Failed to upload: {0}": "Failed to upload: {0}",
+  "Loading installed apps...": "Loading installed apps...",
+  "Failed to get installed apps: {0}": "Failed to get installed apps: {0}",
+  "Select an app to launch": "Select an app to launch",
+  "Failed to launch app: {0}": "Failed to launch app: {0}",
+  "command.launchApp": "Launch App on Device"
 }

@@ -769,6 +769,65 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
   }
 
   /**
+   * Show app picker and launch app on device
+   */
+  public async launchApp(): Promise<void> {
+    // Check device connection
+    if (!this._deviceManager) {
+      vscode.window.showErrorMessage(vscode.l10n.t('No device connected'));
+      return;
+    }
+
+    // Get list of installed apps with progress notification
+    const apps = await vscode.window.withProgress(
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: vscode.l10n.t('Loading installed apps...'),
+        cancellable: false,
+      },
+      async () => {
+        try {
+          // Get all apps (not just third-party) for better UX
+          return await this._deviceManager!.getInstalledApps(false);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          vscode.window.showErrorMessage(
+            vscode.l10n.t('Failed to get installed apps: {0}', message)
+          );
+          return null;
+        }
+      }
+    );
+
+    if (!apps || apps.length === 0) {
+      return;
+    }
+
+    // Create quick pick items with package names
+    const items = apps.map((app) => ({
+      label: app.packageName,
+      packageName: app.packageName,
+    }));
+
+    // Show quick pick with search
+    const selected = await vscode.window.showQuickPick(items, {
+      placeHolder: vscode.l10n.t('Select an app to launch'),
+    });
+
+    if (!selected) {
+      return; // User cancelled
+    }
+
+    // Launch the selected app
+    try {
+      this._deviceManager.launchApp(selected.packageName);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      vscode.window.showErrorMessage(vscode.l10n.t('Failed to launch app: {0}', message));
+    }
+  }
+
+  /**
    * Connect to a WiFi device with the given address
    */
   private async _connectWifiDeviceWithAddress(address: string): Promise<void> {

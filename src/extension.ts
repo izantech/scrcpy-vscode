@@ -42,6 +42,11 @@ export function activate(context: vscode.ExtensionContext) {
     provider?.uploadFiles();
   });
 
+  // Register app launcher command
+  const launchAppCommand = vscode.commands.registerCommand('scrcpy.launchApp', () => {
+    provider?.launchApp();
+  });
+
   // Register settings command
   const settingsCommand = vscode.commands.registerCommand('scrcpy.openSettings', () => {
     vscode.commands.executeCommand('workbench.action.openSettings', '@ext:izan.scrcpy-vscode');
@@ -53,6 +58,7 @@ export function activate(context: vscode.ExtensionContext) {
     wifiCommand,
     installApkCommand,
     uploadFilesCommand,
+    launchAppCommand,
     settingsCommand
   );
 }

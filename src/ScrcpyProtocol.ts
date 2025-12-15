@@ -26,6 +26,9 @@ export enum ControlMessageType {
   ROTATE_DEVICE = 11,
   UHID_CREATE = 12,
   UHID_INPUT = 13,
+  UHID_DESTROY = 14,
+  OPEN_HARD_KEYBOARD_SETTINGS = 15,
+  START_APP = 16,
 }
 
 // Device Message Types (Device -> Host)

@@ -305,6 +305,22 @@ class DeviceSession {
     }
     await this.connection.pushFiles(filePaths, destPath);
   }
+
+  startApp(packageName: string): void {
+    if (!this.connection) {
+      throw new Error(vscode.l10n.t('No connection'));
+    }
+    this.connection.startApp(packageName);
+  }
+
+  async getInstalledApps(
+    thirdPartyOnly: boolean = false
+  ): Promise<Array<{ packageName: string; label: string }>> {
+    if (!this.connection) {
+      throw new Error(vscode.l10n.t('No connection'));
+    }
+    return this.connection.getInstalledApps(thirdPartyOnly);
+  }
 }
 
 /**
@@ -949,6 +965,30 @@ export class DeviceManager {
       throw new Error(vscode.l10n.t('No active device'));
     }
     await session.pushFiles(filePaths, destPath);
+  }
+
+  /**
+   * Launch app on active device by package name
+   */
+  launchApp(packageName: string): void {
+    const session = this.getActiveSession();
+    if (!session) {
+      throw new Error(vscode.l10n.t('No active device'));
+    }
+    session.startApp(packageName);
+  }
+
+  /**
+   * Get list of installed apps from active device
+   */
+  async getInstalledApps(
+    thirdPartyOnly: boolean = false
+  ): Promise<Array<{ packageName: string; label: string }>> {
+    const session = this.getActiveSession();
+    if (!session) {
+      throw new Error(vscode.l10n.t('No active device'));
+    }
+    return session.getInstalledApps(thirdPartyOnly);
   }
 
   /**
