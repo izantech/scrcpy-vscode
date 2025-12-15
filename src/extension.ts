@@ -49,7 +49,7 @@ export function activate(context: vscode.ExtensionContext) {
 
   // Register settings command
   const settingsCommand = vscode.commands.registerCommand('scrcpy.openSettings', () => {
-    vscode.commands.executeCommand('workbench.action.openSettings', '@ext:izan.scrcpy-vscode');
+    vscode.commands.executeCommand('workbench.action.openSettings', '@ext:izantech.scrcpy-vscode');
   });
 
   // Register toggle recording command
