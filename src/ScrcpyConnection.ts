@@ -81,6 +81,7 @@ export class ScrcpyConnection {
   private controlSocket: net.Socket | null = null;
   private audioSocket: net.Socket | null = null;
   private adbProcess: ChildProcess | null = null;
+  private pendingStartFail: ((err: Error) => void) | null = null;
   private deviceWidth = 0;
   private deviceHeight = 0;
   private isConnected = false;
@@ -297,18 +298,54 @@ export class ScrcpyConnection {
     // Create local server to receive connections
     // The server connects separately for video and control sockets
     const server = net.createServer();
+    const safeCloseServer = () => {
+      try {
+        if (server.listening) {
+          server.close();
+        }
+      } catch {
+        // Ignore close errors
+      }
+    };
 
     // Number of sockets: video + control (+ audio if enabled)
     const expectedSockets = this.config.audio ? 3 : 2;
+    const sockets: net.Socket[] = [];
+    let settled = false;
+    let timeout: NodeJS.Timeout | null = null;
+    let failConnection: ((err: Error) => void) | null = null;
 
     const connectionPromise = new Promise<{
       videoSocket: net.Socket;
       controlSocket: net.Socket;
       audioSocket: net.Socket | null;
     }>((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        server.close();
-        reject(
+      const fail = (err: Error) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        this.pendingStartFail = null;
+        if (timeout) {
+          clearTimeout(timeout);
+          timeout = null;
+        }
+        for (const socket of sockets) {
+          try {
+            socket.destroy();
+          } catch {
+            // Ignore destroy errors
+          }
+        }
+        safeCloseServer();
+        reject(err);
+      };
+
+      failConnection = fail;
+      this.pendingStartFail = fail;
+
+      timeout = setTimeout(() => {
+        fail(
           new Error(
             vscode.l10n.t(
               'Timeout waiting for device connection. The server may have failed to start.'
@@ -317,13 +354,25 @@ export class ScrcpyConnection {
         );
       }, 15000);
 
-      const sockets: net.Socket[] = [];
-
       server.on('connection', (socket: net.Socket) => {
         sockets.push(socket);
         // We need 2 or 3 connections depending on audio
         if (sockets.length === expectedSockets) {
-          clearTimeout(timeout);
+          if (settled) {
+            // A late connection after failure; close it immediately
+            try {
+              socket.destroy();
+            } catch {
+              // Ignore destroy errors
+            }
+            return;
+          }
+          settled = true;
+          this.pendingStartFail = null;
+          if (timeout) {
+            clearTimeout(timeout);
+            timeout = null;
+          }
           // Order: video, audio (if enabled), control (control is always last)
           if (this.config.audio) {
             resolve({
@@ -338,8 +387,7 @@ export class ScrcpyConnection {
       });
 
       server.once('error', (err: Error) => {
-        clearTimeout(timeout);
-        reject(err);
+        fail(err);
       });
     });
 
@@ -417,10 +465,16 @@ export class ScrcpyConnection {
 
     this.adbProcess.on('error', (err: Error) => {
       console.error('Failed to start scrcpy server:', err);
+      if (failConnection) {
+        failConnection(new Error(vscode.l10n.t('Failed to start scrcpy server: {0}', err.message)));
+      }
     });
 
     this.adbProcess.on('exit', (code) => {
       console.log('scrcpy server exited with code:', code);
+      if (!this.isConnected && failConnection) {
+        failConnection(new Error(vscode.l10n.t('scrcpy server exited with code {0}', code ?? -1)));
+      }
       if (this.isConnected) {
         this.isConnected = false;
         // Report as error so reconnect button appears
@@ -437,7 +491,7 @@ export class ScrcpyConnection {
 
     try {
       const { videoSocket, controlSocket, audioSocket } = await connectionPromise;
-      server.close();
+      safeCloseServer();
 
       this.isConnected = true;
       this.controlSocket = controlSocket;
@@ -464,8 +518,16 @@ export class ScrcpyConnection {
 
       // Clipboard sync is now on-demand (paste/copy), no polling needed
     } catch (error) {
-      server.close();
+      safeCloseServer();
       this.adbProcess?.kill();
+      // Cleanup reverse port forwarding (avoid leaking reverse entries on failure)
+      if (this.scid) {
+        try {
+          await this.execAdb(['reverse', '--remove', `localabstract:scrcpy_${this.scid}`]);
+        } catch {
+          // Ignore cleanup errors
+        }
+      }
       throw error;
     }
   }
@@ -1631,6 +1693,15 @@ export class ScrcpyConnection {
   async disconnect(): Promise<void> {
     this.isConnected = false;
 
+    const scid = this.scid;
+
+    // Abort any pending startScrcpy() wait (closes server/sockets via the captured fail closure)
+    if (this.pendingStartFail) {
+      const fail = this.pendingStartFail;
+      this.pendingStartFail = null;
+      fail(new Error(vscode.l10n.t('Disconnected')));
+    }
+
     // Reset clipboard state
     this.lastHostClipboard = '';
     this.lastDeviceClipboard = '';
@@ -1662,9 +1733,9 @@ export class ScrcpyConnection {
     }
 
     // Cleanup reverse port forwarding
-    if (this.deviceSerial) {
+    if (this.deviceSerial && scid) {
       try {
-        await this.execAdb(['reverse', '--remove-all']);
+        await this.execAdb(['reverse', '--remove', `localabstract:scrcpy_${scid}`]);
       } catch {
         // Ignore cleanup errors
       }

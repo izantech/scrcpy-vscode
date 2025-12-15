@@ -467,8 +467,10 @@ export class DeviceManager {
   private sessions = new Map<string, DeviceSession>();
   private activeDeviceId: string | null = null;
   private trackDevicesProcess: ChildProcess | null = null;
+  private trackDevicesRestartTimeout: NodeJS.Timeout | null = null;
   private knownDeviceSerials = new Set<string>();
   private isMonitoring = false;
+  private deviceListUpdateChain: Promise<void> = Promise.resolve();
   private deviceInfoCache = new Map<string, { info: DeviceDetailedInfo; timestamp: number }>();
   private deviceInfoRefreshInterval: NodeJS.Timeout | null = null;
   private static readonly INFO_CACHE_TTL = 30000; // 30 seconds
@@ -1277,6 +1279,15 @@ export class DeviceManager {
    * Start the adb track-devices process
    */
   private startTrackDevices(): void {
+    if (!this.isMonitoring) {
+      return;
+    }
+
+    if (this.trackDevicesRestartTimeout) {
+      clearTimeout(this.trackDevicesRestartTimeout);
+      this.trackDevicesRestartTimeout = null;
+    }
+
     if (this.trackDevicesProcess) {
       this.trackDevicesProcess.kill();
     }
@@ -1307,7 +1318,7 @@ export class DeviceManager {
         buffer = buffer.substring(4 + length);
 
         // Process device list
-        this.handleDeviceListUpdate(deviceList);
+        this.enqueueDeviceListUpdate(deviceList);
       }
     });
 
@@ -1318,16 +1329,29 @@ export class DeviceManager {
     this.trackDevicesProcess.on('close', () => {
       // Restart if still monitoring (process died unexpectedly)
       if (this.isMonitoring) {
-        setTimeout(() => this.startTrackDevices(), 1000);
+        this.trackDevicesRestartTimeout = setTimeout(() => this.startTrackDevices(), 1000);
       }
     });
+  }
+
+  /**
+   * Ensure device list updates are processed sequentially to avoid races.
+   */
+  private enqueueDeviceListUpdate(deviceList: string): void {
+    this.deviceListUpdateChain = this.deviceListUpdateChain
+      .then(async () => {
+        await this.handleDeviceListUpdate(deviceList);
+      })
+      .catch((error) => {
+        console.error('Failed to handle device list update:', error);
+      });
   }
 
   /**
    * Handle device list update from track-devices
    */
   private async handleDeviceListUpdate(deviceList: string): Promise<void> {
-    if (!this.config.autoConnect) {
+    if (!this.isMonitoring || !this.config.autoConnect) {
       return;
     }
 
@@ -1358,6 +1382,9 @@ export class DeviceManager {
 
     // Find new USB devices and auto-connect
     for (const device of currentDevices) {
+      if (!this.isMonitoring) {
+        return;
+      }
       // Skip WiFi devices for auto-connect
       if (this.isWifiDevice(device.serial)) {
         continue;
@@ -1383,6 +1410,9 @@ export class DeviceManager {
         this.statusCallback('', vscode.l10n.t('Connecting to {0}...', device.name));
 
         try {
+          if (!this.isMonitoring) {
+            return;
+          }
           await this.addDevice(device);
           this.knownDeviceSerials.add(device.serial);
         } catch {
@@ -1404,6 +1434,10 @@ export class DeviceManager {
    */
   stopDeviceMonitoring(): void {
     this.isMonitoring = false;
+    if (this.trackDevicesRestartTimeout) {
+      clearTimeout(this.trackDevicesRestartTimeout);
+      this.trackDevicesRestartTimeout = null;
+    }
     if (this.trackDevicesProcess) {
       this.trackDevicesProcess.kill();
       this.trackDevicesProcess = null;

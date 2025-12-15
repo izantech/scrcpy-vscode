@@ -505,6 +505,25 @@ describe('ScrcpyConnection', () => {
       expect(controlSocket.destroy).toHaveBeenCalled();
       expect(audioSocket.destroy).toHaveBeenCalled();
     });
+
+    it('should remove the scrcpy reverse for the active session', async () => {
+      const conn = connection as unknown as {
+        deviceSerial: string;
+        scid: string;
+      };
+
+      conn.deviceSerial = 'emulator-5554';
+      conn.scid = 'deadbeef';
+
+      await connection.disconnect();
+
+      expect(execFile).toHaveBeenCalledWith(
+        'adb',
+        ['-s', 'emulator-5554', 'reverse', '--remove', 'localabstract:scrcpy_deadbeef'],
+        expect.any(Object),
+        expect.any(Function)
+      );
+    });
   });
 
   describe('takeScreenshot', () => {

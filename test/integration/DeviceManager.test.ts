@@ -627,6 +627,27 @@ describe('DeviceManager', () => {
       manager.stopDeviceMonitoring();
       vi.useRealTimers();
     });
+
+    it('should not restart track-devices after stopDeviceMonitoring', async () => {
+      vi.useFakeTimers();
+      const mockProcess1 = new MockChildProcess();
+      const mockProcess2 = new MockChildProcess();
+      vi.mocked(spawn).mockReturnValueOnce(mockProcess1).mockReturnValueOnce(mockProcess2);
+
+      await manager.startDeviceMonitoring();
+      expect(spawn).toHaveBeenCalledTimes(1);
+
+      // Simulate process dying (schedules restart)
+      mockProcess1.emit('close');
+
+      // Stop monitoring before the restart timer fires
+      manager.stopDeviceMonitoring();
+
+      await vi.advanceTimersByTimeAsync(1100);
+      expect(spawn).toHaveBeenCalledTimes(1);
+
+      vi.useRealTimers();
+    });
   });
 
   describe('storage size parsing', () => {
