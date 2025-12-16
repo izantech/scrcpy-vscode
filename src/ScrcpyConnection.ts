@@ -30,6 +30,7 @@ type ErrorCallback = (message: string) => void;
 // Scrcpy configuration options
 export interface ScrcpyConfig {
   scrcpyPath: string;
+  adbPath: string;
   displayMode: 'mirror' | 'virtual';
   virtualDisplayWidth: number;
   virtualDisplayHeight: number;
@@ -241,13 +242,17 @@ export class ScrcpyConnection {
    * Get list of connected devices from ADB
    */
   private getDeviceList(): Promise<string[]> {
+    const adbCmd = this.getAdbCommand();
     return new Promise((resolve, reject) => {
-      execFile('adb', ['devices'], (error, stdout, _stderr) => {
+      execFile(adbCmd, ['devices'], (error, stdout, _stderr) => {
         if (error) {
+          const { adb } = this.getInstallInstructions();
           reject(
             new Error(
               vscode.l10n.t(
-                'Failed to run "adb devices".\n\nPlease ensure ADB is installed and in your PATH.\nInstall via: brew install android-platform-tools (macOS)\nOr download from: https://developer.android.com/studio/releases/platform-tools'
+                'ADB not found.\n\nInstall via: {0}\n\nOr download from: {1}\n\nAlternatively, configure the path in Settings.',
+                adb.command,
+                adb.url
               )
             )
           );
@@ -452,7 +457,7 @@ export class ScrcpyConnection {
       'send_codec_meta=true',
     ];
 
-    this.adbProcess = spawn('adb', serverArgs, {
+    this.adbProcess = spawn(this.getAdbCommand(), serverArgs, {
       stdio: ['ignore', 'pipe', 'pipe'],
     });
 
@@ -533,6 +538,52 @@ export class ScrcpyConnection {
   }
 
   /**
+   * Get the ADB command path
+   */
+  private getAdbCommand(): string {
+    if (this.config.adbPath) {
+      return path.join(this.config.adbPath, 'adb');
+    }
+    return 'adb';
+  }
+
+  /**
+   * Get platform-specific installation instructions
+   */
+  private getInstallInstructions() {
+    const platform = process.platform;
+    switch (platform) {
+      case 'darwin':
+        return {
+          adb: {
+            command: 'brew install android-platform-tools',
+            url: 'https://developer.android.com/studio/releases/platform-tools',
+          },
+          scrcpy: { command: 'brew install scrcpy', url: 'https://github.com/Genymobile/scrcpy' },
+        };
+      case 'linux':
+        return {
+          adb: {
+            command: 'sudo apt install android-tools-adb',
+            url: 'https://developer.android.com/studio/releases/platform-tools',
+          },
+          scrcpy: {
+            command: 'sudo apt install scrcpy',
+            url: 'https://github.com/Genymobile/scrcpy',
+          },
+        };
+      default:
+        return {
+          adb: {
+            command: 'scoop install adb',
+            url: 'https://developer.android.com/studio/releases/platform-tools',
+          },
+          scrcpy: { command: 'scoop install scrcpy', url: 'https://github.com/Genymobile/scrcpy' },
+        };
+    }
+  }
+
+  /**
    * Get the scrcpy command path
    */
   private getScrcpyCommand(): string {
@@ -550,10 +601,13 @@ export class ScrcpyConnection {
     return new Promise((resolve, reject) => {
       execFile(scrcpyCmd, ['--version'], (error, stdout) => {
         if (error) {
+          const { scrcpy } = this.getInstallInstructions();
           reject(
             new Error(
               vscode.l10n.t(
-                'Failed to get scrcpy version.\n\nPlease ensure scrcpy is installed:\n- macOS: brew install scrcpy\n- Linux: sudo apt install scrcpy\n- Windows: scoop install scrcpy\n\nOr set the scrcpy path in settings.'
+                'scrcpy not found.\n\nInstall via: {0}\n\nOr download from: {1}\n\nAlternatively, configure the path in Settings.',
+                scrcpy.command,
+                scrcpy.url
               )
             )
           );
@@ -619,9 +673,10 @@ export class ScrcpyConnection {
    * Execute ADB command (argv-based, no shell quoting)
    */
   private execAdb(args: string[], options?: { timeout?: number }): Promise<string> {
+    const adbCmd = this.getAdbCommand();
     return new Promise((resolve, reject) => {
       const fullArgs = this.deviceSerial ? ['-s', this.deviceSerial, ...args] : args;
-      execFile('adb', fullArgs, { timeout: options?.timeout }, (error, stdout, stderr) => {
+      execFile(adbCmd, fullArgs, { timeout: options?.timeout }, (error, stdout, stderr) => {
         if (error) {
           reject(new Error(stderr || error.message));
         } else {
@@ -1480,7 +1535,7 @@ export class ScrcpyConnection {
         'list_cameras=true',
       ];
 
-      const proc = spawn('adb', args);
+      const proc = spawn(this.getAdbCommand(), args);
 
       let stdout = '';
       let stderr = '';
@@ -1518,7 +1573,7 @@ export class ScrcpyConnection {
 
     return new Promise((resolve, reject) => {
       const args = ['-s', this.deviceSerial!, 'exec-out', 'screencap', '-p'];
-      const proc = spawn('adb', args);
+      const proc = spawn(this.getAdbCommand(), args);
 
       const chunks: Buffer[] = [];
       proc.stdout.on('data', (chunk: Buffer) => {

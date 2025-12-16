@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import * as path from 'path';
 import { ScrcpyConnection, ScrcpyConfig, ClipboardAPI, VideoCodecType } from './ScrcpyConnection';
 import { execFile, execFileSync, spawn, ChildProcess } from 'child_process';
 
@@ -487,11 +488,22 @@ export class DeviceManager {
   ) {}
 
   /**
+   * Get the ADB command path from config
+   */
+  private getAdbCommand(): string {
+    if (this.config.adbPath) {
+      return path.join(this.config.adbPath, 'adb');
+    }
+    return 'adb';
+  }
+
+  /**
    * Get list of available ADB devices (excludes mDNS devices for cleaner UI)
    */
   async getAvailableDevices(): Promise<DeviceInfo[]> {
+    const adbCmd = this.getAdbCommand();
     return new Promise((resolve) => {
-      execFile('adb', ['devices', '-l'], (error, stdout) => {
+      execFile(adbCmd, ['devices', '-l'], (error, stdout) => {
         if (error) {
           resolve([]);
           return;
@@ -527,9 +539,10 @@ export class DeviceManager {
    * Get detailed device information via ADB commands
    */
   async getDeviceInfo(serial: string): Promise<DeviceDetailedInfo> {
+    const adbCmd = this.getAdbCommand();
     const execAdb = (args: string[]): Promise<string> => {
       return new Promise((resolve, reject) => {
-        execFile('adb', ['-s', serial, ...args], { timeout: 5000 }, (error, stdout, stderr) => {
+        execFile(adbCmd, ['-s', serial, ...args], { timeout: 5000 }, (error, stdout, stderr) => {
           if (error) {
             reject(new Error(stderr || error.message));
           } else {
@@ -727,7 +740,7 @@ export class DeviceManager {
   async pairWifi(address: string, pairingCode: string): Promise<void> {
     return new Promise((resolve, reject) => {
       // Use spawn to handle the interactive pairing process
-      const adb = spawn('adb', ['pair', address]);
+      const adb = spawn(this.getAdbCommand(), ['pair', address]);
 
       let stdout = '';
       let stderr = '';
@@ -784,9 +797,10 @@ export class DeviceManager {
    */
   async connectWifi(ipAddress: string, port: number = 5555): Promise<DeviceInfo> {
     const address = `${ipAddress}:${port}`;
+    const adbCmd = this.getAdbCommand();
 
     return new Promise((resolve, reject) => {
-      execFile('adb', ['connect', address], (error, stdout, stderr) => {
+      execFile(adbCmd, ['connect', address], (error, stdout, stderr) => {
         if (error) {
           reject(new Error(stderr || error.message));
           return;
@@ -799,7 +813,7 @@ export class DeviceManager {
           // Get device model name
           try {
             const modelOutput = execFileSync(
-              'adb',
+              adbCmd,
               ['-s', address, 'shell', 'getprop', 'ro.product.model'],
               {
                 timeout: 5000,
@@ -852,8 +866,9 @@ export class DeviceManager {
    * @param address The IP:port address of the device
    */
   async disconnectWifi(address: string): Promise<void> {
+    const adbCmd = this.getAdbCommand();
     return new Promise((resolve, reject) => {
-      execFile('adb', ['disconnect', address], (error, stdout, stderr) => {
+      execFile(adbCmd, ['disconnect', address], (error, stdout, stderr) => {
         if (error) {
           reject(new Error(stderr || error.message));
           return;
@@ -1292,7 +1307,7 @@ export class DeviceManager {
       this.trackDevicesProcess.kill();
     }
 
-    this.trackDevicesProcess = spawn('adb', ['track-devices']);
+    this.trackDevicesProcess = spawn(this.getAdbCommand(), ['track-devices']);
     let buffer = '';
 
     this.trackDevicesProcess.stdout?.on('data', (data: Buffer) => {
@@ -1394,7 +1409,7 @@ export class DeviceManager {
         // Get device model name
         try {
           const modelOutput = execFileSync(
-            'adb',
+            this.getAdbCommand(),
             ['-s', device.serial, 'shell', 'getprop', 'ro.product.model'],
             {
               timeout: 5000,

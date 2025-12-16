@@ -46,28 +46,34 @@
             "order": 0,
             "markdownDescription": "%config.scrcpy.path%"
           },
-          "scrcpy.apkInstallDefaultPath": {
+          "scrcpy.adbPath": {
             "type": "string",
             "default": "",
             "order": 1,
+            "markdownDescription": "%config.scrcpy.adbPath%"
+          },
+          "scrcpy.apkInstallDefaultPath": {
+            "type": "string",
+            "default": "",
+            "order": 2,
             "markdownDescription": "%config.scrcpy.apkInstallDefaultPath%"
           },
           "scrcpy.clipboardSync": {
             "type": "boolean",
             "default": true,
-            "order": 2,
+            "order": 3,
             "markdownDescription": "%config.scrcpy.clipboardSync%"
           },
           "scrcpy.showStats": {
             "type": "boolean",
             "default": false,
-            "order": 3,
+            "order": 4,
             "markdownDescription": "%config.scrcpy.showStats%"
           },
           "scrcpy.showExtendedStats": {
             "type": "boolean",
             "default": false,
-            "order": 4,
+            "order": 5,
             "markdownDescription": "%config.scrcpy.showExtendedStats%"
           }
         }
@@ -510,6 +516,46 @@
       {
         "command": "scrcpy.switchToTab9",
         "title": "%command.switchToTab9%"
+      },
+      {
+        "command": "scrcpy.browseScrcpyPath",
+        "title": "%command.browseScrcpyPath%"
+      },
+      {
+        "command": "scrcpy.browseAdbPath",
+        "title": "%command.browseAdbPath%"
+      },
+      {
+        "command": "scrcpy.browseScreenshotPath",
+        "title": "%command.browseScreenshotPath%"
+      },
+      {
+        "command": "scrcpy.browseRecordingPath",
+        "title": "%command.browseRecordingPath%"
+      },
+      {
+        "command": "scrcpy.browseApkInstallPath",
+        "title": "%command.browseApkInstallPath%"
+      },
+      {
+        "command": "scrcpy.resetScrcpyPath",
+        "title": "%command.resetScrcpyPath%"
+      },
+      {
+        "command": "scrcpy.resetAdbPath",
+        "title": "%command.resetAdbPath%"
+      },
+      {
+        "command": "scrcpy.resetScreenshotPath",
+        "title": "%command.resetScreenshotPath%"
+      },
+      {
+        "command": "scrcpy.resetRecordingPath",
+        "title": "%command.resetRecordingPath%"
+      },
+      {
+        "command": "scrcpy.resetApkInstallPath",
+        "title": "%command.resetApkInstallPath%"
       }
     ],
     "keybindings": [

@@ -4,6 +4,7 @@ import * as path from 'path';
 import { getHtmlForWebview } from './webview/WebviewTemplate';
 import { ScrcpyConfig } from './ScrcpyConnection';
 import { DeviceManager } from './DeviceManager';
+import { ToolCheckResult } from './ToolChecker';
 
 export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'scrcpy.deviceView';
@@ -13,8 +14,14 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
   private _disposables: vscode.Disposable[] = [];
   private _isDisposed = false;
   private _abortController?: AbortController;
+  private _toolStatus?: ToolCheckResult;
 
-  constructor(private readonly _extensionUri: vscode.Uri) {}
+  constructor(
+    private readonly _extensionUri: vscode.Uri,
+    toolStatus?: ToolCheckResult
+  ) {
+    this._toolStatus = toolStatus;
+  }
 
   public resolveWebviewView(
     webviewView: vscode.WebviewView,
@@ -97,6 +104,7 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
           // Reconnect for scrcpy options that affect the stream
           const reconnectSettings = [
             'scrcpy.path',
+            'scrcpy.adbPath',
             'scrcpy.displayMode',
             'scrcpy.virtualDisplayWidth',
             'scrcpy.virtualDisplayHeight',
@@ -141,12 +149,39 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
     if (webviewView.visible) {
       this._initializeAndConnect();
     }
+
+    // Send tool status to webview if tools are missing
+    this._sendToolStatus();
+  }
+
+  /**
+   * Update tool status (called from extension.ts after re-check)
+   */
+  public updateToolStatus(toolStatus: ToolCheckResult): void {
+    this._toolStatus = toolStatus;
+    this._sendToolStatus();
+  }
+
+  /**
+   * Send tool status to webview for info bar display
+   */
+  private _sendToolStatus(): void {
+    if (!this._view || !this._toolStatus) {
+      return;
+    }
+    // Always send tool status so webview knows when tools become available again
+    this._view.webview.postMessage({
+      type: 'toolStatus',
+      adbAvailable: this._toolStatus.adb.isAvailable,
+      scrcpyAvailable: this._toolStatus.scrcpy.isAvailable,
+    });
   }
 
   private _getConfig(): ScrcpyConfig {
     const config = vscode.workspace.getConfiguration('scrcpy');
     return {
       scrcpyPath: config.get<string>('path', ''),
+      adbPath: config.get<string>('adbPath', ''),
       displayMode: config.get<'mirror' | 'virtual'>('displayMode', 'mirror'),
       virtualDisplayWidth: config.get<number>('virtualDisplayWidth', 1080),
       virtualDisplayHeight: config.get<number>('virtualDisplayHeight', 1920),
@@ -550,6 +585,10 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
           'workbench.action.openSettings',
           '@ext:izantech.scrcpy-vscode'
         );
+        break;
+
+      case 'openInstallDocs':
+        vscode.env.openExternal(vscode.Uri.parse('https://github.com/Genymobile/scrcpy'));
         break;
 
       case 'browseScrcpyPath': {

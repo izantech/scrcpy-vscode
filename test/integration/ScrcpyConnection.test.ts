@@ -32,6 +32,7 @@ describe('ScrcpyConnection', () => {
 
     config = {
       scrcpyPath: '',
+      adbPath: '',
       screenOff: false,
       stayAwake: true,
       maxSize: 1920,
@@ -117,7 +118,7 @@ describe('ScrcpyConnection', () => {
         }
       );
 
-      await expect(connection.connect()).rejects.toThrow('adb');
+      await expect(connection.connect()).rejects.toThrow(/ADB not found/);
     });
 
     it('should connect to first device when no target specified', async () => {
@@ -1081,6 +1082,218 @@ describe('ScrcpyConnection', () => {
       conn.deviceSerial = undefined;
 
       await expect(connection.listCameras()).rejects.toThrow('No device connected');
+    });
+  });
+
+  describe('adbPath configuration', () => {
+    it('should use custom adb path when configured', async () => {
+      const customConfig = { ...config, adbPath: '/custom/android/sdk' };
+      const customConnection = new ScrcpyConnection(
+        videoCallback,
+        statusCallback,
+        customConfig,
+        undefined,
+        undefined,
+        undefined,
+        errorCallback,
+        audioCallback
+      );
+
+      vi.mocked(execFile).mockImplementation(
+        (
+          file: string,
+          _args: string[],
+          _optionsOrCallback?: unknown,
+          callback?: (error: Error | null, stdout: string, stderr: string) => void
+        ) => {
+          const cb = typeof _optionsOrCallback === 'function' ? _optionsOrCallback : callback;
+          cb?.(null, 'List of devices attached\ndevice1\tdevice\n', '');
+          return new MockChildProcess();
+        }
+      );
+
+      await customConnection.connect();
+
+      expect(execFile).toHaveBeenCalledWith(
+        '/custom/android/sdk/adb',
+        expect.any(Array),
+        expect.any(Function)
+      );
+    });
+
+    it('should use default adb when adbPath is empty', async () => {
+      const defaultConfig = { ...config, adbPath: '' };
+      const defaultConnection = new ScrcpyConnection(
+        videoCallback,
+        statusCallback,
+        defaultConfig,
+        undefined,
+        undefined,
+        undefined,
+        errorCallback,
+        audioCallback
+      );
+
+      vi.mocked(execFile).mockImplementation(
+        (
+          _file: string,
+          _args: string[],
+          _optionsOrCallback?: unknown,
+          callback?: (error: Error | null, stdout: string, stderr: string) => void
+        ) => {
+          const cb = typeof _optionsOrCallback === 'function' ? _optionsOrCallback : callback;
+          cb?.(null, 'List of devices attached\ndevice1\tdevice\n', '');
+          return new MockChildProcess();
+        }
+      );
+
+      await defaultConnection.connect();
+
+      expect(execFile).toHaveBeenCalledWith('adb', expect.any(Array), expect.any(Function));
+    });
+
+    it('should show platform-specific error when adb not found', async () => {
+      vi.mocked(execFile).mockImplementation(
+        (
+          _file: string,
+          _args: string[],
+          _optionsOrCallback?: unknown,
+          callback?: (error: Error | null, stdout: string, stderr: string) => void
+        ) => {
+          const cb = typeof _optionsOrCallback === 'function' ? _optionsOrCallback : callback;
+          cb?.(new Error('ENOENT'), '', 'adb: command not found');
+          return new MockChildProcess();
+        }
+      );
+
+      // Error message should include platform-specific install instructions
+      // On macOS it would be "brew", on Linux "apt", on Windows "scoop"
+      await expect(connection.connect()).rejects.toThrow(/adb/i);
+    });
+
+    it('should use custom adb path for takeScreenshot', async () => {
+      const customConfig = { ...config, adbPath: '/opt/android-sdk' };
+      const customConnection = new ScrcpyConnection(
+        videoCallback,
+        statusCallback,
+        customConfig,
+        undefined,
+        undefined,
+        undefined,
+        errorCallback,
+        audioCallback
+      );
+
+      const conn = customConnection as unknown as {
+        deviceSerial: string;
+        isConnected: boolean;
+      };
+      conn.deviceSerial = 'emulator-5554';
+      conn.isConnected = true;
+
+      const mockProcess = new MockChildProcess();
+      vi.mocked(spawn).mockReturnValue(mockProcess);
+
+      const screenshotPromise = customConnection.takeScreenshot();
+
+      // Simulate PNG data coming back
+      const pngHeader = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+      setTimeout(() => {
+        mockProcess.simulateStdout(pngHeader);
+        mockProcess.simulateClose(0);
+      }, 10);
+
+      await screenshotPromise;
+
+      expect(spawn).toHaveBeenCalledWith('/opt/android-sdk/adb', expect.any(Array));
+    });
+
+    it('should use custom adb path for installApk', async () => {
+      const customConfig = { ...config, adbPath: '/usr/local/android' };
+      const customConnection = new ScrcpyConnection(
+        videoCallback,
+        statusCallback,
+        customConfig,
+        undefined,
+        undefined,
+        undefined,
+        errorCallback,
+        audioCallback
+      );
+
+      const conn = customConnection as unknown as {
+        deviceSerial: string;
+        isConnected: boolean;
+      };
+      conn.deviceSerial = 'emulator-5554';
+      conn.isConnected = true;
+
+      vi.mocked(execFile).mockImplementation(
+        (
+          _file: string,
+          args: string[],
+          _optionsOrCallback?: unknown,
+          callback?: (error: Error | null, stdout: string, stderr: string) => void
+        ) => {
+          const cb = typeof _optionsOrCallback === 'function' ? _optionsOrCallback : callback;
+          if (args.includes('install')) {
+            cb?.(null, 'Success\n', '');
+          }
+          return new MockChildProcess();
+        }
+      );
+
+      await customConnection.installApk('/path/to/app.apk');
+
+      expect(execFile).toHaveBeenCalledWith(
+        '/usr/local/android/adb',
+        ['-s', 'emulator-5554', 'install', '-r', '/path/to/app.apk'],
+        expect.any(Object),
+        expect.any(Function)
+      );
+    });
+
+    it('should use custom adb path for pushFiles', async () => {
+      const customConfig = { ...config, adbPath: '/home/user/android-sdk' };
+      const customConnection = new ScrcpyConnection(
+        videoCallback,
+        statusCallback,
+        customConfig,
+        undefined,
+        undefined,
+        undefined,
+        errorCallback,
+        audioCallback
+      );
+
+      const conn = customConnection as unknown as {
+        deviceSerial: string;
+        isConnected: boolean;
+      };
+      conn.deviceSerial = 'emulator-5554';
+      conn.isConnected = true;
+
+      vi.mocked(execFile).mockImplementation(
+        (
+          _file: string,
+          _args: string[],
+          _optionsOrCallback?: unknown,
+          callback?: (error: Error | null, stdout: string, stderr: string) => void
+        ) => {
+          const cb = typeof _optionsOrCallback === 'function' ? _optionsOrCallback : callback;
+          cb?.(null, '1 file pushed\n', '');
+          return new MockChildProcess();
+        }
+      );
+
+      await customConnection.pushFiles(['/path/to/file.txt']);
+
+      expect(execFile).toHaveBeenCalledWith(
+        '/home/user/android-sdk/adb',
+        ['-s', 'emulator-5554', 'push', '/path/to/file.txt', '/sdcard/Download/'],
+        expect.any(Object),
+        expect.any(Function)
+      );
     });
   });
 });

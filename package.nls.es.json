@@ -10,6 +10,7 @@
   "config.title.recording": "Grabación",
   "config.title.connection": "Conexión",
   "config.scrcpy.path": "Ruta al directorio de instalación de scrcpy (dejar vacío para usar PATH)",
+  "config.scrcpy.adbPath": "Ruta al directorio del ejecutable ADB (dejar vacío para usar PATH)",
   "config.scrcpy.maxSize": "Dimensión máxima de pantalla (ancho o alto) en píxeles",
   "config.scrcpy.maxSize.720": "720 máx - Menor resolución, mejor rendimiento",
   "config.scrcpy.maxSize.1080": "1080 máx - Resolución HD",
