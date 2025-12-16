@@ -1,0 +1,84 @@
+name: Deploy
+
+on:
+  workflow_dispatch:
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  deploy:
+    needs: ci
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Fetch all history for tags
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Resolve version (failsafe for duplicate tags)
+        id: version
+        run: |
+          # Get current version from package.json
+          VERSION=$(node -p "require('./package.json').version")
+          echo "Initial version: $VERSION"
+
+          # Check if tag exists, bump patch if needed
+          while git ls-remote --tags origin | grep -q "refs/tags/$VERSION$"; do
+            echo "Tag $VERSION already exists, bumping patch version..."
+            npm version patch --no-git-tag-version
+            VERSION=$(node -p "require('./package.json').version")
+            echo "New version: $VERSION"
+          done
+
+          echo "Final version to release: $VERSION"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Build extension
+        run: npm run package
+
+      - name: Package extension
+        run: npx @vscode/vsce package
+
+      - name: Publish to VS Code Marketplace
+        run: npx @vscode/vsce publish -p ${{ secrets.VSCE_PAT }}
+
+      - name: Publish to Open VSX
+        continue-on-error: true # TODO: Remove after Eclipse updates GitHub username (Jan 2026)
+        run: npx ovsx publish -p ${{ secrets.OVSX_PAT }}
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+          gh release create "$VERSION" \
+            --title "$VERSION" \
+            --generate-notes \
+            *.vsix
+
+      - name: Bump version for next release
+        run: |
+          npm version patch --no-git-tag-version
+          NEXT_VERSION=$(node -p "require('./package.json').version")
+          echo "Next version: $NEXT_VERSION"
+
+      - name: Commit and push version bump
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add package.json package-lock.json
+          git commit -m "chore: bump version to $(node -p "require('./package.json').version")"
+          git push

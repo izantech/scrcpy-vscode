@@ -3,9 +3,9 @@ name: CI
 on:
   push:
     branches: [main]
-    tags: ['[0-9]+.[0-9]+.[0-9]+']
   pull_request:
     branches: [main]
+  workflow_call: # Makes this workflow reusable by deploy.yml
 
 jobs:
   build:
@@ -41,34 +41,3 @@ jobs:
         with:
           file: ./coverage/lcov.info
           fail_ci_if_error: false
-
-  publish:
-    needs: build
-    runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/')
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build extension
-        run: npm run package
-
-      - name: Package extension
-        run: npx @vscode/vsce package
-
-      - name: Publish to VS Code Marketplace
-        run: npx @vscode/vsce publish -p ${{ secrets.VSCE_PAT }}
-
-      - name: Publish to Open VSX
-        continue-on-error: true # TODO: Remove after Eclipse updates GitHub username (Jan 2026)
-        run: npx ovsx publish -p ${{ secrets.OVSX_PAT }}

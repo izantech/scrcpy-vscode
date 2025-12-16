@@ -677,7 +677,8 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:ui": "vitest --ui",
-    "prepare": "husky"
+    "prepare": "husky",
+    "release": "gh workflow run deploy.yml --ref main && echo 'Deploy workflow triggered! Watch progress at: https://github.com/izantech/scrcpy-vscode/actions'"
   },
   "lint-staged": {
     "*.{ts,js}": [

@@ -59,9 +59,12 @@ npm run test:coverage
 
 The project uses **GitHub Actions** for continuous integration and deployment.
 
-**Workflow file**: `.github/workflows/ci.yml`
+### Workflows
 
-### Build Job (runs on every push/PR to main)
+- **CI** (`.github/workflows/ci.yml`): Runs on every push/PR to main. Also reusable by the Deploy workflow.
+- **Deploy** (`.github/workflows/deploy.yml`): Manual trigger for publishing releases.
+
+### CI Workflow (runs on every push/PR to main)
 
 1. Checkout code
 2. Setup Node.js 20
@@ -72,12 +75,14 @@ The project uses **GitHub Actions** for continuous integration and deployment.
 7. Run tests with coverage (`npm run test:coverage`)
 8. Upload coverage report to Codecov
 
-### Publish Job (runs only on version tags `v*`)
+### Deploy Workflow (manual trigger)
 
-1. Build production package (`npm run package`)
-2. Package extension (`vsce package`)
-3. Publish to VS Code Marketplace
-4. Publish to Open VSX Registry
+1. Runs full CI pipeline
+2. Resolves version (auto-bumps if tag already exists)
+3. Builds production package
+4. Publishes to VS Code Marketplace and Open VSX
+5. Creates GitHub Release with tag
+6. Bumps patch version for next release and commits to main
 
 ### Required GitHub Secrets
 
@@ -92,10 +97,25 @@ Configure these in repository Settings > Secrets and variables > Actions:
 
 **Important:** Do NOT manually run `vsce publish` or `ovsx publish`. Publishing is automated via GitHub Actions.
 
-1. Update version in `package.json`
-2. Commit and push the version bump to `main`
-3. Create and push a version tag (without `v` prefix): `git tag 0.1.2 && git push origin 0.1.2`
-4. The workflow automatically builds, verifies, and publishes to both VS Code Marketplace and Open VSX
+**From your machine (requires [GitHub CLI](https://cli.github.com/)):**
+
+```bash
+npm run release
+```
+
+**Or from GitHub UI:**
+
+Go to Actions → Deploy → Run workflow
+
+**What happens automatically:**
+
+1. CI runs (lint, format, compile, tests)
+2. Version resolved (auto-bumps patch if tag already exists)
+3. Publishes to VS Code Marketplace and Open VSX
+4. Creates GitHub Release with tag (e.g., `0.1.2`)
+5. Bumps `package.json` to next patch version and commits to main
+
+**Note:** You only need to manually update the version in `package.json` when you want to release a new major or minor version.
 
 ## Project Structure
 
