@@ -314,12 +314,14 @@ npm run test:ui
 ```
 test/
 ├── unit/
+│   ├── AppStateManager.test.ts # Centralized state management tests (100% coverage)
 │   ├── CodecUtils.test.ts      # Video codec detection and configuration tests
 │   ├── ScrcpyProtocol.test.ts  # Protocol constants tests
 │   └── webview/
 │       ├── InputHandler.test.ts      # Pointer/scroll event tests
 │       ├── KeyboardHandler.test.ts   # Keyboard input tests
-│       └── RecordingManager.test.ts  # Screen recording tests
+│       ├── RecordingManager.test.ts  # Screen recording tests
+│       └── VideoRenderer.test.ts     # Video decoding and resize tests
 ├── integration/
 │   ├── DeviceService.test.ts   # Device discovery & WiFi tests
 │   └── ScrcpyConnection.test.ts # Connection & control tests
@@ -332,7 +334,7 @@ test/
 └── setup.ts            # Global test setup
 ```
 
-**Coverage:** Tests cover ~50% of the codebase overall, with webview code at ~96% coverage.
+**Coverage:** Tests cover the extension host and webview components with full coverage for state management.
 
 **CI Integration:** Tests run automatically on every push/PR via GitHub Actions with coverage reporting to Codecov.
 

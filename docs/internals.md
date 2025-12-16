@@ -9,9 +9,13 @@ scrcpy-vscode/
 ├── src/
 │   ├── extension.ts          # Extension entry point, provider registration
 │   ├── ScrcpyViewProvider.ts # WebviewView provider for sidebar integration
+│   ├── AppStateManager.ts    # Centralized state management (single source of truth)
 │   ├── DeviceService.ts      # Multi-device session management
 │   ├── ScrcpyConnection.ts   # ADB/scrcpy server communication
 │   ├── ScrcpyProtocol.ts     # Protocol constants and codec IDs
+│   ├── types/
+│   │   ├── AppState.ts       # State interfaces (DeviceState, AppStateSnapshot, etc.)
+│   │   └── WebviewActions.ts # Typed actions from webview to extension
 │   └── webview/
 │       ├── main.ts           # WebView entry point, tab management
 │       ├── VideoRenderer.ts  # WebCodecs H.264/H.265/AV1 decoder (with pause/resume)
@@ -27,6 +31,46 @@ scrcpy-vscode/
 │       └── main.js           # WebView bundle
 └── package.json              # Extension manifest
 ```
+
+## State Management
+
+The extension uses centralized state management through `AppStateManager`:
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                    AppStateManager                       │
+│              (Single Source of Truth)                    │
+├─────────────────────────────────────────────────────────┤
+│ • devices: Map<serial, DeviceState>                     │
+│ • activeDeviceId: string | null                         │
+│ • settings: ScrcpyConfig                                │
+│ • toolStatus: { adb, scrcpy }                           │
+│ • statusMessage: string                                 │
+│ • deviceInfo: Map<serial, DeviceInfo>                   │
+├─────────────────────────────────────────────────────────┤
+│ subscribe() → StateSnapshot on every change             │
+│ (batched via microtask scheduling)                      │
+└─────────────────────────────────────────────────────────┘
+        │
+        ▼ stateSnapshot messages
+┌─────────────────────────────────────────────────────────┐
+│                      WebView                             │
+│           (Receives unified state updates)               │
+└─────────────────────────────────────────────────────────┘
+```
+
+### Key Principles
+
+1. **Single Source of Truth**: All state lives in `AppStateManager`
+2. **Unidirectional Flow**: WebView receives snapshots, sends typed actions back
+3. **Batched Updates**: Multiple state mutations are batched into single snapshot
+4. **No State Duplication**: WebView renders from received state, doesn't store copies
+
+### State Types
+
+- `DeviceState`: Connection status, error info per device
+- `AppStateSnapshot`: Complete state sent to webview
+- `WebviewActions`: Typed action messages from webview to extension
 
 ## Data Flow
 

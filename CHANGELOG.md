@@ -32,6 +32,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added status bar feedback when updating or resetting path settings
 - Eliminated state duplication between extension host and webview
 - Fixed potential race conditions from partial state updates
+- Canvas now properly resizes when frame dimensions change (e.g., device rotation)
+- Status overlays scoped per device tab and stale device info cleared on disconnect
 
 ## [0.1.1] - 2025-12-15
 
