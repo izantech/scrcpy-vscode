@@ -305,11 +305,11 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
           deviceId: deviceId || undefined,
         });
         // Update platform context for menu visibility
-        const activeSession = sessions.find((s) => s.isActive);
+        const activeDevice = this._appState.getActiveDevice();
         vscode.commands.executeCommand(
           'setContext',
           'scrcpy.activeDevicePlatform',
-          activeSession?.platform ?? null
+          activeDevice?.platform ?? null
         );
       },
       // Error callback

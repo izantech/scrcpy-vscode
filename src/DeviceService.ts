@@ -8,11 +8,16 @@
 
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { ScrcpyConnection, ScrcpyConfig, ClipboardAPI, VideoCodecType } from './android/ScrcpyConnection';
+import {
+  ScrcpyConnection,
+  ScrcpyConfig,
+  ClipboardAPI,
+  VideoCodecType,
+} from './android/ScrcpyConnection';
 import { execFile, execFileSync, spawn, ChildProcess } from 'child_process';
 import { AppStateManager } from './AppStateManager';
 import { DeviceInfo, DeviceDetailedInfo, ConnectionState, VideoCodec } from './types/AppState';
-import { DevicePlatform, getCapabilities } from './PlatformCapabilities';
+import { getCapabilities } from './PlatformCapabilities';
 
 // Re-export types for backward compatibility
 export type { DeviceInfo, DeviceDetailedInfo, ConnectionState };

@@ -4,7 +4,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { execFile, spawn, ChildProcess } from 'child_process';
 import { ScrcpyProtocol } from './ScrcpyProtocol';
-import { ToolNotFoundError, ToolErrorCode } from './types/AppState';
+import { ToolNotFoundError, ToolErrorCode } from '../types/AppState';
 
 // Video codec type
 export type VideoCodecType = 'h264' | 'h265' | 'av1';
