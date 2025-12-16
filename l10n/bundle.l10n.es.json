@@ -105,5 +105,7 @@
   "Select ADB executable folder": "Selecciona la carpeta de ADB",
   "Select screenshot save folder": "Selecciona la carpeta para capturas de pantalla",
   "Select recording save folder": "Selecciona la carpeta para grabaciones",
-  "Select default APK folder": "Selecciona la carpeta predeterminada de APK"
+  "Select default APK folder": "Selecciona la carpeta predeterminada de APK",
+  "Setting updated: {0}": "Ajuste actualizado: {0}",
+  "Setting reset to default": "Ajuste restaurado"
 }

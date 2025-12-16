@@ -141,5 +141,7 @@
   "Select ADB executable folder": "Select ADB executable folder",
   "Select screenshot save folder": "Select screenshot save folder",
   "Select recording save folder": "Select recording save folder",
-  "Select default APK folder": "Select default APK folder"
+  "Select default APK folder": "Select default APK folder",
+  "Setting updated: {0}": "Setting updated: {0}",
+  "Setting reset to default": "Setting reset to default"
 }

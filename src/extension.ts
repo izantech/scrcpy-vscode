@@ -135,6 +135,10 @@ export async function activate(context: vscode.ExtensionContext) {
       });
       if (result && result[0]) {
         await vscode.workspace.getConfiguration('scrcpy').update(setting, result[0].fsPath, true);
+        vscode.window.setStatusBarMessage(
+          vscode.l10n.t('Setting updated: {0}', result[0].fsPath),
+          3000
+        );
       }
     })
   );
@@ -151,6 +155,7 @@ export async function activate(context: vscode.ExtensionContext) {
   const resetDisposables = resetCommands.map(({ command, setting }) =>
     vscode.commands.registerCommand(command, async () => {
       await vscode.workspace.getConfiguration('scrcpy').update(setting, undefined, true);
+      vscode.window.setStatusBarMessage(vscode.l10n.t('Setting reset to default'), 3000);
     })
   );
 

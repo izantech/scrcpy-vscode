@@ -169,13 +169,12 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
     if (!this._view || !this._toolStatus) {
       return;
     }
-    if (!this._toolStatus.allAvailable) {
-      this._view.webview.postMessage({
-        type: 'toolStatus',
-        adbAvailable: this._toolStatus.adb.isAvailable,
-        scrcpyAvailable: this._toolStatus.scrcpy.isAvailable,
-      });
-    }
+    // Always send tool status so webview knows when tools become available again
+    this._view.webview.postMessage({
+      type: 'toolStatus',
+      adbAvailable: this._toolStatus.adb.isAvailable,
+      scrcpyAvailable: this._toolStatus.scrcpy.isAvailable,
+    });
   }
 
   private _getConfig(): ScrcpyConfig {
