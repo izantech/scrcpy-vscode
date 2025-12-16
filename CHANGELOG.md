@@ -5,6 +5,20 @@ All notable changes to the "Scrcpy for VS Code" extension will be documented in 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.2] - 2025-12-16
+
+### Added
+
+- **Tool availability check** - Extension now checks for ADB and scrcpy at startup and displays a warning alert when tools are missing
+- **Custom ADB path setting** - New `scrcpy.adbPath` setting to specify custom ADB installation directory
+- **Improved empty state UI** - Redesigned warning alert with title/subtitle layout and pill-shaped buttons
+
+### Changed
+
+- Removed VS Code notification popup for missing tools in favor of inline warning alert
+- Warning alert now shows structured title ("Missing dependency") with detailed subtitle message
+- Buttons in empty state now use pill shape for modern appearance
+
 ## [0.1.1] - 2025-12-15
 
 ### Changed
@@ -64,5 +78,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - English (default)
 - Spanish
 
+[0.1.2]: https://github.com/izantech/scrcpy-vscode/releases/tag/0.1.2
 [0.1.1]: https://github.com/izantech/scrcpy-vscode/releases/tag/0.1.1
 [0.1.0]: https://github.com/izantech/scrcpy-vscode/releases/tag/0.1.0

@@ -91,5 +91,15 @@
   "Select APK to Install": "Selecciona el APK a instalar",
   "Installing {0}...": "Instalando {0}...",
   "APK installed successfully: {0}": "APK instalado correctamente: {0}",
-  "Failed to install APK: {0}": "Error al instalar APK: {0}"
+  "Failed to install APK: {0}": "Error al instalar APK: {0}",
+  "Missing required tools: {0}. Install them to use screen mirroring.": "Faltan herramientas requeridas: {0}. Instálalas para usar la duplicación de pantalla.",
+  "Install Instructions": "Instrucciones de instalación",
+  "Configure Path": "Configurar ruta",
+  "ADB is not installed or not in PATH": "ADB no está instalado o no está en el PATH",
+  "scrcpy is not installed or not in PATH": "scrcpy no está instalado o no está en el PATH",
+  "ADB and scrcpy are not installed": "ADB y scrcpy no están instalados",
+  "Install": "Instalar",
+  "Settings": "Ajustes",
+  "ADB not found.\n\nInstall via: {0}\n\nOr download from: {1}\n\nAlternatively, configure the path in Settings.": "ADB no encontrado.\n\nInstalar con: {0}\n\nO descargar de: {1}\n\nTambién puedes configurar la ruta en Ajustes.",
+  "scrcpy not found.\n\nInstall via: {0}\n\nOr download from: {1}\n\nAlternatively, configure the path in Settings.": "scrcpy no encontrado.\n\nInstalar con: {0}\n\nO descargar de: {1}\n\nTambién puedes configurar la ruta en Ajustes."
 }

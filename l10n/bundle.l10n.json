@@ -127,5 +127,15 @@
   "Copy to Clipboard": "Copy to Clipboard",
   "Dismiss": "Dismiss",
   "config.scrcpy.screenshotPreview": "Show a preview overlay with save/copy options after taking a screenshot. If disabled, screenshots are saved immediately.",
-  "Failed to save screenshot: {0}": "Failed to save screenshot: {0}"
+  "Failed to save screenshot: {0}": "Failed to save screenshot: {0}",
+  "Missing required tools: {0}. Install them to use screen mirroring.": "Missing required tools: {0}. Install them to use screen mirroring.",
+  "Install Instructions": "Install Instructions",
+  "Configure Path": "Configure Path",
+  "ADB is not installed or not in PATH": "ADB is not installed or not in PATH",
+  "scrcpy is not installed or not in PATH": "scrcpy is not installed or not in PATH",
+  "ADB and scrcpy are not installed": "ADB and scrcpy are not installed",
+  "Install": "Install",
+  "Settings": "Settings",
+  "ADB not found.\n\nInstall via: {0}\n\nOr download from: {1}\n\nAlternatively, configure the path in Settings.": "ADB not found.\n\nInstall via: {0}\n\nOr download from: {1}\n\nAlternatively, configure the path in Settings.",
+  "scrcpy not found.\n\nInstall via: {0}\n\nOr download from: {1}\n\nAlternatively, configure the path in Settings.": "scrcpy not found.\n\nInstall via: {0}\n\nOr download from: {1}\n\nAlternatively, configure the path in Settings."
 }

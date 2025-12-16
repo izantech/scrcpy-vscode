@@ -10,6 +10,7 @@
   "config.title.recording": "Recording",
   "config.title.connection": "Connection",
   "config.scrcpy.path": "Path to scrcpy installation directory (leave empty to use PATH)",
+  "config.scrcpy.adbPath": "Path to ADB executable directory (leave empty to use PATH)",
   "config.scrcpy.videoCodec": "Video codec for screen capture. H.264 has best compatibility. H.265 offers better quality (requires device encoder support). AV1 requires hardware encoder on device (most devices lack this, causing slow/laggy video).",
   "config.scrcpy.videoCodec.h264": "H.264 (AVC) - Best compatibility, works on all browsers",
   "config.scrcpy.videoCodec.h265": "H.265 (HEVC) - Better quality/compression, limited browser support (Safari, some Chrome)",

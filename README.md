@@ -121,6 +121,7 @@ Click the **gear icon** in the scrcpy view toolbar to access settings.
 | Setting                        | Default | Description                                                |
 | ------------------------------ | ------- | ---------------------------------------------------------- |
 | `scrcpy.path`                  | (empty) | Path to scrcpy installation directory                      |
+| `scrcpy.adbPath`               | (empty) | Path to ADB installation directory                         |
 | `scrcpy.apkInstallDefaultPath` | (empty) | Default folder for APK file picker (defaults to Downloads) |
 | `scrcpy.screenOff`             | `false` | Turn device screen off while mirroring                     |
 | `scrcpy.stayAwake`             | `true`  | Keep device awake during mirroring                         |

@@ -33,9 +33,20 @@ declare global {
       screenshotPreview: string;
       save: string;
       copy: string;
+      toolWarningAdb: string;
+      toolWarningScrcpy: string;
+      toolWarningBoth: string;
+      install: string;
+      settings: string;
+      missingDependency: string;
     };
   }
 }
+
+// Tool status tracking
+let toolsAvailable = true;
+let adbMissing = false;
+let scrcpyMissing = false;
 
 /**
  * Connection state for a device
@@ -692,6 +703,10 @@ function handleMessage(event: MessageEvent) {
     case 'screenshotPreview':
       handleScreenshotPreview(message);
       break;
+
+    case 'toolStatus':
+      handleToolStatus(message);
+      break;
   }
 }
 
@@ -1324,8 +1339,6 @@ function hideStatus() {
  * Show empty state (no devices connected)
  */
 function showEmptyState() {
-  statusTextElement.textContent = window.l10n.noDevicesConnected;
-  statusTextElement.classList.remove('error');
   statusElement.classList.remove('hidden');
 
   // Hide spinner
@@ -1340,7 +1353,7 @@ function showEmptyState() {
     errorIcon.style.display = 'none';
   }
 
-  // Show empty icon
+  // Get or create empty icon
   let emptyIcon = statusElement.querySelector('.empty-icon') as HTMLElement;
   if (!emptyIcon) {
     emptyIcon = document.createElement('div');
@@ -1352,28 +1365,93 @@ function showEmptyState() {
     emptyIcon.style.cssText = 'margin-bottom: 12px; opacity: 0.5;';
     statusElement.insertBefore(emptyIcon, statusTextElement);
   }
-  emptyIcon.style.display = 'block';
 
-  // Remove existing buttons
+  // Remove existing buttons/alerts
   let btnContainer = statusElement.querySelector('.button-container') as HTMLElement;
   if (btnContainer) {
     btnContainer.remove();
   }
 
-  // Create button container with add device button
+  // Create button container
   btnContainer = document.createElement('div');
   btnContainer.className = 'button-container';
   btnContainer.style.cssText =
-    'display: flex; gap: 8px; justify-content: center; margin-top: 12px;';
+    'display: flex; flex-direction: column; align-items: center; gap: 8px; margin-top: 12px;';
   statusElement.appendChild(btnContainer);
 
-  const addBtn = document.createElement('button');
-  addBtn.className = 'reconnect-btn';
-  addBtn.textContent = window.l10n.addDevice;
-  addBtn.onclick = () => {
-    vscode.postMessage({ type: 'showDevicePicker' });
-  };
-  btnContainer.appendChild(addBtn);
+  if (toolsAvailable) {
+    // Show normal empty state
+    statusElement.classList.remove('warning');
+    emptyIcon.style.display = 'block';
+    statusTextElement.style.display = '';
+    statusTextElement.textContent = window.l10n.noDevicesConnected;
+    statusTextElement.classList.remove('error');
+
+    const addBtn = document.createElement('button');
+    addBtn.className = 'reconnect-btn';
+    addBtn.textContent = window.l10n.addDevice;
+    addBtn.onclick = () => {
+      vscode.postMessage({ type: 'showDevicePicker' });
+    };
+    btnContainer.appendChild(addBtn);
+  } else {
+    // Show warning state
+    statusElement.classList.add('warning');
+    emptyIcon.style.display = 'none';
+    statusTextElement.style.display = 'none';
+
+    // Title row with icon and text
+    const titleRow = document.createElement('div');
+    titleRow.className = 'warning-title-row';
+
+    const warningIcon = document.createElement('div');
+    warningIcon.className = 'warning-icon';
+    warningIcon.innerHTML = `<svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor">
+      <path fill-rule="evenodd" clip-rule="evenodd" d="M7.56 1h.88l6.54 12.26-.44.74H1.44l-.42-.74L7.56 1zm.44 1.7L2.43 13H13.57L8 2.7zM8.5 12h-1V7h1v5zm-1-6V5h1v1h-1z"/>
+    </svg>`;
+
+    const title = document.createElement('span');
+    title.className = 'warning-title';
+    title.textContent = window.l10n.missingDependency;
+
+    titleRow.appendChild(warningIcon);
+    titleRow.appendChild(title);
+    btnContainer.appendChild(titleRow);
+
+    // Subtitle with specific message
+    const subtitle = document.createElement('div');
+    subtitle.className = 'warning-subtitle';
+    if (adbMissing && scrcpyMissing) {
+      subtitle.textContent = window.l10n.toolWarningBoth;
+    } else if (adbMissing) {
+      subtitle.textContent = window.l10n.toolWarningAdb;
+    } else if (scrcpyMissing) {
+      subtitle.textContent = window.l10n.toolWarningScrcpy;
+    }
+    btnContainer.appendChild(subtitle);
+
+    // Action buttons row
+    const actionsRow = document.createElement('div');
+    actionsRow.style.cssText = 'display: flex; gap: 8px; margin-top: 16px;';
+
+    const installBtn = document.createElement('button');
+    installBtn.className = 'reconnect-btn primary';
+    installBtn.textContent = window.l10n.install;
+    installBtn.onclick = () => {
+      vscode.postMessage({ type: 'openInstallDocs' });
+    };
+
+    const settingsBtn = document.createElement('button');
+    settingsBtn.className = 'reconnect-btn';
+    settingsBtn.textContent = window.l10n.settings;
+    settingsBtn.onclick = () => {
+      vscode.postMessage({ type: 'openSettings' });
+    };
+
+    actionsRow.appendChild(installBtn);
+    actionsRow.appendChild(settingsBtn);
+    btnContainer.appendChild(actionsRow);
+  }
 
   statusElement.classList.remove('hidden');
 }
@@ -1631,6 +1709,21 @@ function dismissScreenshotPreview() {
     screenshotPreviewOverlay.classList.remove('visible');
   }
   currentScreenshotData = null;
+}
+
+/**
+ * Handle tool status message to update empty state if needed
+ */
+function handleToolStatus(message: { adbAvailable: boolean; scrcpyAvailable: boolean }) {
+  const wasAvailable = toolsAvailable;
+  toolsAvailable = message.adbAvailable && message.scrcpyAvailable;
+  adbMissing = !message.adbAvailable;
+  scrcpyMissing = !message.scrcpyAvailable;
+
+  // Re-render empty state if currently showing and status changed
+  if (wasAvailable !== toolsAvailable && sessions.size === 0) {
+    showEmptyState();
+  }
 }
 
 // Initialize when DOM is ready

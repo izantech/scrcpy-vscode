@@ -42,6 +42,12 @@ export function getHtmlForWebview(webview: vscode.Webview, extensionUri: vscode.
     screenshotPreview: vscode.l10n.t('Screenshot Preview'),
     save: vscode.l10n.t('Save'),
     copy: vscode.l10n.t('Copy'),
+    toolWarningAdb: vscode.l10n.t('ADB is not installed or not in PATH'),
+    toolWarningScrcpy: vscode.l10n.t('scrcpy is not installed or not in PATH'),
+    toolWarningBoth: vscode.l10n.t('ADB and scrcpy are not installed'),
+    install: vscode.l10n.t('Install'),
+    settings: vscode.l10n.t('Settings'),
+    missingDependency: vscode.l10n.t('Missing dependency'),
   };
 
   return `<!DOCTYPE html>
@@ -488,6 +494,37 @@ export function getHtmlForWebview(webview: vscode.Webview, extensionUri: vscode.
       display: none;
     }
 
+    .status.warning {
+      border-color: var(--vscode-inputValidation-warningBorder, #cf9300);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .status.warning .warning-title-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    .status.warning .warning-icon {
+      color: var(--vscode-inputValidation-warningBorder, #cf9300);
+      display: flex;
+      align-items: center;
+    }
+
+    .status.warning .warning-title {
+      font-weight: 600;
+      color: var(--vscode-foreground, #ccc);
+    }
+
+    .status.warning .warning-subtitle {
+      color: var(--vscode-descriptionForeground, #969696);
+      font-size: 12px;
+    }
+
     .status .spinner {
       width: 48px;
       height: 48px;
@@ -575,11 +612,11 @@ export function getHtmlForWebview(webview: vscode.Webview, extensionUri: vscode.
 
     .reconnect-btn {
       margin-top: 12px;
-      padding: 6px 12px;
+      padding: 8px 16px;
       background: var(--vscode-button-background, #0078d4);
       color: var(--vscode-button-foreground, white);
       border: none;
-      border-radius: 3px;
+      border-radius: 9999px;
       cursor: pointer;
       font-size: 12px;
       font-family: var(--vscode-font-family);
@@ -709,6 +746,15 @@ export function getHtmlForWebview(webview: vscode.Webview, extensionUri: vscode.
 
     .screenshot-preview-btn.secondary:hover {
       background: var(--vscode-button-secondaryHoverBackground, #45494e);
+    }
+
+    .reconnect-btn.primary {
+      background: var(--vscode-button-background, #0e639c);
+      color: var(--vscode-button-foreground, #fff);
+    }
+
+    .reconnect-btn.primary:hover {
+      background: var(--vscode-button-hoverBackground, #1177bb);
     }
   </style>
 </head>

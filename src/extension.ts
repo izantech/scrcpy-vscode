@@ -1,12 +1,21 @@
 import * as vscode from 'vscode';
 import { ScrcpyViewProvider } from './ScrcpyViewProvider';
+import { checkAllTools, clearCache } from './ToolChecker';
 
 let provider: ScrcpyViewProvider | undefined;
 
-export function activate(context: vscode.ExtensionContext) {
+export async function activate(context: vscode.ExtensionContext) {
   console.log('Scrcpy extension activated');
 
-  provider = new ScrcpyViewProvider(context.extensionUri);
+  // Check tools at activation
+  const config = vscode.workspace.getConfiguration('scrcpy');
+  const adbPath = config.get<string>('adbPath', '');
+  const scrcpyPath = config.get<string>('path', '');
+
+  const toolResult = await checkAllTools(adbPath, scrcpyPath);
+
+  // Create provider with tool status
+  provider = new ScrcpyViewProvider(context.extensionUri, toolResult);
 
   // Register the webview view provider
   context.subscriptions.push(
@@ -14,6 +23,21 @@ export function activate(context: vscode.ExtensionContext) {
       webviewOptions: {
         retainContextWhenHidden: true,
       },
+    })
+  );
+
+  // Re-check tools when path settings change
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeConfiguration(async (e) => {
+      if (e.affectsConfiguration('scrcpy.path') || e.affectsConfiguration('scrcpy.adbPath')) {
+        clearCache();
+        const cfg = vscode.workspace.getConfiguration('scrcpy');
+        const newResult = await checkAllTools(
+          cfg.get<string>('adbPath', ''),
+          cfg.get<string>('path', '')
+        );
+        provider?.updateToolStatus(newResult);
+      }
     })
   );
 
