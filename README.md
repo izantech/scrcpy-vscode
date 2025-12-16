@@ -118,25 +118,27 @@ Display and control your Android device screen directly within VS Code, similar 
 
 Click the **gear icon** in the scrcpy view toolbar to access settings.
 
-| Setting                        | Default | Description                                                |
-| ------------------------------ | ------- | ---------------------------------------------------------- |
-| `scrcpy.path`                  | (empty) | Path to scrcpy installation directory                      |
-| `scrcpy.adbPath`               | (empty) | Path to ADB installation directory                         |
-| `scrcpy.apkInstallDefaultPath` | (empty) | Default folder for APK file picker (defaults to Downloads) |
-| `scrcpy.screenOff`             | `false` | Turn device screen off while mirroring                     |
-| `scrcpy.stayAwake`             | `true`  | Keep device awake during mirroring                         |
-| `scrcpy.maxSize`               | `1920`  | Maximum screen dimension in pixels                         |
-| `scrcpy.bitRate`               | `8`     | Video bitrate in Mbps                                      |
-| `scrcpy.maxFps`                | `60`    | Maximum frames per second                                  |
-| `scrcpy.showTouches`           | `false` | Show visual touch feedback on device                       |
-| `scrcpy.audio`                 | `true`  | Enable audio streaming (requires scrcpy 2.0+)              |
-| `scrcpy.clipboardSync`         | `true`  | Enable clipboard sync                                      |
-| `scrcpy.autoConnect`           | `true`  | Auto-connect when devices are plugged in                   |
-| `scrcpy.autoReconnect`         | `true`  | Auto-reconnect when connection is lost                     |
-| `scrcpy.reconnectRetries`      | `2`     | Number of reconnection attempts                            |
-| `scrcpy.lockVideoOrientation`  | `false` | Lock video orientation                                     |
-| `scrcpy.scrollSensitivity`     | `1.0`   | Mouse wheel scroll sensitivity (0.1-5.0)                   |
-| `scrcpy.showStats`             | `false` | Show FPS statistics overlay                                |
+| Setting                        | Default | Description                                                        |
+| ------------------------------ | ------- | ------------------------------------------------------------------ |
+| `scrcpy.path`                  | (empty) | Path to scrcpy installation directory (with directory picker link) |
+| `scrcpy.adbPath`               | (empty) | Path to ADB installation directory (with directory picker link)    |
+| `scrcpy.apkInstallDefaultPath` | (empty) | Default folder for APK file picker (with directory picker link)    |
+| `scrcpy.screenshotSavePath`    | (empty) | Default folder for screenshots (with directory picker link)        |
+| `scrcpy.recordingSavePath`     | (empty) | Default folder for recordings (with directory picker link)         |
+| `scrcpy.screenOff`             | `false` | Turn device screen off while mirroring                             |
+| `scrcpy.stayAwake`             | `true`  | Keep device awake during mirroring                                 |
+| `scrcpy.maxSize`               | `1920`  | Maximum screen dimension in pixels                                 |
+| `scrcpy.bitRate`               | `8`     | Video bitrate in Mbps                                              |
+| `scrcpy.maxFps`                | `60`    | Maximum frames per second                                          |
+| `scrcpy.showTouches`           | `false` | Show visual touch feedback on device                               |
+| `scrcpy.audio`                 | `true`  | Enable audio streaming (requires scrcpy 2.0+)                      |
+| `scrcpy.clipboardSync`         | `true`  | Enable clipboard sync                                              |
+| `scrcpy.autoConnect`           | `true`  | Auto-connect when devices are plugged in                           |
+| `scrcpy.autoReconnect`         | `true`  | Auto-reconnect when connection is lost                             |
+| `scrcpy.reconnectRetries`      | `2`     | Number of reconnection attempts                                    |
+| `scrcpy.lockVideoOrientation`  | `false` | Lock video orientation                                             |
+| `scrcpy.scrollSensitivity`     | `1.0`   | Mouse wheel scroll sensitivity (0.1-5.0)                           |
+| `scrcpy.showStats`             | `false` | Show FPS statistics overlay                                        |
 
 ## Troubleshooting
 

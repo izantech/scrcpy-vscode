@@ -12,12 +12,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Tool availability check** - Extension now checks for ADB and scrcpy at startup and displays a warning alert when tools are missing
 - **Custom ADB path setting** - New `scrcpy.adbPath` setting to specify custom ADB installation directory
 - **Improved empty state UI** - Redesigned warning alert with title/subtitle layout and pill-shaped buttons
+- **Directory picker links in settings** - All path settings now include "Choose directory" and "Reset" links directly in the settings UI
+- **Command emojis** - Added descriptive emojis to all commands for better visual identification in menus
 
 ### Changed
 
 - Removed VS Code notification popup for missing tools in favor of inline warning alert
 - Warning alert now shows structured title ("Missing dependency") with detailed subtitle message
 - Buttons in empty state now use pill shape for modern appearance
+- Simplified command titles by removing "Scrcpy:" prefix for cleaner menu display
 
 ## [0.1.1] - 2025-12-15
 

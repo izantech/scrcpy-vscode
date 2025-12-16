@@ -100,6 +100,60 @@ export async function activate(context: vscode.ExtensionContext) {
     tabCommands.push(cmd);
   }
 
+  // Register browse path commands for settings
+  const browseCommands = [
+    {
+      command: 'scrcpy.browseScrcpyPath',
+      setting: 'path',
+      title: 'Select scrcpy installation folder',
+    },
+    { command: 'scrcpy.browseAdbPath', setting: 'adbPath', title: 'Select ADB executable folder' },
+    {
+      command: 'scrcpy.browseScreenshotPath',
+      setting: 'screenshotSavePath',
+      title: 'Select screenshot save folder',
+    },
+    {
+      command: 'scrcpy.browseRecordingPath',
+      setting: 'recordingSavePath',
+      title: 'Select recording save folder',
+    },
+    {
+      command: 'scrcpy.browseApkInstallPath',
+      setting: 'apkInstallDefaultPath',
+      title: 'Select default APK folder',
+    },
+  ];
+
+  const browseDisposables = browseCommands.map(({ command, setting, title }) =>
+    vscode.commands.registerCommand(command, async () => {
+      const result = await vscode.window.showOpenDialog({
+        canSelectFiles: false,
+        canSelectFolders: true,
+        canSelectMany: false,
+        title: vscode.l10n.t(title),
+      });
+      if (result && result[0]) {
+        await vscode.workspace.getConfiguration('scrcpy').update(setting, result[0].fsPath, true);
+      }
+    })
+  );
+
+  // Register reset path commands for settings
+  const resetCommands = [
+    { command: 'scrcpy.resetScrcpyPath', setting: 'path' },
+    { command: 'scrcpy.resetAdbPath', setting: 'adbPath' },
+    { command: 'scrcpy.resetScreenshotPath', setting: 'screenshotSavePath' },
+    { command: 'scrcpy.resetRecordingPath', setting: 'recordingSavePath' },
+    { command: 'scrcpy.resetApkInstallPath', setting: 'apkInstallDefaultPath' },
+  ];
+
+  const resetDisposables = resetCommands.map(({ command, setting }) =>
+    vscode.commands.registerCommand(command, async () => {
+      await vscode.workspace.getConfiguration('scrcpy').update(setting, undefined, true);
+    })
+  );
+
   context.subscriptions.push(
     startCommand,
     stopCommand,
@@ -111,7 +165,9 @@ export async function activate(context: vscode.ExtensionContext) {
     toggleRecordingCommand,
     listCamerasCommand,
     selectDisplayCommand,
-    ...tabCommands
+    ...tabCommands,
+    ...browseDisposables,
+    ...resetDisposables
   );
 }
 

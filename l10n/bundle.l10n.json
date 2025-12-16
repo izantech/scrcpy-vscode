@@ -137,5 +137,9 @@
   "Install": "Install",
   "Settings": "Settings",
   "ADB not found.\n\nInstall via: {0}\n\nOr download from: {1}\n\nAlternatively, configure the path in Settings.": "ADB not found.\n\nInstall via: {0}\n\nOr download from: {1}\n\nAlternatively, configure the path in Settings.",
-  "scrcpy not found.\n\nInstall via: {0}\n\nOr download from: {1}\n\nAlternatively, configure the path in Settings.": "scrcpy not found.\n\nInstall via: {0}\n\nOr download from: {1}\n\nAlternatively, configure the path in Settings."
+  "scrcpy not found.\n\nInstall via: {0}\n\nOr download from: {1}\n\nAlternatively, configure the path in Settings.": "scrcpy not found.\n\nInstall via: {0}\n\nOr download from: {1}\n\nAlternatively, configure the path in Settings.",
+  "Select ADB executable folder": "Select ADB executable folder",
+  "Select screenshot save folder": "Select screenshot save folder",
+  "Select recording save folder": "Select recording save folder",
+  "Select default APK folder": "Select default APK folder"
 }
