@@ -487,6 +487,46 @@ export class VideoRenderer {
   }
 
   /**
+   * Ensure the canvas matches the decoded frame dimensions.
+   *
+   * Some codecs/browsers may not reliably surface rotation/resolution changes via config parsing.
+   * In those cases, we fall back to the decoded frame's display size to keep aspect ratio correct.
+   */
+  private updateCanvasDimensionsFromFrame(frame: VideoFrame): void {
+    const frameWidth = frame.displayWidth || frame.codedWidth;
+    const frameHeight = frame.displayHeight || frame.codedHeight;
+
+    if (frameWidth <= 0 || frameHeight <= 0) {
+      return;
+    }
+
+    if (frameWidth === this.width && frameHeight === this.height) {
+      return;
+    }
+
+    console.log(
+      `Video dimensions changed from ${this.width}x${this.height} to ${frameWidth}x${frameHeight}`
+    );
+
+    this.width = frameWidth;
+    this.height = frameHeight;
+
+    // Resize drawing buffer (clears canvas + resets context state)
+    this.canvas.width = frameWidth;
+    this.canvas.height = frameHeight;
+    this.fitToContainer();
+    this.ctx = this.canvas.getContext('2d');
+
+    // Drop any queued frames from the previous size to avoid stretched renders.
+    for (const pending of this.pendingFrames) {
+      pending.close();
+    }
+    this.pendingFrames = [];
+
+    this.onDimensionsChanged?.(frameWidth, frameHeight);
+  }
+
+  /**
    * Handle decoded video frame
    */
   private handleDecodedFrame(frame: VideoFrame) {
@@ -497,6 +537,7 @@ export class VideoRenderer {
       return;
     }
 
+    this.updateCanvasDimensionsFromFrame(frame);
     this.pendingFrames.push(frame);
 
     // Update FPS counter only if stats are enabled
