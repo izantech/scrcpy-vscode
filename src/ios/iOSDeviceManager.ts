@@ -83,12 +83,20 @@ export class iOSDeviceManager {
               console.log('[iOSDeviceManager] Found', devices.length, 'iOS device(s):', devices);
 
               resolve(
-                devices.map((d: { udid: string; name: string; model: string }) => ({
-                  serial: d.udid,
-                  name: d.name,
-                  model: d.model,
-                  platform: 'ios' as const,
-                }))
+                devices.map(
+                  (d: {
+                    udid: string;
+                    name: string;
+                    model: string;
+                    isCameraFallback?: boolean;
+                  }) => ({
+                    serial: d.udid,
+                    name: d.name,
+                    model: d.model,
+                    platform: 'ios' as const,
+                    isCameraFallback: d.isCameraFallback ?? false,
+                  })
+                )
               );
               return;
             }

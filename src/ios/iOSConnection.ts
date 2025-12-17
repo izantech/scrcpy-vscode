@@ -60,6 +60,7 @@ export class iOSConnection implements IDeviceConnection {
   private _deviceWidth = 0;
   private _deviceHeight = 0;
   private messageBuffer = Buffer.alloc(0);
+  private _frameLogged = false;
 
   // WebDriverAgent integration (Phase 8)
   private wdaClient: WDAClient | null = null;
@@ -122,8 +123,19 @@ export class iOSConnection implements IDeviceConnection {
     }
 
     const helperPath = this.getHelperPath();
+    console.log('[iOSConnection] Starting stream for device:', this.deviceSerial);
 
-    this.onStatus?.('Starting iOS screen capture...');
+    // Check if this is a camera fallback device (synthetic UDID ends with 00000000)
+    const isCameraFallback = this.deviceSerial.endsWith('00000000');
+    if (isCameraFallback) {
+      console.warn('[iOSConnection] This device is using Continuity Camera fallback');
+      console.warn(
+        '[iOSConnection] iOS screen capture is not available - video will show camera instead'
+      );
+      this.onStatus?.('Starting iOS camera capture (screen mirroring unavailable)...');
+    } else {
+      this.onStatus?.('Starting iOS screen capture...');
+    }
 
     // If helper is a JS file, run with node
     const isNodeScript = helperPath.endsWith('.js');
@@ -131,6 +143,7 @@ export class iOSConnection implements IDeviceConnection {
     const args = isNodeScript
       ? [helperPath, 'stream', this.deviceSerial]
       : ['stream', this.deviceSerial];
+    console.log('[iOSConnection] Running:', command, args);
 
     this.helperProcess = spawn(command, args, {
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -321,6 +334,13 @@ export class iOSConnection implements IDeviceConnection {
    * Process a complete message from the helper
    */
   private processMessage(type: number, payload: Buffer): void {
+    // Log message types (except video frames to avoid spam)
+    if (type !== MessageType.VIDEO_FRAME) {
+      console.log(
+        `[iOSConnection] Received message type: 0x${type.toString(16)}, size: ${payload.length}`
+      );
+    }
+
     switch (type) {
       case MessageType.DEVICE_INFO:
         this.handleDeviceInfo(payload);
@@ -372,6 +392,10 @@ export class iOSConnection implements IDeviceConnection {
     // Extract config data (SPS/PPS in Annex B format)
     const configData = new Uint8Array(payload.subarray(8));
 
+    console.log(
+      `[iOSConnection] VIDEO_CONFIG: ${this._deviceWidth}x${this._deviceHeight}, config size: ${configData.length}`
+    );
+
     this.onStatus?.(`Streaming at ${this._deviceWidth}x${this._deviceHeight}`);
 
     // Send config to video renderer
@@ -400,6 +424,14 @@ export class iOSConnection implements IDeviceConnection {
 
     // Skip PTS (8 bytes) and get frame data
     const frameData = new Uint8Array(payload.subarray(9));
+
+    // Debug logging for first few frames
+    if (!this._frameLogged || isKeyFrame) {
+      console.log(
+        `[iOSConnection] VIDEO_FRAME: size=${frameData.length}, isKeyFrame=${isKeyFrame}, isConfig=${isConfig}`
+      );
+      this._frameLogged = true;
+    }
 
     this.onVideoFrame?.(
       frameData,

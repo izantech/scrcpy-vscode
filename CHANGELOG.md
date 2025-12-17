@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Automatic device discovery and connection
   - H.264 video streaming with hardware decoding
   - Platform-aware UI showing Apple icon for iOS devices
+  - **Continuity Camera fallback** - Auto-detects iOS devices via Continuity Camera when screen capture is unavailable
+  - `isCameraFallback` flag in device info to indicate when camera fallback is active
 - **WebDriverAgent integration** - Optional touch/keyboard input for iOS devices
   - Tap, swipe, and scroll gestures via WDA HTTP API
   - Keyboard text input support
@@ -41,6 +43,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Control buttons now respect platform capabilities (volume buttons shown only when supported)
 - Moved WiFi connection to overflow menu (less prominent, cleaner toolbar)
 - iOS setup commands now appear in overflow menu on macOS
+
+### Known Issues
+
+- **iOS screen capture on beta OS versions** - On macOS 26.x with iOS 26.x beta, the traditional CoreMediaIO screen mirroring device may not appear. The extension falls back to Continuity Camera detection, which shows the device camera instead of the screen. This appears to be a compatibility issue with beta OS versions.
 
 ### Documentation
 

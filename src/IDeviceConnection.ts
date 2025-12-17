@@ -20,6 +20,11 @@ export interface DeviceInfo {
   name: string;
   model?: string;
   platform: DevicePlatform;
+  /**
+   * iOS only: True if screen capture is unavailable and device was detected via Continuity Camera.
+   * When true, video will show the device camera instead of the screen.
+   */
+  isCameraFallback?: boolean;
 }
 
 /**

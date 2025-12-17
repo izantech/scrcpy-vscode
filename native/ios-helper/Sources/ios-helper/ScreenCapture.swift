@@ -32,6 +32,7 @@ class ScreenCapture: NSObject {
     init(device: AVCaptureDevice) {
         self.device = device
         super.init()
+        fputs("[ScreenCapture] Initialized with device: \(device.localizedName) [\(device.uniqueID)]\n", stderr)
     }
 
     /// Start capturing video from the device

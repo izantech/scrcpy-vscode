@@ -132,9 +132,15 @@ src/
 │   └── ScrcpyProtocol.ts   # Protocol constants and codec IDs
 ├── ios/
 │   ├── iOSConnection.ts   # iOS device connection via CoreMediaIO
-│   ├── iOSDeviceManager.ts # iOS device discovery
+│   ├── iOSDeviceManager.ts # iOS device discovery (with Continuity Camera fallback)
 │   ├── WDAClient.ts       # WebDriverAgent HTTP client for input control
 │   └── index.ts           # iOS module exports
+├── native/
+│   └── ios-helper/        # Swift CLI for iOS screen capture
+│       └── Sources/ios-helper/
+│           ├── main.swift           # CLI entry point (list, stream, screenshot)
+│           ├── DeviceEnumerator.swift # CoreMediaIO device discovery
+│           └── ScreenCapture.swift  # AVFoundation video capture
 ├── types/
 │   ├── AppState.ts       # State interfaces (DeviceState, AppStateSnapshot, etc.)
 │   └── WebviewActions.ts # Typed actions from webview to extension
@@ -251,13 +257,35 @@ src/
 - Clipboard: variable (type=0, length 4 bytes, UTF-8 text)
 - ACK clipboard: 9 bytes (type=1, sequence 8 bytes)
 
-### Connection Setup
+### Connection Setup (Android)
 
 1. `adb reverse localabstract:scrcpy_XXXX tcp:PORT`
 2. Start server via `adb shell app_process`
 3. Accept 2 connections (audio=false) or 3 connections (audio=true): video, [audio], control
 4. Video socket receives stream, audio socket receives Opus stream (if enabled)
 5. Control socket is bidirectional (sends touch/keys, receives clipboard)
+
+### iOS Screen Capture (macOS only)
+
+The ios-helper Swift binary handles iOS device discovery and screen capture:
+
+1. **Device Discovery** (`DeviceEnumerator.swift`):
+   - Enables `kCMIOHardwarePropertyAllowScreenCaptureDevices` via CoreMediaIO
+   - Discovers devices via AVCaptureDevice.DiscoverySession with `.external` device type
+   - Checks `.muxed` (video+audio) and `.video` media types
+   - Filters out camera devices (those with "Camera" in the name)
+   - **Continuity Camera fallback**: If no screen devices found, detects iOS devices via Continuity Camera
+     - Uses synthetic UDID (ending with `00000000`) to differentiate from camera UDIDs
+     - Sets `isCameraFallback: true` in device info
+
+2. **Screen Capture** (`ScreenCapture.swift`):
+   - Uses AVCaptureSession with AVCaptureVideoDataOutput
+   - Outputs raw BGRA frames which are H.264 encoded via VideoToolbox
+   - Binary protocol: type (1 byte) + length (4 bytes BE) + payload
+
+3. **Known Limitations**:
+   - On macOS 26.x with iOS 26.x beta, screen mirroring devices may not appear
+   - Falls back to Continuity Camera (shows device camera instead of screen)
 
 ## Reference: scrcpy Source
 
