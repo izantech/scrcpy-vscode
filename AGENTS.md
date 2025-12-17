@@ -475,15 +475,21 @@ test/
     - Verify files appear in `/sdcard/Download/` on device
     - Verify summary notification shows success/failure count
 20. Test iOS device connection (macOS only):
-    - Enable iOS support in settings: `scrcpy.ios.enabled: true` (experimental)
+    - iOS support is auto-enabled on macOS (no setting required)
     - Connect an iOS device via USB
     - Verify the device appears in the device list with Apple icon
     - Click to connect and verify video displays
     - Verify the device tooltip shows iOS-specific info (model, iOS version)
     - Disconnect the device and verify it's removed from the list
-    - Disable iOS support: `scrcpy.ios.enabled: false`
-    - Verify iOS devices no longer appear in the device list
-21. Test iOS input with WebDriverAgent:
+    - Optional: Disable iOS support via `scrcpy.ios.enabled: false`
+    - Verify iOS devices no longer appear when disabled
+21. Test iOS setup commands (macOS only):
+    - Run command "Setup iOS Input Control (WebDriverAgent)"
+    - Verify terminal opens with guided setup script
+    - Script should check Xcode, iproxy, and connected devices
+    - Run command "Start iOS Input Control"
+    - Verify terminal opens and attempts to launch WDA
+22. Test iOS input with WebDriverAgent:
     - Prerequisites:
       - macOS with Xcode installed
       - WebDriverAgent built and running on device (see docs/ios-input-control-research.md)
@@ -498,7 +504,7 @@ test/
     - Test volume buttons: click volume up/down and verify volume changes
     - Disable WDA setting and verify tooltip shows "Input disabled"
     - Test without WDA running: verify tooltip shows "Input unavailable" and display-only mode works
-22. Test iOS screenshots:
+23. Test iOS screenshots:
     - Connect iOS device via USB (macOS only)
     - Click screenshot button (📷) in toolbar
     - Verify loading spinner appears while capturing

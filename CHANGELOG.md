@@ -27,9 +27,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `PlatformCapabilities` defines per-platform feature availability
   - Dynamic capability updates based on WDA connection status
 - **iOS-specific settings**
-  - `scrcpy.ios.enabled` - Enable/disable iOS device support (experimental, default: false)
+  - `scrcpy.ios.enabled` - Enable/disable iOS device support (auto-enabled on macOS)
   - `scrcpy.ios.webDriverAgentEnabled` - Enable/disable WDA input control
   - `scrcpy.ios.webDriverAgentPort` - WDA port (default: 8100)
+- **iOS setup commands**
+  - `Setup iOS Input Control (WebDriverAgent)` - Guided one-time setup for WDA
+  - `Start iOS Input Control` - Launch WDA for touch/keyboard input
 
 ### Changed
 

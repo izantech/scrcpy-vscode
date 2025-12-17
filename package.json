@@ -511,6 +511,16 @@
         "icon": "$(device-desktop)"
       },
       {
+        "command": "scrcpy.setupiOSInput",
+        "title": "%command.setupiOSInput%",
+        "icon": "$(tools)"
+      },
+      {
+        "command": "scrcpy.startiOSInput",
+        "title": "%command.startiOSInput%",
+        "icon": "$(play)"
+      },
+      {
         "command": "scrcpy.switchToTab1",
         "title": "%command.switchToTab1%"
       },

@@ -229,8 +229,10 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
     webDriverAgentPort: number;
   } {
     const config = vscode.workspace.getConfiguration('scrcpy');
+    // Auto-enable iOS on macOS by default (users can still disable it)
+    const defaultEnabled = process.platform === 'darwin';
     return {
-      enabled: config.get<boolean>('ios.enabled', false),
+      enabled: config.get<boolean>('ios.enabled', defaultEnabled),
       webDriverAgentEnabled: config.get<boolean>('ios.webDriverAgentEnabled', false),
       webDriverAgentPort: config.get<number>('ios.webDriverAgentPort', 8100),
     };

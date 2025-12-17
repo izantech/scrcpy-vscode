@@ -75,52 +75,32 @@ Display and control your Android device screen directly within VS Code, similar 
 
 **Legacy**: `adb tcpip 5555`, then connect via IP
 
-### iOS Devices (Experimental, macOS only)
+### iOS Devices (macOS only)
 
-iOS device mirroring is available as an experimental feature on macOS.
+iOS device mirroring is **automatically enabled** on macOS. Just connect your device via USB.
 
 #### Quick Start
 
-1. Enable iOS support: **Settings > scrcpy > iOS: Enabled** (check the box)
-2. Connect your iOS device via USB
-3. Trust the computer on your iOS device if prompted
-4. The device should appear in the device list with an Apple icon
+1. Connect your iOS device via USB
+2. Trust the computer on your iOS device if prompted
+3. The device appears in the device list with an Apple icon
+4. Click to connect and start mirroring
 
-> **Note:** iOS mirroring is display-only by default. For touch and keyboard input, see the optional WebDriverAgent setup below.
+> **Note:** iOS mirroring is display-only by default. For touch and keyboard input, use the setup command below.
 
-#### Optional: Enable Touch Input with WebDriverAgent
+#### Enable Touch Input (One-Time Setup)
 
-To control your iOS device (tap, swipe, type), you need to set up [WebDriverAgent](https://github.com/appium/WebDriverAgent):
+To control your iOS device (tap, swipe, type), run the guided setup:
 
-1. **Install prerequisites:**
+1. Open Command Palette (`Cmd+Shift+P`)
+2. Run **"Setup iOS Input Control (WebDriverAgent)"**
+3. Follow the terminal prompts
 
-   ```bash
-   brew install libimobiledevice
-   ```
+The script will install prerequisites, clone WebDriverAgent, guide you through Xcode signing, and build WDA for your device.
 
-2. **Clone and build WebDriverAgent:**
+After setup, run **"Start iOS Input Control"** to launch WDA, then enable it in Settings > scrcpy > iOS: Web Driver Agent Enabled.
 
-   ```bash
-   git clone https://github.com/appium/WebDriverAgent.git
-   cd WebDriverAgent
-   open WebDriverAgent.xcodeproj
-   ```
-
-3. **Configure in Xcode:**
-   - Select `WebDriverAgentRunner` target
-   - Enable automatic signing with your Apple Developer team
-   - Connect your iOS device and press ⌘+U to build and run
-
-4. **Start the USB tunnel (keep this running):**
-
-   ```bash
-   iproxy 8100 8100 -u <your-device-UDID>
-   ```
-
-5. **Enable in VS Code:**
-   - Settings > scrcpy > iOS: Web Driver Agent Enabled (check the box)
-
-For detailed instructions and troubleshooting, see [iOS Input Control Guide](docs/ios-input-control-research.md).
+For manual setup, see [iOS Input Control Guide](docs/ios-input-control-research.md).
 
 ## Commands
 
@@ -131,6 +111,8 @@ For detailed instructions and troubleshooting, see [iOS Input Control Guide](doc
 | `Scrcpy: Connect to Device over WiFi` | Wireless connection         |
 | `Scrcpy: Install APK`                 | Install APK on device       |
 | `Scrcpy: Upload Files to Device`      | Upload to /sdcard/Download/ |
+| `Scrcpy: Setup iOS Input Control`     | One-time WDA setup (macOS)  |
+| `Scrcpy: Start iOS Input Control`     | Launch WDA for touch input  |
 
 ## Settings
 
