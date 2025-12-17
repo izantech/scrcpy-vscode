@@ -132,7 +132,7 @@ src/
 │   └── ScrcpyProtocol.ts   # Protocol constants and codec IDs
 ├── ios/
 │   ├── iOSConnection.ts   # iOS device connection via CoreMediaIO
-│   ├── iOSDeviceManager.ts # iOS device discovery (with Continuity Camera fallback)
+│   ├── iOSDeviceManager.ts # iOS device discovery (display/camera sources)
 │   ├── WDAClient.ts       # WebDriverAgent HTTP client for input control
 │   └── index.ts           # iOS module exports
 ├── native/
@@ -274,9 +274,7 @@ The ios-helper Swift binary handles iOS device discovery and screen capture:
    - Discovers devices via AVCaptureDevice.DiscoverySession with `.external` device type
    - Checks `.muxed` (video+audio) and `.video` media types
    - Filters out camera devices (those with "Camera" in the name)
-   - **Continuity Camera fallback**: If no screen devices found, detects iOS devices via Continuity Camera
-     - Uses synthetic UDID (ending with `00000000`) to differentiate from camera UDIDs
-     - Sets `isCameraFallback: true` in device info
+   - **Continuity Camera mode**: When `scrcpy.videoSource` is set to `camera`, lists Continuity Camera sources as capture devices
 
 2. **Screen Capture** (`ScreenCapture.swift`):
    - Uses AVCaptureSession with AVCaptureVideoDataOutput
@@ -284,8 +282,8 @@ The ios-helper Swift binary handles iOS device discovery and screen capture:
    - Binary protocol: type (1 byte) + length (4 bytes BE) + payload
 
 3. **Known Limitations**:
-   - On macOS 26.x with iOS 26.x beta, screen mirroring devices may not appear
-   - Falls back to Continuity Camera (shows device camera instead of screen)
+   - On macOS 26.x with iOS 26.x (including 26.1), the CoreMediaIO screen capture device may not appear until `iOSScreenCaptureAssistant` is running and Screen Recording permission is granted
+   - If screen capture isn't available, set `scrcpy.videoSource` to `camera` to use Continuity Camera instead
 
 ## Reference: scrcpy Source
 
@@ -344,6 +342,7 @@ Audio support is implemented using:
 1. Extension logs: Check "Output" panel in VS Code
 2. WebView logs: Help > Toggle Developer Tools in Extension Host
 3. Server logs: `adb logcat | grep scrcpy`
+4. iOS capture preview (fast iteration): `npm run ios:preview -- list --video-source display` then `npm run ios:preview -- preview <UDID> --video-source display`
 
 ## Testing
 

@@ -9,6 +9,35 @@ const fs = require('fs');
 const iosHelperPath = path.resolve(__dirname, 'native/ios-helper/.build/release/ios-helper');
 const iosHelperExists = fs.existsSync(iosHelperPath);
 
+class EnsureExecutablePlugin {
+  /**
+   * @param {string} relativePath
+   */
+  constructor(relativePath) {
+    this.relativePath = relativePath;
+  }
+
+  /**
+   * @param {import('webpack').Compiler} compiler
+   */
+  apply(compiler) {
+    compiler.hooks.afterEmit.tap('EnsureExecutablePlugin', () => {
+      try {
+        const outputPath = compiler.options.output?.path;
+        if (!outputPath) {
+          return;
+        }
+        const targetPath = path.resolve(outputPath, this.relativePath);
+        if (fs.existsSync(targetPath)) {
+          fs.chmodSync(targetPath, 0o755);
+        }
+      } catch {
+        // Best-effort: permissions may be read-only in some environments.
+      }
+    });
+  }
+}
+
 /** @type {import('webpack').Configuration} */
 const extensionConfig = {
   target: 'node',
@@ -44,6 +73,7 @@ const extensionConfig = {
             },
           ],
         }),
+        new EnsureExecutablePlugin('ios-helper/ios-helper'),
       ]
     : [],
   devtool: 'nosources-source-map',

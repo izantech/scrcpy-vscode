@@ -707,6 +707,7 @@
   "scripts": {
     "vscode:prepublish": "npm run package",
     "build:ios-helper": "cd native/ios-helper && ./build.sh || true",
+    "ios:preview": "cd native/ios-helper && swift run ios-preview",
     "compile": "npm run build:ios-helper && webpack",
     "watch": "webpack --watch",
     "package": "npm run build:ios-helper && webpack --mode production --devtool hidden-source-map",

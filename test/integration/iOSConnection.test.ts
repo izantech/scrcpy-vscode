@@ -15,9 +15,25 @@ vi.mock('vscode', () => import('../mocks/vscode'));
 
 // Mock fs.existsSync to return true for helper path
 vi.mock('fs', () => ({
+  constants: {
+    X_OK: 1,
+  },
   existsSync: vi.fn(() => true),
+  statSync: vi.fn(() => ({
+    isFile: () => true,
+  })),
+  accessSync: vi.fn(),
+  chmodSync: vi.fn(),
   default: {
+    constants: {
+      X_OK: 1,
+    },
     existsSync: vi.fn(() => true),
+    statSync: vi.fn(() => ({
+      isFile: () => true,
+    })),
+    accessSync: vi.fn(),
+    chmodSync: vi.fn(),
   },
 }));
 
@@ -230,12 +246,14 @@ describe('iOSDeviceManager', () => {
         name: 'iPhone 15 Pro',
         model: 'iPhone16,1',
         platform: 'ios',
+        isCameraFallback: false,
       });
       expect(devices[1]).toEqual({
         serial: 'XYZ789-GHI012',
         name: 'iPad Pro',
         model: 'iPad14,5',
         platform: 'ios',
+        isCameraFallback: false,
       });
     });
 

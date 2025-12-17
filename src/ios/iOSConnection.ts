@@ -5,9 +5,7 @@
  * Phase 8: Added WebDriverAgent support for input control
  */
 
-import { spawn, ChildProcess } from 'child_process';
-import * as path from 'path';
-import * as fs from 'fs';
+import { execFile, spawn, ChildProcess } from 'child_process';
 import {
   IDeviceConnection,
   DeviceInfo,
@@ -20,6 +18,7 @@ import {
 } from '../IDeviceConnection';
 import { DevicePlatform, IOS_CAPABILITIES, PlatformCapabilities } from '../PlatformCapabilities';
 import { WDAClient } from './WDAClient';
+import { resolveIOSHelperPath } from './iosHelperPath';
 
 /**
  * iOS connection configuration
@@ -61,6 +60,7 @@ export class iOSConnection implements IDeviceConnection {
   private _deviceHeight = 0;
   private messageBuffer = Buffer.alloc(0);
   private _frameLogged = false;
+  private readonly videoSource: 'display' | 'camera';
 
   // WebDriverAgent integration (Phase 8)
   private wdaClient: WDAClient | null = null;
@@ -68,6 +68,7 @@ export class iOSConnection implements IDeviceConnection {
   private iproxyProcess: ChildProcess | null = null;
   private readonly wdaEnabled: boolean;
   private readonly wdaPort: number;
+  private resolvedWdaUdid: string | null = null;
 
   // Callbacks
   onVideoFrame?: VideoFrameCallback;
@@ -79,10 +80,12 @@ export class iOSConnection implements IDeviceConnection {
   constructor(
     private targetUDID?: string,
     private customHelperPath?: string,
-    config?: iOSConnectionConfig
+    config?: iOSConnectionConfig,
+    videoSource: 'display' | 'camera' = 'display'
   ) {
     this.wdaEnabled = config?.webDriverAgentEnabled ?? false;
     this.wdaPort = config?.webDriverAgentPort ?? 8100;
+    this.videoSource = videoSource;
   }
 
   /**
@@ -125,14 +128,8 @@ export class iOSConnection implements IDeviceConnection {
     const helperPath = this.getHelperPath();
     console.log('[iOSConnection] Starting stream for device:', this.deviceSerial);
 
-    // Check if this is a camera fallback device (synthetic UDID ends with 00000000)
-    const isCameraFallback = this.deviceSerial.endsWith('00000000');
-    if (isCameraFallback) {
-      console.warn('[iOSConnection] This device is using Continuity Camera fallback');
-      console.warn(
-        '[iOSConnection] iOS screen capture is not available - video will show camera instead'
-      );
-      this.onStatus?.('Starting iOS camera capture (screen mirroring unavailable)...');
+    if (this.videoSource === 'camera') {
+      this.onStatus?.('Starting iOS camera capture...');
     } else {
       this.onStatus?.('Starting iOS screen capture...');
     }
@@ -190,21 +187,46 @@ export class iOSConnection implements IDeviceConnection {
 
     this.onStatus?.('Initializing WebDriverAgent...');
 
-    // Start iproxy to forward WDA port
+    // Create WDA client and check status
+    this.wdaClient = new WDAClient('localhost', this.wdaPort);
+
+    // First try connecting directly. If the user is already running `iproxy` (via the setup script),
+    // the port is already forwarded and we don't need to start our own iproxy process.
+    try {
+      const status = await this.wdaClient.checkStatus();
+      if (status?.ready !== false) {
+        this.wdaReady = true;
+        this.updateCapabilities(true);
+        this.onStatus?.('WDA: Connected, input enabled');
+        return;
+      } else {
+        this.onStatus?.('WDA: Not ready, input disabled');
+        this.wdaClient = null;
+        return;
+      }
+    } catch (error) {
+      console.log('[WDA] Direct connection unavailable, trying iproxy...');
+    }
+
+    // Fall back to starting iproxy (best-effort).
     const iproxyStarted = await this.startIproxy();
     if (!iproxyStarted) {
       this.onStatus?.('WDA: iproxy not available, input disabled');
+      this.wdaClient = null;
       return;
     }
 
     // Give iproxy a moment to establish the connection
     await new Promise((resolve) => setTimeout(resolve, 500));
 
-    // Create WDA client and check status
-    this.wdaClient = new WDAClient('localhost', this.wdaPort);
-
     try {
-      const status = await this.wdaClient.checkStatus();
+      const wdaClient = this.wdaClient;
+      if (!wdaClient) {
+        this.onStatus?.('WDA: Client not available, input disabled');
+        return;
+      }
+
+      const status = await wdaClient.checkStatus();
       if (status?.ready !== false) {
         this.wdaReady = true;
         this.updateCapabilities(true);
@@ -224,26 +246,51 @@ export class iOSConnection implements IDeviceConnection {
    * Start iproxy to forward WDA port from device to localhost
    */
   private async startIproxy(): Promise<boolean> {
+    const deviceUdid = await this.resolveWdaDeviceUdid();
+    if (!deviceUdid) {
+      this.onStatus?.(
+        'WDA: No iOS UDID available for iproxy (connect device via USB or run setup script)'
+      );
+      return false;
+    }
+
     return new Promise((resolve) => {
       try {
         // iproxy <local_port> <device_port> -u <udid>
         this.iproxyProcess = spawn(
           'iproxy',
-          [String(this.wdaPort), String(this.wdaPort), '-u', this.deviceSerial!],
+          [String(this.wdaPort), String(this.wdaPort), '-u', deviceUdid],
           {
             stdio: ['ignore', 'pipe', 'pipe'],
           }
         );
 
         let started = false;
+        let resolved = false;
+
+        const resolveOnce = (result: boolean) => {
+          if (resolved) {
+            return;
+          }
+          resolved = true;
+          resolve(result);
+        };
 
         this.iproxyProcess.stderr?.on('data', (data: Buffer) => {
           const message = data.toString().trim();
           console.log('[iproxy]', message);
+          if (message.toLowerCase().includes('address already in use')) {
+            // Another iproxy instance is already forwarding this port.
+            started = true;
+            this.iproxyProcess?.kill();
+            this.iproxyProcess = null;
+            resolveOnce(true);
+            return;
+          }
           // iproxy outputs "waiting for connection" when ready
           if (message.includes('waiting') || message.includes('Creating')) {
             started = true;
-            resolve(true);
+            resolveOnce(true);
           }
         });
 
@@ -254,13 +301,13 @@ export class iOSConnection implements IDeviceConnection {
           } else {
             console.error('[iproxy] Error:', err.message);
           }
-          resolve(false);
+          resolveOnce(false);
         });
 
         this.iproxyProcess.on('close', (code) => {
           if (!started && code !== 0) {
             console.error('[iproxy] Exited with code', code);
-            resolve(false);
+            resolveOnce(false);
           }
         });
 
@@ -271,9 +318,9 @@ export class iOSConnection implements IDeviceConnection {
             // Check if process is still running
             if (this.iproxyProcess && !this.iproxyProcess.killed) {
               started = true;
-              resolve(true);
+              resolveOnce(true);
             } else {
-              resolve(false);
+              resolveOnce(false);
             }
           }
         }, 3000);
@@ -281,6 +328,61 @@ export class iOSConnection implements IDeviceConnection {
         console.error('[iproxy] Failed to start:', error);
         resolve(false);
       }
+    });
+  }
+
+  private async resolveWdaDeviceUdid(): Promise<string | null> {
+    if (this.resolvedWdaUdid) {
+      return this.resolvedWdaUdid;
+    }
+
+    const envUdid = process.env.SCRCPY_WDA_UDID || process.env.IOS_UDID || process.env.UDID;
+    if (envUdid) {
+      this.resolvedWdaUdid = envUdid;
+      return envUdid;
+    }
+
+    return new Promise((resolve) => {
+      execFile('idevice_id', ['-l'], (error, stdout) => {
+        if (error) {
+          if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+            console.error(
+              '[WDA] idevice_id not found. Install with: brew install libimobiledevice'
+            );
+          } else {
+            console.error('[WDA] Failed to run idevice_id:', error.message);
+          }
+          resolve(null);
+          return;
+        }
+
+        const udids = stdout
+          .split('\n')
+          .map((line) => line.trim())
+          .filter(Boolean);
+
+        if (udids.length === 0) {
+          resolve(null);
+          return;
+        }
+
+        // If the selected device serial matches a real iOS UDID, prefer it.
+        if (this.deviceSerial && udids.includes(this.deviceSerial)) {
+          this.resolvedWdaUdid = this.deviceSerial;
+          resolve(this.deviceSerial);
+          return;
+        }
+
+        if (udids.length === 1) {
+          this.resolvedWdaUdid = udids[0];
+          resolve(udids[0]);
+          return;
+        }
+
+        // Multiple devices connected; avoid picking the wrong one.
+        console.warn('[WDA] Multiple iOS devices detected:', udids);
+        resolve(null);
+      });
     });
   }
 
@@ -477,41 +579,7 @@ export class iOSConnection implements IDeviceConnection {
    * Get path to the ios-helper binary
    */
   private getHelperPath(): string {
-    // Allow custom helper path for testing
-    if (this.customHelperPath) {
-      return this.customHelperPath;
-    }
-
-    // Check environment variable for mock helper
-    const envHelperPath = process.env.IOS_HELPER_PATH;
-    if (envHelperPath && fs.existsSync(envHelperPath)) {
-      return envHelperPath;
-    }
-
-    // __dirname is 'out' folder, go up one level to get extension root
-    const extensionRoot = path.join(__dirname, '..');
-
-    // Check if running in development by looking for node_modules
-    const isDevMode = fs.existsSync(path.join(extensionRoot, 'node_modules'));
-
-    if (isDevMode) {
-      // Development paths - Swift uses architecture-specific directories
-      const buildDir = path.join(extensionRoot, 'native', 'ios-helper', '.build');
-      const possiblePaths = [
-        path.join(buildDir, 'arm64-apple-macosx', 'release', 'ios-helper'),
-        path.join(buildDir, 'x86_64-apple-macosx', 'release', 'ios-helper'),
-        path.join(buildDir, 'release', 'ios-helper'),
-      ];
-
-      for (const devPath of possiblePaths) {
-        if (fs.existsSync(devPath)) {
-          return devPath;
-        }
-      }
-    }
-
-    // Production path (bundled with extension)
-    return path.join(extensionRoot, 'ios-helper');
+    return resolveIOSHelperPath(this.customHelperPath);
   }
 
   // Input methods - implemented via WebDriverAgent (Phase 8)
@@ -640,7 +708,13 @@ export class iOSConnection implements IDeviceConnection {
     }
 
     return new Promise((resolve, reject) => {
-      const proc = spawn(helperPath, ['screenshot', this.targetUDID!]);
+      const isNodeScript = helperPath.endsWith('.js');
+      const command = isNodeScript ? 'node' : helperPath;
+      const args = isNodeScript
+        ? [helperPath, 'screenshot', this.targetUDID!]
+        : ['screenshot', this.targetUDID!];
+
+      const proc = spawn(command, args);
       const chunks: Buffer[] = [];
 
       proc.stdout.on('data', (chunk: Buffer) => {

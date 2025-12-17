@@ -154,7 +154,7 @@ export class DeviceService {
     );
     if (this.iosConfig.enabled && isIOSSupportAvailable()) {
       try {
-        iosDevices = await iOSDeviceManager.getAvailableDevices();
+        iosDevices = await iOSDeviceManager.getAvailableDevices(this.config.videoSource);
         console.log('[DeviceService] Found iOS devices:', iosDevices.length);
       } catch (error) {
         console.error('Failed to get iOS devices:', error);
@@ -634,7 +634,8 @@ export class DeviceService {
     const connection = new iOSConnection(
       session.deviceInfo.serial,
       undefined, // customHelperPath
-      this.iosConfig
+      this.iosConfig,
+      this.config.videoSource
     );
 
     // Wire up video frame callback

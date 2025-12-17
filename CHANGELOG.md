@@ -14,8 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Automatic device discovery and connection
   - H.264 video streaming with hardware decoding
   - Platform-aware UI showing Apple icon for iOS devices
-  - **Continuity Camera fallback** - Auto-detects iOS devices via Continuity Camera when screen capture is unavailable
-  - `isCameraFallback` flag in device info to indicate when camera fallback is active
+  - **Video source selection** - Use `scrcpy.videoSource` (`display`/`camera`) to choose iOS screen capture vs Continuity Camera
 - **WebDriverAgent integration** - Optional touch/keyboard input for iOS devices
   - Tap, swipe, and scroll gestures via WDA HTTP API
   - Keyboard text input support
@@ -44,9 +43,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Moved WiFi connection to overflow menu (less prominent, cleaner toolbar)
 - iOS setup commands now appear in overflow menu on macOS
 
+### Fixed
+
+- Fixed iOS streaming crash in `ios-helper` when converting H.264 AVCC NAL units to Annex B
+- Fixed `ios-helper` path resolution so the packaged extension can find the bundled binary under `dist/`
+- Fixed iOS screen capture device discovery on macOS 26.x by auto-starting `iOSScreenCaptureAssistant`
+
 ### Known Issues
 
-- **iOS screen capture on beta OS versions** - On macOS 26.x with iOS 26.x beta, the traditional CoreMediaIO screen mirroring device may not appear. The extension falls back to Continuity Camera detection, which shows the device camera instead of the screen. This appears to be a compatibility issue with beta OS versions.
+- **iOS screen capture on macOS 26 / iOS 26** - On macOS 26.x with iOS 26.x (including 26.1), the CoreMediaIO screen capture device may not appear until Screen Recording permission is granted and `iOSScreenCaptureAssistant` is running. If screen capture isn't available, set `scrcpy.videoSource` to `camera` to use Continuity Camera instead.
 
 ### Documentation
 

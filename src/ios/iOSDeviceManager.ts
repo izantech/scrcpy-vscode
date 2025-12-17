@@ -3,10 +3,10 @@
  */
 
 import { spawn } from 'child_process';
-import * as path from 'path';
 import * as fs from 'fs';
 import { DeviceInfo } from '../IDeviceConnection';
 import { isIOSSupportAvailable } from '../PlatformCapabilities';
+import { resolveIOSHelperPath } from './iosHelperPath';
 
 /**
  * Message types from the iOS helper binary protocol
@@ -22,7 +22,9 @@ export class iOSDeviceManager {
   /**
    * Get list of connected iOS devices
    */
-  static async getAvailableDevices(): Promise<DeviceInfo[]> {
+  static async getAvailableDevices(
+    videoSource: 'display' | 'camera' = 'display'
+  ): Promise<DeviceInfo[]> {
     if (!isIOSSupportAvailable()) {
       console.log('[iOSDeviceManager] iOS support not available');
       return [];
@@ -43,7 +45,9 @@ export class iOSDeviceManager {
       // If helper is a JS file, run with node
       const isNodeScript = helperPath.endsWith('.js');
       const command = isNodeScript ? 'node' : helperPath;
-      const args = isNodeScript ? [helperPath, 'list'] : ['list'];
+      const args = isNodeScript
+        ? [helperPath, 'list', '--video-source', videoSource]
+        : ['list', '--video-source', videoSource];
 
       const proc = spawn(command, args, {
         stdio: ['ignore', 'pipe', 'pipe'],
@@ -128,35 +132,6 @@ export class iOSDeviceManager {
    * Get path to the ios-helper binary
    */
   private static getHelperPath(): string {
-    // Check environment variable for mock helper
-    const envHelperPath = process.env.IOS_HELPER_PATH;
-    if (envHelperPath && fs.existsSync(envHelperPath)) {
-      return envHelperPath;
-    }
-
-    // __dirname is 'out' folder, go up one level to get extension root
-    const extensionRoot = path.join(__dirname, '..');
-
-    // Check if running in development by looking for node_modules
-    const isDevMode = fs.existsSync(path.join(extensionRoot, 'node_modules'));
-
-    if (isDevMode) {
-      // Development paths - Swift uses architecture-specific directories
-      const buildDir = path.join(extensionRoot, 'native', 'ios-helper', '.build');
-      const possiblePaths = [
-        path.join(buildDir, 'arm64-apple-macosx', 'release', 'ios-helper'),
-        path.join(buildDir, 'x86_64-apple-macosx', 'release', 'ios-helper'),
-        path.join(buildDir, 'release', 'ios-helper'),
-      ];
-
-      for (const devPath of possiblePaths) {
-        if (fs.existsSync(devPath)) {
-          return devPath;
-        }
-      }
-    }
-
-    // Production path (bundled with extension)
-    return path.join(extensionRoot, 'ios-helper');
+    return resolveIOSHelperPath();
   }
 }

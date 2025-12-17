@@ -100,17 +100,38 @@ class MessageWriter {
 class IOSHelperApp: ScreenCaptureDelegate {
 
     private var screenCapture: ScreenCapture?
+    private var windowCapture: WindowCapture?
     private var frameEncoder: FrameEncoder?
     private var frameCount: UInt64 = 0
 
     /// List connected iOS devices
-    func listDevices() {
-        MessageWriter.writeStatus("Scanning for iOS devices...")
+    func listDevices(videoSource: String) {
+        let normalized = videoSource.lowercased()
+        if normalized == "camera" {
+            MessageWriter.writeStatus("Scanning for iOS camera devices...")
+        } else {
+            MessageWriter.writeStatus("Scanning for iOS screen devices...")
+        }
 
-        let devices = DeviceEnumerator.getIOSDevices()
+        let devices: [IOSDeviceInfo]
+        if normalized == "camera" {
+            devices = DeviceEnumerator.getIOSCameraDevices()
+        } else {
+            let directDevices = DeviceEnumerator.getIOSDevices()
+            let mirroringDevices = MirroringWindowEnumerator.getMirroringWindows()
+            devices = directDevices + mirroringDevices
+        }
 
         if devices.isEmpty {
-            MessageWriter.writeStatus("No iOS devices found. Make sure your device is connected via USB and trusted.")
+            if normalized == "camera" {
+                MessageWriter.writeStatus(
+                    "No iOS camera devices found. Try enabling Continuity Camera and selecting your iPhone as a camera source."
+                )
+            } else {
+                MessageWriter.writeStatus(
+                    "No iOS screen devices found. Ensure Screen Recording permission, connect via USB, and trust this Mac. To use Continuity Camera instead, set scrcpy.videoSource=camera."
+                )
+            }
         }
 
         MessageWriter.writeDeviceList(devices)
@@ -119,6 +140,27 @@ class IOSHelperApp: ScreenCaptureDelegate {
     /// Start streaming from a specific device
     func startStream(udid: String) {
         MessageWriter.writeStatus("Looking for device: \(udid)")
+
+        if udid.hasPrefix("window:") {
+            let idString = String(udid.dropFirst("window:".count))
+            guard let windowID = UInt32(idString) else {
+                MessageWriter.writeError("Invalid window ID: \(udid)")
+                exit(1)
+            }
+
+            MessageWriter.writeStatus("Capturing iPhone Mirroring window: \(windowID)")
+            windowCapture = WindowCapture(windowID: windowID)
+            windowCapture?.delegate = self
+
+            do {
+                try windowCapture?.start()
+                MessageWriter.writeStatus("Capture started")
+                RunLoop.main.run()
+            } catch {
+                MessageWriter.writeError("Failed to start window capture: \(error.localizedDescription)")
+                exit(1)
+            }
+        }
 
         guard let device = DeviceEnumerator.findDevice(udid: udid) else {
             MessageWriter.writeError("Device not found: \(udid)")
@@ -145,6 +187,29 @@ class IOSHelperApp: ScreenCaptureDelegate {
 
     /// Take a single screenshot from a device
     func takeScreenshot(udid: String) {
+        if udid.hasPrefix("window:") {
+            let idString = String(udid.dropFirst("window:".count))
+            guard let windowID = UInt32(idString) else {
+                MessageWriter.writeError("Invalid window ID: \(udid)")
+                exit(1)
+            }
+
+            let capture = WindowCapture(windowID: windowID)
+            capture.captureOneFrame { result in
+                switch result {
+                case .success(let pngData):
+                    MessageWriter.writeScreenshot(pngData)
+                    exit(0)
+                case .failure(let error):
+                    MessageWriter.writeError("Screenshot failed: \(error.localizedDescription)")
+                    exit(1)
+                }
+            }
+
+            RunLoop.main.run()
+            return
+        }
+
         guard let device = DeviceEnumerator.findDevice(udid: udid) else {
             MessageWriter.writeError("Device not found: \(udid)")
             exit(1)
@@ -169,7 +234,7 @@ class IOSHelperApp: ScreenCaptureDelegate {
 
     // MARK: - ScreenCaptureDelegate
 
-    func screenCapture(_ capture: ScreenCapture, didStart width: Int, height: Int) {
+    func screenCapture(_ capture: AnyObject, didStart width: Int, height: Int) {
         MessageWriter.writeStatus("Capturing at \(width)x\(height)")
 
         // Initialize encoder
@@ -197,11 +262,11 @@ class IOSHelperApp: ScreenCaptureDelegate {
         }
     }
 
-    func screenCapture(_ capture: ScreenCapture, didOutputVideoFrame frame: CMSampleBuffer) {
+    func screenCapture(_ capture: AnyObject, didOutputVideoFrame frame: CMSampleBuffer) {
         frameEncoder?.encode(frame)
     }
 
-    func screenCapture(_ capture: ScreenCapture, didReceiveError error: Error) {
+    func screenCapture(_ capture: AnyObject, didReceiveError error: Error) {
         MessageWriter.writeError(error.localizedDescription)
     }
 }
@@ -213,9 +278,10 @@ func printUsage() {
     ios-helper - iOS Screen Capture Helper for scrcpy-vscode
 
     Usage:
-      ios-helper list              List connected iOS devices
-      ios-helper stream <UDID>     Stream video from a specific device
-      ios-helper screenshot <UDID> Take a single screenshot from a device
+      ios-helper list [--video-source display|camera]
+                                 List iOS capture sources
+      ios-helper stream <UDID>    Stream video from a specific capture source
+      ios-helper screenshot <UDID> Take a single screenshot from a capture source
 
     The output is a binary protocol on stdout for consumption by the VS Code extension.
 
@@ -235,7 +301,19 @@ func main() {
 
     switch command {
     case "list":
-        app.listDevices()
+        var videoSource = "display"
+        var i = 2
+        while i < args.count {
+            let arg = args[i]
+            if arg == "--video-source", i + 1 < args.count {
+                videoSource = args[i + 1]
+                i += 2
+                continue
+            }
+            i += 1
+        }
+
+        app.listDevices(videoSource: videoSource)
         exit(0)
 
     case "stream":

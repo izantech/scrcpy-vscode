@@ -1,5 +1,7 @@
 import AVFoundation
 import CoreMediaIO
+import CoreGraphics
+import Foundation
 
 /// Device information structure
 struct IOSDeviceInfo: Codable {
@@ -19,26 +21,153 @@ struct IOSDeviceInfo: Codable {
 /// Manages iOS device discovery via CoreMediaIO/AVFoundation
 class DeviceEnumerator {
 
+    /// Device types to scan for iOS capture sources.
+    /// On newer macOS versions, iPhone sources may show up as Continuity Camera types instead of generic `.external`.
+    private static let discoveryDeviceTypes: [AVCaptureDevice.DeviceType] = [
+        .external,
+        .continuityCamera,
+        .deskViewCamera,
+    ]
+
     /// Enable CoreMediaIO screen capture devices
     /// This is required before iOS devices appear as AVCaptureDevice
     static func enableScreenCaptureDevices() {
-        var property = CMIOObjectPropertyAddress(
-            mSelector: CMIOObjectPropertySelector(kCMIOHardwarePropertyAllowScreenCaptureDevices),
-            mScope: CMIOObjectPropertyScope(kCMIOObjectPropertyScopeGlobal),
-            mElement: CMIOObjectPropertyElement(kCMIOObjectPropertyElementMain)
-        )
+        kickstartIOSScreenCaptureAssistant()
 
         var allow: UInt32 = 1
         let dataSize = UInt32(MemoryLayout<UInt32>.size)
 
-        CMIOObjectSetPropertyData(
-            CMIOObjectID(kCMIOObjectSystemObject),
-            &property,
-            0,
-            nil,
-            dataSize,
-            &allow
+        func setHardwareProperty(_ selector: CMIOObjectPropertySelector, label: String) {
+            var property = CMIOObjectPropertyAddress(
+                mSelector: selector,
+                mScope: CMIOObjectPropertyScope(kCMIOObjectPropertyScopeGlobal),
+                mElement: CMIOObjectPropertyElement(kCMIOObjectPropertyElementMain)
+            )
+
+            let status = CMIOObjectSetPropertyData(
+                CMIOObjectID(kCMIOObjectSystemObject),
+                &property,
+                0,
+                nil,
+                dataSize,
+                &allow
+            )
+
+            if status != noErr {
+                fputs(
+                    "[DeviceEnumerator] Failed to enable \(label) (status=\(status)).\n",
+                    stderr
+                )
+            }
+        }
+
+        // Present wired screen capture devices to this process.
+        setHardwareProperty(
+            CMIOObjectPropertySelector(kCMIOHardwarePropertyAllowScreenCaptureDevices),
+            label: "screen capture devices"
         )
+
+        // Present wireless screen capture devices (default is 0 on newer macOS).
+        setHardwareProperty(
+            CMIOObjectPropertySelector(kCMIOHardwarePropertyAllowWirelessScreenCaptureDevices),
+            label: "wireless screen capture devices"
+        )
+    }
+
+    /// Ensure `iOSScreenCaptureAssistant` is running.
+    ///
+    /// On macOS Tahoe, the screen capture DAL can fail to surface muxed iOS devices until the
+    /// corresponding launchd service is started.
+    private static func kickstartIOSScreenCaptureAssistant() {
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/bin/launchctl")
+        task.arguments = ["kickstart", "-k", "system/com.apple.cmio.iOSScreenCaptureAssistant"]
+
+        let stdoutPipe = Pipe()
+        let stderrPipe = Pipe()
+        task.standardOutput = stdoutPipe
+        task.standardError = stderrPipe
+
+        do {
+            try task.run()
+            task.waitUntilExit()
+        } catch {
+            // Best-effort; continue enumeration even if kickstart fails.
+            fputs("[DeviceEnumerator] Failed to run launchctl kickstart: \(error)\n", stderr)
+            return
+        }
+
+        if task.terminationStatus != 0 {
+            let outData = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
+            let errData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
+            let out = String(data: outData, encoding: .utf8) ?? ""
+            let err = String(data: errData, encoding: .utf8) ?? ""
+            let combined = (out + err).trimmingCharacters(in: .whitespacesAndNewlines)
+            if !combined.isEmpty {
+                fputs("[DeviceEnumerator] launchctl kickstart output: \(combined)\n", stderr)
+            }
+        }
+    }
+
+    /// Continuity Camera device IDs typically end with these suffixes.
+    private static func isContinuityCameraUniqueID(_ uniqueID: String) -> Bool {
+        uniqueID.hasSuffix("00000001") || uniqueID.hasSuffix("00000002")
+    }
+
+    /// Try to resolve a screen capture device related to a known Continuity Camera UDID prefix.
+    ///
+    /// On macOS 26/iOS 26, the iPhone screen capture device may not appear in standard discovery sessions,
+    /// but can still sometimes be opened directly by uniqueID. We probe a small range of suffixes and
+    /// prefer muxed (audio+video) devices when possible.
+    private static func resolveScreenDevice(forUDIDPrefix prefix: String) -> AVCaptureDevice? {
+        // Probe a small range of suffixes (hex). 0x01/0x02 are known camera variants, so skip them.
+        let maxSuffix: UInt32 = 0x40
+
+        var best: AVCaptureDevice?
+        var bestScore = Int.min
+        for i in 0...maxSuffix {
+            if i == 0x01 || i == 0x02 {
+                continue
+            }
+
+            let suffix = String(format: "%08X", i)
+            let candidateUDID = prefix + suffix
+
+            guard let candidate = AVCaptureDevice(uniqueID: candidateUDID) else {
+                continue
+            }
+
+            guard candidate.hasMediaType(.video) || candidate.hasMediaType(.muxed) else {
+                continue
+            }
+
+            if isContinuityCameraUniqueID(candidate.uniqueID) {
+                continue
+            }
+
+            // Heuristic scoring:
+            // - Prefer muxed devices (often iPhone screen capture shows as muxed)
+            // - Prefer names without "camera" (to avoid selecting Continuity Camera variants)
+            var score = 0
+            if candidate.hasMediaType(.muxed) {
+                score += 2
+            }
+            if !candidate.localizedName.lowercased().contains("camera") {
+                score += 1
+            }
+
+            if score > bestScore {
+                bestScore = score
+                best = candidate
+            }
+
+            // Prefer muxed devices (often the screen capture device).
+            if candidate.hasMediaType(.muxed) {
+                return candidate
+            }
+        }
+
+        return best
     }
 
     /// List ALL CoreMediaIO devices directly (for debugging)
@@ -108,8 +237,10 @@ class DeviceEnumerator {
             mElement: CMIOObjectPropertyElement(kCMIOObjectPropertyElementMain)
         )
 
-        var name: CFString? = nil
-        var dataSize = UInt32(MemoryLayout<CFString?>.size)
+        // kCMIOObjectPropertyName: caller is responsible for releasing the returned CFObject.
+        // Use Unmanaged to avoid raw-pointer warnings and to manage ownership correctly.
+        var name: Unmanaged<CFString>?
+        var dataSize = UInt32(MemoryLayout<Unmanaged<CFString>?>.size)
 
         let status = CMIOObjectGetPropertyData(
             deviceID,
@@ -121,7 +252,7 @@ class DeviceEnumerator {
             &name
         )
 
-        guard status == noErr, let deviceName = name else {
+        guard status == noErr, let deviceName = name?.takeRetainedValue() else {
             return nil
         }
 
@@ -136,8 +267,9 @@ class DeviceEnumerator {
             mElement: CMIOObjectPropertyElement(kCMIOObjectPropertyElementMain)
         )
 
-        var uid: CFString? = nil
-        var dataSize = UInt32(MemoryLayout<CFString?>.size)
+        // kCMIODevicePropertyDeviceUID: caller is responsible for releasing the returned CFObject.
+        var uid: Unmanaged<CFString>?
+        var dataSize = UInt32(MemoryLayout<Unmanaged<CFString>?>.size)
 
         let status = CMIOObjectGetPropertyData(
             deviceID,
@@ -149,7 +281,7 @@ class DeviceEnumerator {
             &uid
         )
 
-        guard status == noErr, let deviceUID = uid else {
+        guard status == noErr, let deviceUID = uid?.takeRetainedValue() else {
             return nil
         }
 
@@ -171,145 +303,304 @@ class DeviceEnumerator {
     static func getIOSDevices() -> [IOSDeviceInfo] {
         enableScreenCaptureDevices()
 
-        // Short delay to allow devices to appear
-        Thread.sleep(forTimeInterval: 0.5)
+        if !CGPreflightScreenCaptureAccess() {
+            fputs(
+                "[DeviceEnumerator] Screen Recording permission is not granted for this process.\n",
+                stderr
+            )
+            fputs(
+                "[DeviceEnumerator] To enable iOS screen capture, grant Screen Recording permission to Visual Studio Code (or the parent terminal) in:\n",
+                stderr
+            )
+            fputs(
+                "[DeviceEnumerator] System Settings > Privacy & Security > Screen Recording, then restart the app.\n",
+                stderr
+            )
+            return []
+        }
 
         // Debug: list all CoreMediaIO devices directly
         listAllCoreMediaIODevices()
 
-        var devices: [IOSDeviceInfo] = []
+        // Some macOS versions take a while to surface the iPhone screen capture device after enabling.
+        // Poll a few times to give the DAL time to register devices.
+        let maxAttempts = 6
+        let attemptDelay: TimeInterval = 0.5
 
-        // Method 0: Try the default muxed device (as suggested by Apple forums)
-        if let defaultMuxed = AVCaptureDevice.default(for: .muxed) {
-            fputs("[DeviceEnumerator] Default muxed device: \(defaultMuxed.localizedName) [\(defaultMuxed.uniqueID)]\n", stderr)
-            let name = defaultMuxed.localizedName
-            let udid = defaultMuxed.uniqueID
-            if !name.lowercased().contains("camera") {
-                if let model = determineModel(from: name, isScreenDevice: true) {
+        for attempt in 0..<maxAttempts {
+            if attempt > 0 {
+                Thread.sleep(forTimeInterval: attemptDelay)
+            }
+
+            var devices: [IOSDeviceInfo] = []
+            var seenUDIDs = Set<String>()
+
+            // Method 1: Look for muxed (video+audio) devices - typical for screen capture
+            let muxedDiscovery = AVCaptureDevice.DiscoverySession(
+                deviceTypes: discoveryDeviceTypes,
+                mediaType: .muxed,
+                position: .unspecified
+            )
+
+            fputs(
+                "[DeviceEnumerator] (attempt \(attempt + 1)/\(maxAttempts)) Muxed devices found: \(muxedDiscovery.devices.count)\n",
+                stderr
+            )
+            for device in muxedDiscovery.devices {
+                fputs(
+                    "  - [muxed] \(device.localizedName) [\(device.uniqueID)] type=\(device.deviceType.rawValue)\n",
+                    stderr
+                )
+            }
+
+            // Method 2: Also check video devices (some iOS sources appear video-only)
+            let videoDiscovery = AVCaptureDevice.DiscoverySession(
+                deviceTypes: discoveryDeviceTypes,
+                mediaType: .video,
+                position: .unspecified
+            )
+
+            fputs(
+                "[DeviceEnumerator] (attempt \(attempt + 1)/\(maxAttempts)) Video devices found: \(videoDiscovery.devices.count)\n",
+                stderr
+            )
+            for device in videoDiscovery.devices {
+                fputs(
+                    "  - [video] \(device.localizedName) [\(device.uniqueID)] type=\(device.deviceType.rawValue)\n",
+                    stderr
+                )
+            }
+
+            // Method 3: Check all devices of relevant types (shows everything)
+            let allDiscovery = AVCaptureDevice.DiscoverySession(
+                deviceTypes: discoveryDeviceTypes,
+                mediaType: nil,
+                position: .unspecified
+            )
+
+            fputs(
+                "[DeviceEnumerator] (attempt \(attempt + 1)/\(maxAttempts)) All devices (nil mediaType): \(allDiscovery.devices.count)\n",
+                stderr
+            )
+            for device in allDiscovery.devices {
+                let hasVideo = device.hasMediaType(.video)
+                let hasAudio = device.hasMediaType(.audio)
+                let hasMuxed = device.hasMediaType(.muxed)
+                fputs(
+                    "  - [all] \(device.localizedName) [\(device.uniqueID)] type=\(device.deviceType.rawValue) video=\(hasVideo) audio=\(hasAudio) muxed=\(hasMuxed)\n",
+                    stderr
+                )
+            }
+
+            // Derive known iOS uniqueID prefixes from Continuity Camera devices.
+            var iosPrefixes = Set<String>()
+            for device in muxedDiscovery.devices + videoDiscovery.devices + allDiscovery.devices {
+                let udid = device.uniqueID
+                if isContinuityCameraUniqueID(udid) || device.deviceType == .continuityCamera || device.deviceType == .deskViewCamera {
+                    if let prefix = getUDIDPrefix(from: udid) {
+                        iosPrefixes.insert(prefix)
+                    }
+                }
+            }
+
+            func isKnownIOSDevice(name: String, udid: String) -> Bool {
+                if determineModel(from: name, isScreenDevice: false) != nil {
+                    return true
+                }
+                return iosPrefixes.contains(where: { udid.hasPrefix($0) })
+            }
+
+            func resolveModel(name: String, udid: String) -> String? {
+                if let model = determineModel(from: name, isScreenDevice: false) {
+                    return model
+                }
+                if iosPrefixes.contains(where: { udid.hasPrefix($0) }) {
+                    return determineModel(from: name, isScreenDevice: true)
+                }
+                return nil
+            }
+
+            // Method 0: Try the default muxed device (as suggested by Apple forums)
+            if let defaultMuxed = AVCaptureDevice.default(for: .muxed) {
+                fputs(
+                    "[DeviceEnumerator] Default muxed device: \(defaultMuxed.localizedName) [\(defaultMuxed.uniqueID)]\n",
+                    stderr
+                )
+                let name = defaultMuxed.localizedName
+                let udid = defaultMuxed.uniqueID
+                if !isContinuityCameraUniqueID(udid),
+                   isKnownIOSDevice(name: name, udid: udid),
+                   let model = resolveModel(name: name, udid: udid) {
                     fputs("[DeviceEnumerator] Adding default muxed device: \(name) [\(udid)] as \(model)\n", stderr)
+                    seenUDIDs.insert(udid)
+                    devices.append(IOSDeviceInfo(udid: udid, name: name, model: model))
+                }
+            } else if attempt == 0 {
+                fputs("[DeviceEnumerator] No default muxed device found\n", stderr)
+            }
+
+            for device in muxedDiscovery.devices {
+                let name = device.localizedName
+                let udid = device.uniqueID
+
+                if isContinuityCameraUniqueID(udid) {
+                    continue
+                }
+
+                if seenUDIDs.contains(udid) {
+                    continue
+                }
+
+                guard isKnownIOSDevice(name: name, udid: udid),
+                      let model = resolveModel(name: name, udid: udid) else {
+                    continue
+                }
+
+                seenUDIDs.insert(udid)
+                fputs("[DeviceEnumerator] Adding muxed screen device: \(name) [\(udid)] as \(model)\n", stderr)
+                devices.append(IOSDeviceInfo(udid: udid, name: name, model: model))
+            }
+
+            for device in videoDiscovery.devices {
+                let name = device.localizedName
+                let udid = device.uniqueID
+
+                if seenUDIDs.contains(udid) {
+                    continue
+                }
+
+                if isContinuityCameraUniqueID(udid) {
+                    continue
+                }
+
+                guard isKnownIOSDevice(name: name, udid: udid),
+                      let model = resolveModel(name: name, udid: udid) else {
+                    continue
+                }
+
+                seenUDIDs.insert(udid)
+                fputs("[DeviceEnumerator] Adding video screen device: \(name) [\(udid)] as \(model)\n", stderr)
+                devices.append(IOSDeviceInfo(udid: udid, name: name, model: model))
+            }
+
+            for device in allDiscovery.devices {
+                let name = device.localizedName
+                let udid = device.uniqueID
+
+                if seenUDIDs.contains(udid) {
+                    continue
+                }
+
+                if isContinuityCameraUniqueID(udid) {
+                    continue
+                }
+
+                guard device.hasMediaType(.video) || device.hasMediaType(.muxed) else {
+                    continue
+                }
+
+                guard isKnownIOSDevice(name: name, udid: udid),
+                      let model = resolveModel(name: name, udid: udid) else {
+                    continue
+                }
+
+                seenUDIDs.insert(udid)
+                fputs("[DeviceEnumerator] Adding screen device: \(name) [\(udid)] as \(model)\n", stderr)
+                devices.append(IOSDeviceInfo(udid: udid, name: name, model: model))
+            }
+
+            // If we saw Continuity Camera devices, try to resolve a related screen device by uniqueID.
+            for prefix in iosPrefixes {
+                if let screenDevice = resolveScreenDevice(forUDIDPrefix: prefix) {
+                    let name = screenDevice.localizedName
+                    let udid = screenDevice.uniqueID
+                    if seenUDIDs.contains(udid) {
+                        continue
+                    }
+
+                    // Only include if it looks like iOS (by prefix).
+                    guard let model = determineModel(from: name, isScreenDevice: true) else {
+                        continue
+                    }
+
+                    fputs(
+                        "[DeviceEnumerator] Resolved screen device from prefix: \(name) [\(udid)] as \(model)\n",
+                        stderr
+                    )
+                    seenUDIDs.insert(udid)
                     devices.append(IOSDeviceInfo(udid: udid, name: name, model: model))
                 }
             }
-        } else {
-            fputs("[DeviceEnumerator] No default muxed device found\n", stderr)
+
+            if !devices.isEmpty {
+                return devices
+            }
         }
 
-        // Try multiple discovery methods to find iOS screen capture devices
-        // Method 1: Look for muxed (video+audio) devices - typical for screen capture
-        let muxedDiscovery = AVCaptureDevice.DiscoverySession(
-            deviceTypes: [.external],
-            mediaType: .muxed,
-            position: .unspecified
-        )
+        fputs("\n[DeviceEnumerator] No screen capture devices found.\n", stderr)
+        return []
+    }
 
-        fputs("[DeviceEnumerator] Muxed devices found: \(muxedDiscovery.devices.count)\n", stderr)
-        for device in muxedDiscovery.devices {
-            fputs("  - [muxed] \(device.localizedName) [\(device.uniqueID)]\n", stderr)
-        }
+    /// Get Continuity Camera devices (explicit camera capture mode)
+    static func getIOSCameraDevices() -> [IOSDeviceInfo] {
+        enableScreenCaptureDevices()
 
-        // Method 2: Also check video-only devices
+        fputs("\n[DeviceEnumerator] Listing iOS Continuity Camera devices...\n", stderr)
+
+        var devices: [IOSDeviceInfo] = []
+
+        // Group devices by UDID prefix so we only list one camera per iOS device.
+        var devicesByPrefix: [String: [AVCaptureDevice]] = [:]
+
         let videoDiscovery = AVCaptureDevice.DiscoverySession(
-            deviceTypes: [.external],
+            deviceTypes: discoveryDeviceTypes,
             mediaType: .video,
             position: .unspecified
         )
 
-        fputs("[DeviceEnumerator] Video devices found: \(videoDiscovery.devices.count)\n", stderr)
         for device in videoDiscovery.devices {
-            fputs("  - [video] \(device.localizedName) [\(device.uniqueID)]\n", stderr)
-        }
+            let lowerName = device.localizedName.lowercased()
 
-        // Method 3: Check all external devices with nil mediaType (shows everything)
-        let allExternalDiscovery = AVCaptureDevice.DiscoverySession(
-            deviceTypes: [.external],
-            mediaType: nil,
-            position: .unspecified
-        )
-
-        fputs("[DeviceEnumerator] All external devices (nil mediaType): \(allExternalDiscovery.devices.count)\n", stderr)
-        for device in allExternalDiscovery.devices {
-            let hasVideo = device.hasMediaType(.video)
-            let hasAudio = device.hasMediaType(.audio)
-            let hasMuxed = device.hasMediaType(.muxed)
-            fputs("  - [all] \(device.localizedName) [\(device.uniqueID)] video=\(hasVideo) audio=\(hasAudio) muxed=\(hasMuxed)\n", stderr)
-        }
-
-        // Combine both, preferring muxed devices (screen) over video-only (camera)
-        var seenUDIDs = Set<String>()
-
-        // First add muxed devices (these are typically screens)
-        for device in muxedDiscovery.devices {
-            let name = device.localizedName
-            let udid = device.uniqueID
-
-            // Skip camera devices
-            if name.lowercased().contains("camera") {
-                fputs("[DeviceEnumerator] Skipping camera device: \(name)\n", stderr)
+            // Skip Mac cameras.
+            if lowerName.contains("facetime") {
                 continue
             }
 
-            seenUDIDs.insert(udid)
-
-            // This is a muxed (video+audio) non-camera device - likely a screen
-            if let model = determineModel(from: name, isScreenDevice: true) {
-                fputs("[DeviceEnumerator] Adding muxed screen device: \(name) [\(udid)] as \(model)\n", stderr)
-                devices.append(IOSDeviceInfo(udid: udid, name: name, model: model))
+            // Only include Continuity Camera / Desk View camera sources.
+            if device.deviceType != .continuityCamera && device.deviceType != .deskViewCamera && !isContinuityCameraUniqueID(device.uniqueID) {
+                continue
             }
+
+            guard let prefix = getUDIDPrefix(from: device.uniqueID) else {
+                continue
+            }
+
+            devicesByPrefix[prefix, default: []].append(device)
         }
 
-        // Then add video devices we haven't seen yet (that aren't cameras)
-        for device in videoDiscovery.devices {
-            let name = device.localizedName
-            let udid = device.uniqueID
-
-            // Skip if we already have this device or if it's a camera
-            if seenUDIDs.contains(udid) || name.lowercased().contains("camera") {
-                if !seenUDIDs.contains(udid) {
-                    fputs("[DeviceEnumerator] Skipping camera device: \(name)\n", stderr)
+        for (_, candidates) in devicesByPrefix {
+            // Prefer the main camera (suffix 00000001) over other variants (e.g., Desk View 00000002).
+            let chosen = candidates.sorted { a, b in
+                let aIsMain = a.uniqueID.hasSuffix("00000001")
+                let bIsMain = b.uniqueID.hasSuffix("00000001")
+                if aIsMain != bIsMain {
+                    return aIsMain
                 }
+                return a.localizedName < b.localizedName
+            }.first
+
+            guard let chosen else {
                 continue
             }
 
-            // This is a video-only non-camera device - might be a screen
-            if let model = determineModel(from: name, isScreenDevice: true) {
-                fputs("[DeviceEnumerator] Adding video screen device: \(name) [\(udid)] as \(model)\n", stderr)
-                devices.append(IOSDeviceInfo(udid: udid, name: name, model: model))
-            }
+            let name = chosen.localizedName
+            let udid = chosen.uniqueID
+            let model = determineModel(from: name, isScreenDevice: true) ?? "iOS Device"
+            fputs("[DeviceEnumerator] Adding camera device: \(name) [\(udid)] as \(model)\n", stderr)
+            devices.append(IOSDeviceInfo(udid: udid, name: name, model: model, isCameraFallback: false))
         }
 
-        // Finally, check all external devices in case we missed any screen devices
-        for device in allExternalDiscovery.devices {
-            let name = device.localizedName
-            let udid = device.uniqueID
-
-            // Skip if already seen, is a camera, or doesn't have video/muxed capability
-            if seenUDIDs.contains(udid) {
-                continue
-            }
-
-            if name.lowercased().contains("camera") {
-                continue
-            }
-
-            // Must have video or muxed capability
-            guard device.hasMediaType(.video) || device.hasMediaType(.muxed) else {
-                continue
-            }
-
-            seenUDIDs.insert(udid)
-
-            if let model = determineModel(from: name, isScreenDevice: true) {
-                fputs("[DeviceEnumerator] Adding external screen device: \(name) [\(udid)] as \(model)\n", stderr)
-                devices.append(IOSDeviceInfo(udid: udid, name: name, model: model))
-            }
-        }
-
-        // If no screen devices found, try to detect iOS devices via Continuity Camera
-        if devices.isEmpty {
-            fputs("\n[DeviceEnumerator] No screen capture devices found, trying Continuity Camera fallback...\n", stderr)
-            devices = getIOSDevicesFromContinuityCamera()
-        }
-
+        devices.sort { $0.name < $1.name }
         return devices
     }
 
@@ -368,7 +659,7 @@ class DeviceEnumerator {
 
         // Check video devices for Continuity Camera
         let videoDiscovery = AVCaptureDevice.DiscoverySession(
-            deviceTypes: [.external],
+            deviceTypes: discoveryDeviceTypes,
             mediaType: .video,
             position: .unspecified
         )
@@ -376,20 +667,63 @@ class DeviceEnumerator {
         for device in videoDiscovery.devices {
             let name = device.localizedName
 
-            // Look for camera devices that indicate an iOS device is connected
-            if name.lowercased().contains("camera") && !name.lowercased().contains("facetime") {
-                // Check if it's an iOS device camera (has iPhone/iPad in name)
-                if let model = determineModel(from: name, isScreenDevice: false) {
-                    let baseName = extractBaseDeviceName(from: name)
-                    if let prefix = getUDIDPrefix(from: device.uniqueID), !seenPrefixes.contains(prefix) {
-                        seenPrefixes.insert(prefix)
-                        // Use the prefix + "00000000" as a synthetic UDID for the screen device
-                        let syntheticUDID = prefix + "00000000"
-                        fputs("[DeviceEnumerator] Found iOS device via Continuity Camera: \(baseName) [synthetic UDID: \(syntheticUDID)]\n", stderr)
-                        fputs("[DeviceEnumerator] WARNING: Screen capture may not be available. Using camera device for detection.\n", stderr)
-                        devices.append(IOSDeviceInfo(udid: syntheticUDID, name: baseName, model: model, isCameraFallback: true))
-                    }
-                }
+            let lowerName = name.lowercased()
+
+            // Skip FaceTime cameras.
+            if lowerName.contains("facetime") {
+                continue
+            }
+
+            // Prefer explicit Continuity Camera/Desk View types; allow name-based match for iPhone/iPad cameras.
+            let isContinuityType = device.deviceType == .continuityCamera || device.deviceType == .deskViewCamera
+            let isIOSByName = determineModel(from: name, isScreenDevice: false) != nil
+            let isCameraName = lowerName.contains("camera")
+
+            guard isContinuityType || (isCameraName && isIOSByName) else {
+                continue
+            }
+
+            guard let prefix = getUDIDPrefix(from: device.uniqueID), !seenPrefixes.contains(prefix) else {
+                continue
+            }
+
+            seenPrefixes.insert(prefix)
+
+            let baseName = extractBaseDeviceName(from: name)
+            let model = determineModel(from: baseName, isScreenDevice: true) ?? "iOS Device"
+
+            if let screenDevice = resolveScreenDevice(forUDIDPrefix: prefix) {
+                fputs(
+                    "[DeviceEnumerator] Resolved screen device from Continuity Camera prefix: \(baseName) [\(screenDevice.uniqueID)]\n",
+                    stderr
+                )
+                devices.append(
+                    IOSDeviceInfo(
+                        udid: screenDevice.uniqueID,
+                        name: baseName,
+                        model: model,
+                        isCameraFallback: false
+                    )
+                )
+            } else {
+                // Use the prefix + "00000000" as a synthetic UDID for the screen device
+                let syntheticUDID = prefix + "00000000"
+                fputs(
+                    "[DeviceEnumerator] Found iOS device via Continuity Camera: \(baseName) [synthetic UDID: \(syntheticUDID)]\n",
+                    stderr
+                )
+                fputs(
+                    "[DeviceEnumerator] WARNING: Screen capture may not be available. Using camera device for detection.\n",
+                    stderr
+                )
+                devices.append(
+                    IOSDeviceInfo(
+                        udid: syntheticUDID,
+                        name: baseName,
+                        model: model,
+                        isCameraFallback: true
+                    )
+                )
             }
         }
 
@@ -406,14 +740,14 @@ class DeviceEnumerator {
 
         // Try muxed devices first (screen capture)
         let muxedDiscovery = AVCaptureDevice.DiscoverySession(
-            deviceTypes: [.external],
+            deviceTypes: discoveryDeviceTypes,
             mediaType: .muxed,
             position: .unspecified
         )
 
         // Then video devices
         let videoDiscovery = AVCaptureDevice.DiscoverySession(
-            deviceTypes: [.external],
+            deviceTypes: discoveryDeviceTypes,
             mediaType: .video,
             position: .unspecified
         )
@@ -424,16 +758,16 @@ class DeviceEnumerator {
 
         for device in muxedDiscovery.devices {
             let isCamera = device.localizedName.lowercased().contains("camera")
-            fputs("  - [muxed] \(device.localizedName) [\(device.uniqueID)] \(isCamera ? "(camera)" : "(screen)")\n", stderr)
+            fputs("  - [muxed] \(device.localizedName) [\(device.uniqueID)] type=\(device.deviceType.rawValue) \(isCamera ? "(camera)" : "(screen)")\n", stderr)
         }
         for device in videoDiscovery.devices {
             let isCamera = device.localizedName.lowercased().contains("camera")
-            fputs("  - [video] \(device.localizedName) [\(device.uniqueID)] \(isCamera ? "(camera)" : "(screen)")\n", stderr)
+            fputs("  - [video] \(device.localizedName) [\(device.uniqueID)] type=\(device.deviceType.rawValue) \(isCamera ? "(camera)" : "(screen)")\n", stderr)
         }
 
         // First try to find in muxed devices (preferred for screen capture)
         let muxedDevice = muxedDiscovery.devices.first { device in
-            device.uniqueID == udid && !device.localizedName.lowercased().contains("camera")
+            device.uniqueID == udid
         }
 
         if let device = muxedDevice {
@@ -443,12 +777,21 @@ class DeviceEnumerator {
 
         // Fall back to video devices (non-camera)
         let videoDevice = videoDiscovery.devices.first { device in
-            device.uniqueID == udid && !device.localizedName.lowercased().contains("camera")
+            device.uniqueID == udid
         }
 
         if let device = videoDevice {
             fputs("[DeviceEnumerator] Found video screen device: \(device.localizedName)\n", stderr)
             return device
+        }
+
+        // As a fallback, try to create the device directly by uniqueID.
+        if let directDevice = AVCaptureDevice(uniqueID: udid) {
+            fputs(
+                "[DeviceEnumerator] Found device via AVCaptureDevice(uniqueID:): \(directDevice.localizedName)\n",
+                stderr
+            )
+            return directDevice
         }
 
         // Check if this is a synthetic UDID from Continuity Camera fallback
@@ -457,6 +800,15 @@ class DeviceEnumerator {
             let prefix = String(udid.dropLast(8))
             fputs("[DeviceEnumerator] UDID appears to be synthetic (from Continuity Camera fallback)\n", stderr)
             fputs("[DeviceEnumerator] Looking for camera device with prefix: \(prefix)\n", stderr)
+
+            // Try to resolve an actual screen device for this prefix (some systems use a different suffix).
+            if let screenDevice = resolveScreenDevice(forUDIDPrefix: prefix) {
+                fputs(
+                    "[DeviceEnumerator] Resolved screen device from synthetic prefix: \(screenDevice.localizedName) [\(screenDevice.uniqueID)]\n",
+                    stderr
+                )
+                return screenDevice
+            }
 
             // Find the camera device with matching prefix
             // Prefer "...00000001" (main camera) over "...00000002" (desk view)

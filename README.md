@@ -102,6 +102,14 @@ After setup, run **"Start iOS Input Control"** to launch WDA, then enable it in 
 
 For manual setup, see [iOS Input Control Guide](docs/ios-input-control-research.md).
 
+### iOS Preview Tool
+
+- **Purpose**: Quickly validate CoreMediaIO screen/camera capture outside VS Code (no extension reload).
+- **List sources**: `npm run ios:preview -- list --video-source display` (or `camera`)
+- **Preview**: `npm run ios:preview -- preview --video-source display`, choose the index (default 0), and press `q` to quit.
+- You can also pass a UDID directly: `npm run ios:preview -- preview <UDID> --video-source display`.
+- Grants Screen Recording permission to your terminal before running—macOS will prompt the first time.
+
 ## Commands
 
 | Command                               | Description                 |

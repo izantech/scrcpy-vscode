@@ -6,9 +6,9 @@ import AppKit
 
 /// Delegate protocol for receiving video frames
 protocol ScreenCaptureDelegate: AnyObject {
-    func screenCapture(_ capture: ScreenCapture, didOutputVideoFrame frame: CMSampleBuffer)
-    func screenCapture(_ capture: ScreenCapture, didReceiveError error: Error)
-    func screenCapture(_ capture: ScreenCapture, didStart width: Int, height: Int)
+    func screenCapture(_ capture: AnyObject, didOutputVideoFrame frame: CMSampleBuffer)
+    func screenCapture(_ capture: AnyObject, didReceiveError error: Error)
+    func screenCapture(_ capture: AnyObject, didStart width: Int, height: Int)
 }
 
 /// Manages screen capture from iOS devices via AVCaptureSession
@@ -64,8 +64,8 @@ class ScreenCapture: NSObject {
         session.addOutput(videoOutput)
         self.videoOutput = videoOutput
 
-        // Configure format to get highest resolution
-        try configureFormat()
+        // Configure format to get highest resolution (best-effort)
+        configureFormat()
 
         session.commitConfiguration()
 
@@ -113,10 +113,18 @@ class ScreenCapture: NSObject {
     }
 
     /// Configure the capture format for best quality
-    private func configureFormat() throws {
+    private func configureFormat() {
         // Find the best format (highest resolution)
         var bestFormat: AVCaptureDevice.Format?
         var bestWidth: Int32 = 0
+
+        if device.formats.isEmpty {
+            fputs(
+                "[ScreenCapture] Device reports no formats. Using default capture configuration.\n",
+                stderr
+            )
+            return
+        }
 
         for format in device.formats {
             let dimensions = CMVideoFormatDescriptionGetDimensions(format.formatDescription)
@@ -127,12 +135,21 @@ class ScreenCapture: NSObject {
         }
 
         guard let format = bestFormat else {
-            throw ScreenCaptureError.noSuitableFormat
+            fputs("[ScreenCapture] No suitable format found. Using default capture configuration.\n", stderr)
+            return
         }
 
-        try device.lockForConfiguration()
-        device.activeFormat = format
-        device.unlockForConfiguration()
+        do {
+            try device.lockForConfiguration()
+            device.activeFormat = format
+            device.unlockForConfiguration()
+        } catch {
+            fputs(
+                "[ScreenCapture] Failed to lock device for configuration (\(error)). Using default capture configuration.\n",
+                stderr
+            )
+            return
+        }
 
         let dimensions = CMVideoFormatDescriptionGetDimensions(format.formatDescription)
         self.videoWidth = Int(dimensions.width)
@@ -191,7 +208,6 @@ extension ScreenCapture: AVCaptureVideoDataOutputSampleBufferDelegate {
 enum ScreenCaptureError: Error, LocalizedError {
     case cannotAddInput
     case cannotAddOutput
-    case noSuitableFormat
     case cannotConvertToPNG
 
     var errorDescription: String? {
@@ -200,8 +216,6 @@ enum ScreenCaptureError: Error, LocalizedError {
             return "Cannot add video input to capture session"
         case .cannotAddOutput:
             return "Cannot add video output to capture session"
-        case .noSuitableFormat:
-            return "No suitable video format found"
         case .cannotConvertToPNG:
             return "Cannot convert frame to PNG"
         }

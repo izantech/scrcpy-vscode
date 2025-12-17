@@ -24,6 +24,7 @@ BOLD='\033[1m'
 WDA_DIR="$HOME/.scrcpy-vscode/WebDriverAgent"
 WDA_REPO="https://github.com/appium/WebDriverAgent.git"
 NEEDS_FIRST_TIME_SETUP=false
+IOS_HELPER_BIN=""
 
 print_header() {
     echo ""
@@ -151,6 +152,16 @@ build_ios_helper() {
     script_dir="$(cd "$(dirname "$0")" && pwd)"
     local project_root
     project_root="$(dirname "$script_dir")"
+
+    # Prefer the bundled binary (packaged extension / development build output)
+    local bundled_helper="$project_root/dist/ios-helper/ios-helper"
+    if [[ -f "$bundled_helper" ]]; then
+        chmod +x "$bundled_helper" 2>/dev/null || true
+        IOS_HELPER_BIN="$bundled_helper"
+        print_success "ios-helper ready"
+        return 0
+    fi
+
     local helper_dir="$project_root/native/ios-helper"
     local build_dir="$helper_dir/.build"
 
@@ -158,6 +169,7 @@ build_ios_helper() {
     for arch in "arm64-apple-macosx" "x86_64-apple-macosx" ""; do
         local check_path="$build_dir/${arch:+$arch/}release/ios-helper"
         if [[ -f "$check_path" ]]; then
+            IOS_HELPER_BIN="$check_path"
             print_success "ios-helper ready"
             return 0
         fi
@@ -179,10 +191,25 @@ build_ios_helper() {
         fi
 
         print_info "Building ios-helper..."
-        cd "$helper_dir"
+        cd "$helper_dir" || exit 1
 
         if swift build -c release > /dev/null 2>&1; then
-            print_success "ios-helper built"
+            # Locate built artifact
+            local built_path=""
+            for arch in "arm64-apple-macosx" "x86_64-apple-macosx" ""; do
+                local candidate="$build_dir/${arch:+$arch/}release/ios-helper"
+                if [[ -f "$candidate" ]]; then
+                    built_path="$candidate"
+                    break
+                fi
+            done
+
+            if [[ -n "$built_path" ]]; then
+                IOS_HELPER_BIN="$built_path"
+                print_success "ios-helper built"
+            else
+                print_warning "ios-helper built, but binary not found in $build_dir"
+            fi
             break
         else
             print_error "Failed to build ios-helper"
@@ -194,6 +221,28 @@ build_ios_helper() {
             wait_for_retry
         fi
     done
+}
+
+run_ios_helper_if_not_running() {
+    if [[ -z "$IOS_HELPER_BIN" || ! -f "$IOS_HELPER_BIN" ]]; then
+        return 0
+    fi
+
+    print_step "Checking ios-helper process..."
+
+    # If VS Code is already mirroring an iOS device, ios-helper will be running.
+    # Don't start another instance to avoid contention for the capture device.
+    if pgrep -f "ios-helper.*stream" &> /dev/null; then
+        print_success "ios-helper already running"
+        return 0
+    fi
+
+    print_info "ios-helper not running. Running a quick self-test..."
+    chmod +x "$IOS_HELPER_BIN" 2>/dev/null || true
+
+    # `list` writes a binary protocol to stdout; discard output to keep the terminal readable.
+    "$IOS_HELPER_BIN" list > /dev/null 2>/dev/null || true
+    print_success "ios-helper OK"
 }
 
 check_ios_device() {
@@ -262,7 +311,7 @@ setup_wda_repo() {
 check_wda_built() {
     print_step "Checking WDA build status..."
 
-    cd "$WDA_DIR"
+    cd "$WDA_DIR" || exit 1
 
     # Look for build products in DerivedData
     local derived_data="$HOME/Library/Developer/Xcode/DerivedData"
@@ -309,14 +358,14 @@ configure_signing() {
     echo "     • Same steps as above"
     echo ""
 
-    read -p "Press Enter once BOTH targets are configured..."
+    read -r -p "Press Enter once BOTH targets are configured..."
 }
 
 build_wda() {
     while true; do
         print_step "Building WebDriverAgent..."
 
-        cd "$WDA_DIR"
+        cd "$WDA_DIR" || exit 1
 
         print_info "This may take a minute..."
         echo ""
@@ -378,7 +427,7 @@ start_wda() {
     while true; do
         print_step "Starting WebDriverAgent..."
 
-        cd "$WDA_DIR"
+        cd "$WDA_DIR" || exit 1
 
         # Kill any existing sessions
         pkill -f "iproxy.*8100" 2>/dev/null || true
@@ -419,7 +468,7 @@ start_wda() {
         cleanup() {
             echo ""
             print_info "Stopping WebDriverAgent..."
-            kill $XCODE_PID $IPROXY_PID 2>/dev/null
+            kill "$XCODE_PID" "$IPROXY_PID" 2>/dev/null
             pkill -f "iproxy.*8100" 2>/dev/null
             pkill -f "xcodebuild.*WebDriverAgent" 2>/dev/null
             exit 0
@@ -440,7 +489,7 @@ start_wda() {
             break
         else
             print_error "Failed to connect to WebDriverAgent"
-            kill $XCODE_PID $IPROXY_PID 2>/dev/null
+            kill "$XCODE_PID" "$IPROXY_PID" 2>/dev/null
             echo ""
             print_info "How to fix:"
             print_info "  1. Check your iOS device - you may need to trust the developer"
@@ -462,6 +511,7 @@ main() {
     check_iproxy
     build_ios_helper
     check_ios_device
+    run_ios_helper_if_not_running
     setup_wda_repo
 
     if ! check_wda_built; then

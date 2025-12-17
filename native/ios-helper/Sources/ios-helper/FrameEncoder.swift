@@ -57,11 +57,11 @@ class FrameEncoder {
             throw FrameEncoderError.failedToConfigureSession
         }
 
-        // Profile: Baseline for compatibility
+        // Profile: Baseline for compatibility (matches scrcpy/webview expectations)
         status = VTSessionSetProperty(
             session,
             key: kVTCompressionPropertyKey_ProfileLevel,
-            value: kVTProfileLevel_H264_High_AutoLevel
+            value: kVTProfileLevel_H264_Baseline_AutoLevel
         )
 
         // Allow frame reordering (B-frames)
@@ -239,12 +239,13 @@ class FrameEncoder {
         // AVCC format: each NAL unit is prefixed with its length (4 bytes big-endian)
         while offset < length - 4 {
             // Read NAL unit length (4 bytes big-endian)
-            let nalLength = Int(
-                UInt32(dataPointer[offset]) << 24 |
-                UInt32(dataPointer[offset + 1]) << 16 |
-                UInt32(dataPointer[offset + 2]) << 8 |
-                UInt32(dataPointer[offset + 3])
-            )
+            // CMBlockBufferGetDataPointer returns an Int8 pointer, so we must use the bitPattern
+            // conversion to avoid traps on bytes >= 0x80.
+            let b0 = UInt32(UInt8(bitPattern: dataPointer[offset]))
+            let b1 = UInt32(UInt8(bitPattern: dataPointer[offset + 1]))
+            let b2 = UInt32(UInt8(bitPattern: dataPointer[offset + 2]))
+            let b3 = UInt32(UInt8(bitPattern: dataPointer[offset + 3]))
+            let nalLength = Int((b0 << 24) | (b1 << 16) | (b2 << 8) | b3)
 
             offset += 4
 
