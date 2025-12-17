@@ -53,6 +53,9 @@ declare global {
       fontSize: string;
       displaySize: string;
       showLayoutBounds: string;
+      appearance: string;
+      accessibility: string;
+      developer: string;
       loadingSettings: string;
       small: string;
       default: string;
@@ -1924,19 +1927,52 @@ function handleDeviceSettingApplied(setting: string, success: boolean, error?: s
 }
 
 /**
- * Create a settings row element
+ * Create a settings row element with icon
  */
-function createSettingsRow(label: string, controlElement: HTMLElement): HTMLElement {
+function createSettingsRow(
+  label: string,
+  controlElement: HTMLElement,
+  iconSvg: string,
+  iconClass: string
+): HTMLElement {
   const row = document.createElement('div');
-  row.className = 'settings-row';
+  const isToggle = controlElement.classList.contains('toggle-switch');
+  row.className = isToggle ? 'settings-row clickable' : 'settings-row';
+
+  const left = document.createElement('div');
+  left.className = 'settings-row-left';
+
+  const iconDiv = document.createElement('div');
+  iconDiv.className = `settings-row-icon ${iconClass}`;
+  iconDiv.innerHTML = iconSvg;
+  left.appendChild(iconDiv);
 
   const labelSpan = document.createElement('span');
   labelSpan.className = 'settings-row-label';
   labelSpan.textContent = label;
-  row.appendChild(labelSpan);
+  left.appendChild(labelSpan);
 
+  row.appendChild(left);
   row.appendChild(controlElement);
   return row;
+}
+
+/**
+ * Create a settings group with header
+ */
+function createSettingsGroup(headerText: string, headerIcon: string): HTMLElement {
+  const group = document.createElement('div');
+  group.className = 'settings-group';
+
+  const header = document.createElement('div');
+  header.className = 'settings-group-header';
+  header.innerHTML = headerIcon;
+  const headerSpan = document.createElement('span');
+  headerSpan.textContent = headerText;
+  header.appendChild(headerSpan);
+  group.appendChild(header);
+
+  return group;
 }
 
 /**
@@ -2053,6 +2089,45 @@ function renderDeviceSettingsForm(settings: DeviceUISettings, disabled: boolean)
       ? Math.round((settings.displayDensity / settings.defaultDensity) * 100)
       : 100;
 
+  // SVG icons for settings
+  const icons = {
+    // Dark mode - moon
+    darkMode:
+      '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.75,4.09L15.22,6.03L16.13,9.09L13.5,7.28L10.87,9.09L11.78,6.03L9.25,4.09L12.44,4L13.5,1L14.56,4L17.75,4.09M21.25,11L19.61,12.25L20.2,14.23L18.5,13.06L16.8,14.23L17.39,12.25L15.75,11L17.81,10.95L18.5,9L19.19,10.95L21.25,11M18.97,15.95C19.8,15.87 20.69,17.05 20.16,17.8C19.84,18.25 19.5,18.67 19.08,19.07C15.17,23 8.84,23 4.94,19.07C1.03,15.17 1.03,8.83 4.94,4.93C5.34,4.53 5.76,4.17 6.21,3.85C6.96,3.32 8.14,4.21 8.06,5.04C7.79,7.9 8.75,10.87 10.95,13.06C13.14,15.26 16.1,16.22 18.97,15.95Z"/></svg>',
+    // Navigation - concentric circles
+    nav: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,4A8,8 0 0,1 20,12A8,8 0 0,1 12,20A8,8 0 0,1 4,12A8,8 0 0,1 12,4M12,6A6,6 0 0,0 6,12A6,6 0 0,0 12,18A6,6 0 0,0 18,12A6,6 0 0,0 12,6M12,8A4,4 0 0,1 16,12A4,4 0 0,1 12,16A4,4 0 0,1 8,12A4,4 0 0,1 12,8Z"/></svg>',
+    // TalkBack - person with sound waves
+    talkback:
+      '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12,2A2,2 0 0,1 14,4A2,2 0 0,1 12,6A2,2 0 0,1 10,4A2,2 0 0,1 12,2M10.5,7H13.5A2,2 0 0,1 15.5,9V14.5H14V22H10V14.5H8.5V9A2,2 0 0,1 10.5,7M20,17L22,15V19L20,17M20,7L22,9V5L20,7M20,12L22,10V14L20,12Z"/></svg>',
+    // Select to Speak - text with speaker
+    selectToSpeak:
+      '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M9,5A4,4 0 0,1 13,9A4,4 0 0,1 9,13A4,4 0 0,1 5,9A4,4 0 0,1 9,5M9,15C11.67,15 17,16.34 17,19V21H1V19C1,16.34 6.33,15 9,15M16.76,5.36C18.78,7.56 18.78,10.61 16.76,12.63L15.08,10.94C15.92,9.76 15.92,8.23 15.08,7.05L16.76,5.36M20.07,2C24,6.05 23.97,12.11 20.07,16L18.44,14.37C21.21,11.19 21.21,6.65 18.44,3.63L20.07,2Z"/></svg>',
+    // Font size - text resize
+    fontSize:
+      '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M2,4V7H7V19H10V7H15V4H2M21,9H12V12H15V19H18V12H21V9Z"/></svg>',
+    // Display size - screen resize
+    displaySize:
+      '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M21,17H3V5H21M21,3H3A2,2 0 0,0 1,5V17A2,2 0 0,0 3,19H8V21H16V19H21A2,2 0 0,0 23,17V5A2,2 0 0,0 21,3M5,7H9V9H7V11H5V7M19,11H17V9H15V7H19V11Z"/></svg>',
+    // Layout bounds - grid layout
+    layoutBounds:
+      '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M3,3H9V9H3V3M3,15H9V21H3V15M15,3H21V9H15V3M15,15H21V21H15V15M5,5V7H7V5H5M5,17V19H7V17H5M17,5V7H19V5H17M17,17V19H19V17H17M11,5H13V9H11V5M11,11H13V13H11V11M11,15H13V19H11V15M5,11H9V13H5V11M15,11H19V13H15V11Z"/></svg>',
+  };
+
+  const groupIcons = {
+    // Appearance - palette/theme
+    appearance:
+      '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.5,12A1.5,1.5 0 0,1 16,10.5A1.5,1.5 0 0,1 17.5,9A1.5,1.5 0 0,1 19,10.5A1.5,1.5 0 0,1 17.5,12M14.5,8A1.5,1.5 0 0,1 13,6.5A1.5,1.5 0 0,1 14.5,5A1.5,1.5 0 0,1 16,6.5A1.5,1.5 0 0,1 14.5,8M9.5,8A1.5,1.5 0 0,1 8,6.5A1.5,1.5 0 0,1 9.5,5A1.5,1.5 0 0,1 11,6.5A1.5,1.5 0 0,1 9.5,8M6.5,12A1.5,1.5 0 0,1 5,10.5A1.5,1.5 0 0,1 6.5,9A1.5,1.5 0 0,1 8,10.5A1.5,1.5 0 0,1 6.5,12M12,3A9,9 0 0,0 3,12A9,9 0 0,0 12,21A1.5,1.5 0 0,0 13.5,19.5C13.5,19.11 13.35,18.76 13.11,18.5C12.88,18.23 12.73,17.88 12.73,17.5A1.5,1.5 0 0,1 14.23,16H16A5,5 0 0,0 21,11C21,6.58 16.97,3 12,3Z"/></svg>',
+    // Accessibility - universal symbol
+    accessibility:
+      '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12,2A2,2 0 0,1 14,4A2,2 0 0,1 12,6A2,2 0 0,1 10,4A2,2 0 0,1 12,2M21,9H15V22H13V16H11V22H9V9H3V7H21V9Z"/></svg>',
+    // Developer - code brackets
+    developer:
+      '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8,3A2,2 0 0,0 6,5V9A2,2 0 0,1 4,11H3V13H4A2,2 0 0,1 6,15V19A2,2 0 0,0 8,21H10V19H8V14A2,2 0 0,0 6,12A2,2 0 0,0 8,10V5H10V3M16,3A2,2 0 0,1 18,5V9A2,2 0 0,0 20,11H21V13H20A2,2 0 0,0 18,15V19A2,2 0 0,1 16,21H14V19H16V14A2,2 0 0,1 18,12A2,2 0 0,1 16,10V5H14V3H16Z"/></svg>',
+  };
+
+  // === APPEARANCE GROUP ===
+  const appearanceGroup = createSettingsGroup(window.l10n.appearance, groupIcons.appearance);
+
   // Dark Mode
   const darkModeControl = createSegmentedControl(
     'darkMode',
@@ -2064,7 +2139,9 @@ function renderDeviceSettingsForm(settings: DeviceUISettings, disabled: boolean)
     settings.darkMode,
     disabled
   );
-  deviceSettingsContent.appendChild(createSettingsRow(window.l10n.darkMode, darkModeControl));
+  appearanceGroup.appendChild(
+    createSettingsRow(window.l10n.darkMode, darkModeControl, icons.darkMode, 'icon-display')
+  );
 
   // Navigation Mode - only show available modes
   const allNavOptions = [
@@ -2080,20 +2157,8 @@ function renderDeviceSettingsForm(settings: DeviceUISettings, disabled: boolean)
     settings.navigationMode,
     disabled
   );
-  deviceSettingsContent.appendChild(createSettingsRow(window.l10n.navigationMode, navModeControl));
-
-  // TalkBack
-  const talkbackToggle = createToggleSwitch('talkbackEnabled', settings.talkbackEnabled, disabled);
-  deviceSettingsContent.appendChild(createSettingsRow(window.l10n.talkback, talkbackToggle));
-
-  // Select to Speak
-  const selectToSpeakToggle = createToggleSwitch(
-    'selectToSpeakEnabled',
-    settings.selectToSpeakEnabled,
-    disabled
-  );
-  deviceSettingsContent.appendChild(
-    createSettingsRow(window.l10n.selectToSpeak, selectToSpeakToggle)
+  appearanceGroup.appendChild(
+    createSettingsRow(window.l10n.navigationMode, navModeControl, icons.nav, 'icon-nav')
   );
 
   // Font Size
@@ -2106,7 +2171,9 @@ function renderDeviceSettingsForm(settings: DeviceUISettings, disabled: boolean)
     getFontScaleLabel(settings.fontScale),
     disabled
   );
-  deviceSettingsContent.appendChild(createSettingsRow(window.l10n.fontSize, fontScaleControl));
+  appearanceGroup.appendChild(
+    createSettingsRow(window.l10n.fontSize, fontScaleControl, icons.fontSize, 'icon-text')
+  );
 
   // Display Size
   const displaySizeControl = createSliderControl(
@@ -2118,7 +2185,43 @@ function renderDeviceSettingsForm(settings: DeviceUISettings, disabled: boolean)
     `${densityPercent}%`,
     disabled
   );
-  deviceSettingsContent.appendChild(createSettingsRow(window.l10n.displaySize, displaySizeControl));
+  appearanceGroup.appendChild(
+    createSettingsRow(window.l10n.displaySize, displaySizeControl, icons.displaySize, 'icon-size')
+  );
+
+  deviceSettingsContent.appendChild(appearanceGroup);
+
+  // === ACCESSIBILITY GROUP ===
+  const accessibilityGroup = createSettingsGroup(
+    window.l10n.accessibility,
+    groupIcons.accessibility
+  );
+
+  // TalkBack
+  const talkbackToggle = createToggleSwitch('talkbackEnabled', settings.talkbackEnabled, disabled);
+  accessibilityGroup.appendChild(
+    createSettingsRow(window.l10n.talkback, talkbackToggle, icons.talkback, 'icon-accessibility')
+  );
+
+  // Select to Speak
+  const selectToSpeakToggle = createToggleSwitch(
+    'selectToSpeakEnabled',
+    settings.selectToSpeakEnabled,
+    disabled
+  );
+  accessibilityGroup.appendChild(
+    createSettingsRow(
+      window.l10n.selectToSpeak,
+      selectToSpeakToggle,
+      icons.selectToSpeak,
+      'icon-accessibility'
+    )
+  );
+
+  deviceSettingsContent.appendChild(accessibilityGroup);
+
+  // === DEVELOPER GROUP ===
+  const developerGroup = createSettingsGroup(window.l10n.developer, groupIcons.developer);
 
   // Show Layout Bounds
   const layoutBoundsToggle = createToggleSwitch(
@@ -2126,9 +2229,16 @@ function renderDeviceSettingsForm(settings: DeviceUISettings, disabled: boolean)
     settings.showLayoutBounds,
     disabled
   );
-  deviceSettingsContent.appendChild(
-    createSettingsRow(window.l10n.showLayoutBounds, layoutBoundsToggle)
+  developerGroup.appendChild(
+    createSettingsRow(
+      window.l10n.showLayoutBounds,
+      layoutBoundsToggle,
+      icons.layoutBounds,
+      'icon-debug'
+    )
   );
+
+  deviceSettingsContent.appendChild(developerGroup);
 
   // Attach event handlers (only if not disabled)
   if (!disabled) {
@@ -2171,12 +2281,19 @@ function attachSettingsEventHandlers() {
     });
   });
 
-  // Toggle switches
-  const toggleSwitches = deviceSettingsContent.querySelectorAll('.toggle-switch');
-  toggleSwitches.forEach((toggle) => {
+  // Toggle switches - make entire row clickable
+  const clickableRows = deviceSettingsContent.querySelectorAll('.settings-row.clickable');
+  clickableRows.forEach((row) => {
+    const toggle = row.querySelector('.toggle-switch');
+    if (!toggle) {
+      return;
+    }
+
     const setting = (toggle as HTMLElement).dataset.setting;
 
-    toggle.addEventListener('click', () => {
+    const handleToggle = (e: Event) => {
+      e.stopPropagation();
+
       if (toggle.classList.contains('loading')) {
         return;
       }
@@ -2191,7 +2308,9 @@ function attachSettingsEventHandlers() {
 
       // Send to extension
       applyDeviceSetting(setting, newValue, toggle as HTMLElement);
-    });
+    };
+
+    row.addEventListener('click', handleToggle);
   });
 
   // Sliders

@@ -5,6 +5,20 @@ All notable changes to the "Scrcpy for VS Code" extension will be documented in 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- **Redesigned Device Settings popup** - Complete visual overhaul with grouped sections (Appearance, Accessibility, Developer)
+- **New setting icons** - Each setting now has a distinctive colorful gradient icon (moon for dark mode, palette for appearance group, accessibility symbols, etc.)
+- **Improved controls** - Enhanced toggle switches, segmented controls, and sliders with better visibility and smoother animations
+- **Clickable toggle rows** - Entire row is now clickable to toggle switches, not just the switch itself
+- **Slide-in animation** - Settings popup now animates in with a subtle bounce effect
+
+### Added
+
+- Localization strings for settings group headers (Appearance, Accessibility, Developer)
+
 ## [0.1.3] - 2025-12-16
 
 ### Added

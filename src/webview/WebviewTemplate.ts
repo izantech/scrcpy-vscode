@@ -63,6 +63,9 @@ export function getHtmlForWebview(webview: vscode.Webview, extensionUri: vscode.
     fontSize: vscode.l10n.t('Font Size'),
     displaySize: vscode.l10n.t('Display Size'),
     showLayoutBounds: vscode.l10n.t('Layout Bounds'),
+    appearance: vscode.l10n.t('Appearance'),
+    accessibility: vscode.l10n.t('Accessibility'),
+    developer: vscode.l10n.t('Developer'),
     small: vscode.l10n.t('Small'),
     default: vscode.l10n.t('Default'),
     large: vscode.l10n.t('Large'),
@@ -797,13 +800,30 @@ export function getHtmlForWebview(webview: vscode.Webview, extensionUri: vscode.
       left: 0;
       width: 100%;
       height: 100%;
-      background: transparent;
+      background: rgba(0, 0, 0, 0.4);
       display: none;
       align-items: flex-end;
       justify-content: flex-end;
       z-index: 100;
-      padding: 8px;
-      padding-bottom: 48px;
+      padding: 12px;
+      padding-bottom: 52px;
+      animation: overlayFadeIn 0.2s ease-out;
+    }
+
+    @keyframes overlayFadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    @keyframes panelSlideIn {
+      from {
+        opacity: 0;
+        transform: translateY(12px) scale(0.97);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
     }
 
     .device-settings-overlay.visible {
@@ -812,31 +832,41 @@ export function getHtmlForWebview(webview: vscode.Webview, extensionUri: vscode.
 
     .device-settings-container {
       background: var(--vscode-editor-background, #1e1e1e);
-      border: 1px solid var(--vscode-widget-border, rgba(255, 255, 255, 0.1));
-      border-radius: 8px;
+      border: 1px solid var(--vscode-widget-border, rgba(255, 255, 255, 0.12));
+      border-radius: 12px;
       display: flex;
       flex-direction: column;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+      box-shadow: 
+        0 0 0 1px rgba(255, 255, 255, 0.05) inset,
+        0 20px 50px -10px rgba(0, 0, 0, 0.5),
+        0 8px 20px -8px rgba(0, 0, 0, 0.4);
       position: relative;
-      width: 90%;
-      max-width: 340px;
+      width: 92%;
+      max-width: 360px;
       max-height: 85vh;
       overflow: hidden;
+      animation: panelSlideIn 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
     }
 
     .device-settings-header {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 12px 16px;
-      border-bottom: 1px solid var(--vscode-widget-border, rgba(255, 255, 255, 0.1));
+      padding: 16px 18px 14px;
+      border-bottom: 1px solid var(--vscode-widget-border, rgba(255, 255, 255, 0.08));
+      background: linear-gradient(
+        180deg,
+        rgba(255, 255, 255, 0.03) 0%,
+        transparent 100%
+      );
     }
 
     .device-settings-title {
       font-family: var(--vscode-font-family);
-      font-size: 14px;
+      font-size: 15px;
       font-weight: 600;
-      color: var(--vscode-foreground, #ccc);
+      color: var(--vscode-foreground, #e0e0e0);
+      letter-spacing: -0.2px;
     }
 
     .device-settings-close {
@@ -844,19 +874,24 @@ export function getHtmlForWebview(webview: vscode.Webview, extensionUri: vscode.
       border: none;
       color: var(--vscode-foreground, #ccc);
       cursor: pointer;
-      width: 24px;
-      height: 24px;
+      width: 28px;
+      height: 28px;
       display: flex;
       align-items: center;
       justify-content: center;
-      border-radius: 4px;
-      opacity: 0.7;
-      transition: opacity 0.1s, background 0.1s;
+      border-radius: 6px;
+      opacity: 0.6;
+      transition: all 0.15s ease;
     }
 
     .device-settings-close:hover {
       opacity: 1;
       background: var(--vscode-toolbar-hoverBackground, rgba(255, 255, 255, 0.1));
+      transform: scale(1.05);
+    }
+
+    .device-settings-close:active {
+      transform: scale(0.95);
     }
 
     .device-settings-close svg {
@@ -865,31 +900,132 @@ export function getHtmlForWebview(webview: vscode.Webview, extensionUri: vscode.
     }
 
     .device-settings-content {
-      padding: 12px 16px;
+      padding: 8px 14px 16px;
       overflow-y: auto;
       overflow-x: hidden;
       flex: 1;
+    }
+
+    /* Settings Groups */
+    .settings-group {
+      background: var(--vscode-input-background, rgba(255, 255, 255, 0.04));
+      border: 1px solid var(--vscode-widget-border, rgba(255, 255, 255, 0.06));
+      border-radius: 10px;
+      margin-bottom: 12px;
+      overflow: hidden;
+    }
+
+    .settings-group:last-child {
+      margin-bottom: 0;
+    }
+
+    .settings-group-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px 6px;
+      font-family: var(--vscode-font-family);
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--vscode-descriptionForeground, #888);
+    }
+
+    .settings-group-header svg {
+      width: 14px;
+      height: 14px;
+      opacity: 0.7;
     }
 
     .settings-row {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 10px 0;
-      border-bottom: 1px solid var(--vscode-widget-border, rgba(255, 255, 255, 0.05));
+      padding: 12px 14px;
+      gap: 14px;
+      min-width: 0;
+      transition: background 0.1s ease;
+    }
+
+    .settings-row:not(:last-child) {
+      border-bottom: 1px solid var(--vscode-widget-border, rgba(255, 255, 255, 0.04));
+    }
+
+    .settings-row.clickable {
+      cursor: pointer;
+    }
+
+    .settings-row.clickable:hover {
+      background: rgba(255, 255, 255, 0.03);
+    }
+
+    .settings-row.clickable:active {
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .settings-row-left {
+      display: flex;
+      align-items: center;
       gap: 12px;
+      flex: 1;
       min-width: 0;
     }
 
-    .settings-row:last-child {
-      border-bottom: none;
+    .settings-row-icon {
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 8px;
+      flex-shrink: 0;
+      background: var(--vscode-tab-activeBorderTop, #0078d4);
+      color: var(--vscode-button-foreground, white);
+      transition: transform 0.15s ease;
+    }
+
+    .settings-row.clickable:hover .settings-row-icon {
+      transform: scale(1.05);
+    }
+
+    .settings-row-icon svg {
+      width: 16px;
+      height: 16px;
+    }
+
+    .settings-row-icon.icon-display {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+
+    .settings-row-icon.icon-nav {
+      background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    }
+
+    .settings-row-icon.icon-accessibility {
+      background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+    }
+
+    .settings-row-icon.icon-text {
+      background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+    }
+
+    .settings-row-icon.icon-size {
+      background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+    }
+
+    .settings-row-icon.icon-debug {
+      background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
+      color: #333;
     }
 
     .settings-row-label {
       font-family: var(--vscode-font-family);
-      font-size: 12px;
-      color: var(--vscode-foreground, #ccc);
-      flex-shrink: 0;
+      font-size: 13px;
+      color: var(--vscode-foreground, #e0e0e0);
+      flex-shrink: 1;
+      min-width: 0;
+      user-select: none;
     }
 
     .settings-row-control {
@@ -897,157 +1033,188 @@ export function getHtmlForWebview(webview: vscode.Webview, extensionUri: vscode.
       align-items: center;
       gap: 4px;
       min-width: 0;
+      flex-shrink: 0;
     }
 
     /* Toggle switch */
     .toggle-switch {
       position: relative;
-      width: 36px;
-      height: 20px;
-      background: var(--vscode-input-background, #3c3c3c);
-      border: 1px solid var(--vscode-input-border, #3c3c3c);
-      border-radius: 10px;
+      width: 44px;
+      height: 26px;
+      background: var(--vscode-input-background, rgba(255, 255, 255, 0.15));
+      border: 1px solid var(--vscode-widget-border, rgba(255, 255, 255, 0.1));
+      border-radius: 13px;
       cursor: pointer;
-      transition: background 0.2s, border-color 0.2s;
+      transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      flex-shrink: 0;
     }
 
     .toggle-switch.loading,
     .toggle-switch.disabled {
-      opacity: 0.5;
+      opacity: 0.4;
       pointer-events: none;
     }
 
     .toggle-switch::after {
       content: '';
       position: absolute;
-      top: 2px;
-      left: 2px;
-      width: 14px;
-      height: 14px;
-      background: var(--vscode-foreground, #ccc);
+      top: 3px;
+      left: 3px;
+      width: 20px;
+      height: 20px;
+      background: linear-gradient(180deg, #fff 0%, #f0f0f0 100%);
       border-radius: 50%;
-      transition: transform 0.2s;
+      transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25), 0 1px 2px rgba(0, 0, 0, 0.15);
+    }
+
+    .toggle-switch:hover::after {
+      transform: scale(1.05);
+    }
+
+    .toggle-switch:active::after {
+      width: 24px;
     }
 
     .toggle-switch.active {
       background: var(--vscode-tab-activeBorderTop, #0078d4);
-      border-color: var(--vscode-tab-activeBorderTop, #0078d4);
+      box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.1);
     }
 
     .toggle-switch.active::after {
-      transform: translateX(16px);
-      background: var(--vscode-button-foreground, white);
+      transform: translateX(18px);
+    }
+
+    .toggle-switch.active:active::after {
+      transform: translateX(14px);
+      width: 24px;
     }
 
     /* Segmented control */
     .segmented-control {
       display: flex;
-      background: var(--vscode-input-background, #3c3c3c);
-      border: 1px solid var(--vscode-input-border, #3c3c3c);
-      border-radius: 4px;
+      background: var(--vscode-input-background, rgba(255, 255, 255, 0.12));
+      border: 1px solid var(--vscode-widget-border, rgba(255, 255, 255, 0.1));
+      border-radius: 8px;
       overflow: hidden;
+      padding: 3px;
+      gap: 2px;
     }
 
     .segmented-control.loading,
     .segmented-control.disabled {
-      opacity: 0.5;
+      opacity: 0.4;
       pointer-events: none;
     }
 
     .segment-btn {
-      padding: 4px 10px;
+      padding: 6px 12px;
       font-family: var(--vscode-font-family);
       font-size: 11px;
+      font-weight: 500;
       background: transparent;
-      color: var(--vscode-foreground, #ccc);
+      color: var(--vscode-descriptionForeground, #999);
       border: none;
+      border-radius: 6px;
       cursor: pointer;
-      transition: background 0.1s, color 0.1s;
-    }
-
-    .segment-btn:not(:last-child) {
-      border-right: 1px solid var(--vscode-input-border, #3c3c3c);
+      transition: all 0.15s ease;
+      white-space: nowrap;
     }
 
     .segment-btn:hover:not(.active) {
-      background: var(--vscode-toolbar-hoverBackground, rgba(255, 255, 255, 0.1));
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--vscode-foreground, #ccc);
     }
 
     .segment-btn.active {
       background: var(--vscode-tab-activeBorderTop, #0078d4);
       color: var(--vscode-button-foreground, white);
+      box-shadow: 0 2px 8px rgba(0, 120, 212, 0.3);
     }
 
     /* Slider with value */
     .slider-control {
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 10px;
       flex: 1;
-      max-width: 150px;
+      max-width: 160px;
     }
 
     .slider-control.loading,
     .slider-control.disabled {
-      opacity: 0.5;
+      opacity: 0.4;
       pointer-events: none;
     }
 
     .settings-slider {
       flex: 1;
-      min-width: 60px;
-      height: 4px;
+      min-width: 70px;
+      height: 6px;
       -webkit-appearance: none;
       appearance: none;
-      background: var(--vscode-input-background, #3c3c3c);
-      border-radius: 2px;
+      background: var(--vscode-input-background, rgba(255, 255, 255, 0.15));
+      border: 1px solid var(--vscode-widget-border, rgba(255, 255, 255, 0.1));
+      border-radius: 3px;
       outline: none;
+      cursor: pointer;
     }
 
     .settings-slider::-webkit-slider-runnable-track {
-      height: 4px;
-      background: var(--vscode-input-background, #3c3c3c);
-      border-radius: 2px;
+      height: 6px;
+      background: transparent;
+      border-radius: 3px;
     }
 
     .settings-slider::-webkit-slider-thumb {
       -webkit-appearance: none;
       appearance: none;
-      width: 14px;
-      height: 14px;
-      margin-top: -5px;
-      background: var(--vscode-tab-activeBorderTop, #0078d4);
+      width: 18px;
+      height: 18px;
+      margin-top: -6px;
+      background: linear-gradient(180deg, #fff 0%, #f0f0f0 100%);
       border-radius: 50%;
       cursor: pointer;
-      transition: transform 0.1s;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25), 0 1px 2px rgba(0, 0, 0, 0.15);
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
     }
 
     .settings-slider::-webkit-slider-thumb:hover {
-      transform: scale(1.15);
+      transform: scale(1.1);
+      box-shadow: 0 3px 10px rgba(0, 0, 0, 0.3), 0 1px 3px rgba(0, 0, 0, 0.2);
+    }
+
+    .settings-slider::-webkit-slider-thumb:active {
+      transform: scale(0.95);
     }
 
     .settings-slider::-moz-range-track {
-      height: 4px;
-      background: var(--vscode-input-background, #3c3c3c);
-      border-radius: 2px;
+      height: 6px;
+      background: transparent;
+      border-radius: 3px;
     }
 
     .settings-slider::-moz-range-thumb {
-      width: 14px;
-      height: 14px;
-      background: var(--vscode-tab-activeBorderTop, #0078d4);
+      width: 18px;
+      height: 18px;
+      background: linear-gradient(180deg, #fff 0%, #f0f0f0 100%);
       border: none;
       border-radius: 50%;
       cursor: pointer;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
     }
 
     .slider-value {
-      font-family: var(--vscode-font-family);
+      font-family: var(--vscode-editor-font-family, monospace);
       font-size: 11px;
-      color: var(--vscode-descriptionForeground, #999);
-      min-width: 48px;
+      font-weight: 500;
+      color: var(--vscode-descriptionForeground, #888);
+      min-width: 52px;
       flex-shrink: 0;
       text-align: right;
+      background: var(--vscode-input-background, rgba(255, 255, 255, 0.04));
+      padding: 4px 8px;
+      border-radius: 4px;
     }
   </style>
 </head>
