@@ -434,6 +434,11 @@ start_wda() {
         pkill -f "xcodebuild.*WebDriverAgent" 2>/dev/null || true
         sleep 1
 
+        # Start iproxy first (so it's ready when WDA starts)
+        iproxy 8100 8100 -u "$DEVICE_UDID" > /dev/null 2>&1 &
+        IPROXY_PID=$!
+        sleep 1
+
         # Start xcodebuild
         xcodebuild test-without-building \
             -project WebDriverAgent.xcodeproj \
@@ -442,27 +447,6 @@ start_wda() {
             > /dev/null 2>&1 &
 
         XCODE_PID=$!
-        sleep 5
-
-        # Check if xcodebuild is still running
-        if ! kill -0 $XCODE_PID 2>/dev/null; then
-            print_error "WebDriverAgent failed to start"
-            echo ""
-            print_info "How to fix:"
-            print_info "  1. Unlock your iOS device"
-            print_info "  2. If you see an 'Untrusted Developer' alert on device:"
-            print_info "     Go to Settings > General > VPN & Device Management"
-            print_info "     Tap your developer account and tap 'Trust'"
-            print_info "  3. The WDA app icon should appear on your device"
-            wait_for_retry
-            check_ios_device
-            continue
-        fi
-
-        # Start iproxy
-        iproxy 8100 8100 -u "$DEVICE_UDID" > /dev/null 2>&1 &
-        IPROXY_PID=$!
-        sleep 2
 
         # Cleanup handler
         cleanup() {
@@ -475,8 +459,34 @@ start_wda() {
         }
         trap cleanup INT TERM
 
-        # Verify connection
-        if curl -s http://localhost:8100/status | grep -q "ready"; then
+        # Wait for WDA to start with retries (up to 30 seconds)
+        print_info "Waiting for WDA to start on device..."
+        local max_attempts=15
+        local attempt=1
+        local connected=false
+
+        while [[ $attempt -le $max_attempts ]]; do
+            sleep 2
+
+            # Check if xcodebuild is still running
+            if ! kill -0 $XCODE_PID 2>/dev/null; then
+                print_error "WebDriverAgent process exited unexpectedly"
+                break
+            fi
+
+            # Try to connect to WDA
+            if curl -s --connect-timeout 2 http://localhost:8100/status 2>/dev/null | grep -q "sessionId\|ready\|value"; then
+                connected=true
+                break
+            fi
+
+            # Show progress
+            printf "  Attempt %d/%d...\r" "$attempt" "$max_attempts"
+            attempt=$((attempt + 1))
+        done
+        echo "" # Clear the progress line
+
+        if $connected; then
             print_success "WebDriverAgent running at http://localhost:8100"
             echo ""
             echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
