@@ -78,6 +78,7 @@ export type NavigationMode = 'gestural' | 'threebutton' | 'twobutton';
 export interface DeviceUISettings {
   darkMode: DarkMode;
   navigationMode: NavigationMode;
+  availableNavigationModes: NavigationMode[];
   talkbackEnabled: boolean;
   selectToSpeakEnabled: boolean;
   fontScale: number;

@@ -68,6 +68,7 @@ declare global {
 interface DeviceUISettings {
   darkMode: 'auto' | 'light' | 'dark';
   navigationMode: 'gestural' | 'threebutton' | 'twobutton';
+  availableNavigationModes: ('gestural' | 'threebutton' | 'twobutton')[];
   talkbackEnabled: boolean;
   selectToSpeakEnabled: boolean;
   fontScale: number;
@@ -1852,6 +1853,7 @@ function openDeviceSettings() {
   const initialSettings: DeviceUISettings = cachedSettings || {
     darkMode: 'auto',
     navigationMode: 'gestural',
+    availableNavigationModes: ['threebutton', 'gestural'],
     talkbackEnabled: false,
     selectToSpeakEnabled: false,
     fontScale: 1.0,
@@ -2064,14 +2066,17 @@ function renderDeviceSettingsForm(settings: DeviceUISettings, disabled: boolean)
   );
   deviceSettingsContent.appendChild(createSettingsRow(window.l10n.darkMode, darkModeControl));
 
-  // Navigation Mode
+  // Navigation Mode - only show available modes
+  const allNavOptions = [
+    { value: 'threebutton', label: window.l10n.threeButton },
+    { value: 'gestural', label: window.l10n.gestural },
+    { value: 'twobutton', label: window.l10n.twoButton },
+  ];
+  const availableModes = settings.availableNavigationModes || ['threebutton', 'gestural'];
+  const navOptions = allNavOptions.filter((opt) => availableModes.includes(opt.value as never));
   const navModeControl = createSegmentedControl(
     'navigationMode',
-    [
-      { value: 'gestural', label: window.l10n.gestural },
-      { value: 'threebutton', label: window.l10n.threeButton },
-      { value: 'twobutton', label: window.l10n.twoButton },
-    ],
+    navOptions,
     settings.navigationMode,
     disabled
   );

@@ -1087,7 +1087,16 @@ export class DeviceService {
       darkMode = 'light';
     }
 
-    // Parse navigation mode from overlay list
+    // Parse available navigation modes from overlay list
+    const availableNavigationModes: NavigationMode[] = ['threebutton']; // Always available as default
+    if (overlayResult.includes('com.android.internal.systemui.navbar.gestural')) {
+      availableNavigationModes.push('gestural');
+    }
+    if (overlayResult.includes('com.android.internal.systemui.navbar.twobutton')) {
+      availableNavigationModes.push('twobutton');
+    }
+
+    // Parse current navigation mode from overlay list
     let navigationMode: NavigationMode = 'threebutton';
     if (overlayResult.includes('[x] com.android.internal.systemui.navbar.gestural')) {
       navigationMode = 'gestural';
@@ -1119,6 +1128,7 @@ export class DeviceService {
     return {
       darkMode,
       navigationMode,
+      availableNavigationModes,
       talkbackEnabled,
       selectToSpeakEnabled,
       fontScale,
@@ -1170,7 +1180,9 @@ export class DeviceService {
           'com.android.internal.systemui.navbar.twobutton',
         ];
         for (const overlay of overlays) {
-          await execAdb(['shell', 'cmd', 'overlay', 'disable', overlay]).catch(() => {});
+          await execAdb(['shell', 'cmd', 'overlay', 'disable', '--user', 'current', overlay]).catch(
+            () => {}
+          );
         }
         // Three-button is the default (no overlay needed)
         // Only enable overlay for gestural or twobutton
@@ -1180,6 +1192,8 @@ export class DeviceService {
             'cmd',
             'overlay',
             'enable',
+            '--user',
+            'current',
             'com.android.internal.systemui.navbar.gestural',
           ]);
         } else if (value === 'twobutton') {
@@ -1188,6 +1202,8 @@ export class DeviceService {
             'cmd',
             'overlay',
             'enable',
+            '--user',
+            'current',
             'com.android.internal.systemui.navbar.twobutton',
           ]);
         }
