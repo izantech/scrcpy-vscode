@@ -136,7 +136,8 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
             'scrcpy.crop',
             'scrcpy.displayId',
             'scrcpy.keyboardMode',
-            // iOS WDA settings
+            // iOS settings
+            'scrcpy.ios.enabled',
             'scrcpy.ios.webDriverAgentEnabled',
             'scrcpy.ios.webDriverAgentPort',
           ];
@@ -220,11 +221,16 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
   }
 
   /**
-   * Get iOS configuration for WebDriverAgent (Phase 8)
+   * Get iOS configuration (Phase 8)
    */
-  private _getIOSConfig(): { webDriverAgentEnabled: boolean; webDriverAgentPort: number } {
+  private _getIOSConfig(): {
+    enabled: boolean;
+    webDriverAgentEnabled: boolean;
+    webDriverAgentPort: number;
+  } {
     const config = vscode.workspace.getConfiguration('scrcpy');
     return {
+      enabled: config.get<boolean>('ios.enabled', false),
       webDriverAgentEnabled: config.get<boolean>('ios.webDriverAgentEnabled', false),
       webDriverAgentPort: config.get<number>('ios.webDriverAgentPort', 8100),
     };

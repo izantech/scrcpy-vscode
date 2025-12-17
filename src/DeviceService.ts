@@ -105,6 +105,7 @@ export class DeviceService {
 
   // iOS configuration (Phase 8)
   private iosConfig: iOSConnectionConfig = {
+    enabled: false,
     webDriverAgentEnabled: false,
     webDriverAgentPort: 8100,
   };
@@ -143,9 +144,9 @@ export class DeviceService {
     // Get Android devices
     const androidDevices = await this.getAndroidDevices();
 
-    // Get iOS devices if on macOS
+    // Get iOS devices if enabled and on macOS
     let iosDevices: DeviceInfo[] = [];
-    if (isIOSSupportAvailable()) {
+    if (this.iosConfig.enabled && isIOSSupportAvailable()) {
       try {
         iosDevices = await iOSDeviceManager.getAvailableDevices();
       } catch (error) {

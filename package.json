@@ -436,16 +436,25 @@
         "title": "%config.title.iosControl%",
         "order": 9,
         "properties": {
-          "scrcpy.ios.webDriverAgentEnabled": {
+          "scrcpy.ios.enabled": {
             "type": "boolean",
             "default": false,
             "order": 0,
+            "tags": [
+              "experimental"
+            ],
+            "markdownDescription": "%config.scrcpy.ios.enabled%"
+          },
+          "scrcpy.ios.webDriverAgentEnabled": {
+            "type": "boolean",
+            "default": false,
+            "order": 1,
             "markdownDescription": "%config.scrcpy.ios.webDriverAgentEnabled%"
           },
           "scrcpy.ios.webDriverAgentPort": {
             "type": "number",
             "default": 8100,
-            "order": 1,
+            "order": 2,
             "minimum": 1,
             "maximum": 65535,
             "markdownDescription": "%config.scrcpy.ios.webDriverAgentPort%"

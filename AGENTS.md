@@ -475,11 +475,14 @@ test/
     - Verify files appear in `/sdcard/Download/` on device
     - Verify summary notification shows success/failure count
 20. Test iOS device connection (macOS only):
+    - Enable iOS support in settings: `scrcpy.ios.enabled: true` (experimental)
     - Connect an iOS device via USB
     - Verify the device appears in the device list with Apple icon
     - Click to connect and verify video displays
     - Verify the device tooltip shows iOS-specific info (model, iOS version)
     - Disconnect the device and verify it's removed from the list
+    - Disable iOS support: `scrcpy.ios.enabled: false`
+    - Verify iOS devices no longer appear in the device list
 21. Test iOS input with WebDriverAgent:
     - Prerequisites:
       - macOS with Xcode installed

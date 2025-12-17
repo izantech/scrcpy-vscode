@@ -22,9 +22,10 @@ import { DevicePlatform, IOS_CAPABILITIES, PlatformCapabilities } from '../Platf
 import { WDAClient } from './WDAClient';
 
 /**
- * iOS connection configuration for WebDriverAgent
+ * iOS connection configuration
  */
 export interface iOSConnectionConfig {
+  enabled: boolean;
   webDriverAgentEnabled: boolean;
   webDriverAgentPort: number;
 }
