@@ -64,6 +64,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Reduced iOS input latency** - Touch and scroll are now fire-and-forget (don't wait for WDA response), session is pre-created on connection, and scroll events are debounced to prevent stuttering
 - **Added iOS Back gesture** - Wide swipe from left edge to right (90% of screen width) simulates iOS native back navigation
 - **Device-aware Recents button** - Recents button (double home tap) only shown on devices with physical home button; hidden on Face ID devices where the gesture isn't supported via WDA
+- **Improved WDA startup reliability** - Script now waits up to 30 seconds with retry loop instead of failing after 5 seconds; starts iproxy before xcodebuild; shows progress indicator during connection attempts
 
 ### Known Issues
 
