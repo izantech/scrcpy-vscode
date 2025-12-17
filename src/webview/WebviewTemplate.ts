@@ -798,12 +798,13 @@ export function getHtmlForWebview(webview: vscode.Webview, extensionUri: vscode.
       left: 0;
       width: 100%;
       height: 100%;
-      background: rgba(0, 0, 0, 0.8);
+      background: transparent;
       display: none;
-      align-items: center;
-      justify-content: center;
+      align-items: flex-end;
+      justify-content: flex-end;
       z-index: 100;
-      backdrop-filter: blur(4px);
+      padding: 8px;
+      padding-bottom: 48px;
     }
 
     .device-settings-overlay.visible {
@@ -818,8 +819,8 @@ export function getHtmlForWebview(webview: vscode.Webview, extensionUri: vscode.
       flex-direction: column;
       box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
       position: relative;
-      min-width: 280px;
-      max-width: 90vw;
+      width: 90%;
+      max-width: 340px;
       max-height: 85vh;
       overflow: hidden;
     }
@@ -867,6 +868,7 @@ export function getHtmlForWebview(webview: vscode.Webview, extensionUri: vscode.
     .device-settings-content {
       padding: 12px 16px;
       overflow-y: auto;
+      overflow-x: hidden;
       flex: 1;
     }
 
@@ -901,6 +903,7 @@ export function getHtmlForWebview(webview: vscode.Webview, extensionUri: vscode.
       padding: 10px 0;
       border-bottom: 1px solid var(--vscode-widget-border, rgba(255, 255, 255, 0.05));
       gap: 12px;
+      min-width: 0;
     }
 
     .settings-row:last-child {
@@ -918,6 +921,7 @@ export function getHtmlForWebview(webview: vscode.Webview, extensionUri: vscode.
       display: flex;
       align-items: center;
       gap: 4px;
+      min-width: 0;
     }
 
     /* Toggle switch */
@@ -1003,7 +1007,7 @@ export function getHtmlForWebview(webview: vscode.Webview, extensionUri: vscode.
       align-items: center;
       gap: 8px;
       flex: 1;
-      max-width: 160px;
+      max-width: 150px;
     }
 
     .slider-control.loading {
@@ -1013,6 +1017,7 @@ export function getHtmlForWebview(webview: vscode.Webview, extensionUri: vscode.
 
     .settings-slider {
       flex: 1;
+      min-width: 60px;
       height: 4px;
       -webkit-appearance: none;
       appearance: none;
@@ -1049,7 +1054,8 @@ export function getHtmlForWebview(webview: vscode.Webview, extensionUri: vscode.
       font-family: var(--vscode-font-family);
       font-size: 11px;
       color: var(--vscode-descriptionForeground, #999);
-      min-width: 50px;
+      min-width: 48px;
+      flex-shrink: 0;
       text-align: right;
     }
   </style>
