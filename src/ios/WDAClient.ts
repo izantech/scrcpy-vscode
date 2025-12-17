@@ -75,6 +75,11 @@ export class WDAClient {
   private touchStartX = 0;
   private touchStartY = 0;
 
+  // Scroll debounce delay - wait this long after last scroll event before sending
+  private scrollDebounceMs = 50;
+  private pendingScroll: { deltaX: number; deltaY: number } | null = null;
+  private scrollTimeoutId: ReturnType<typeof setTimeout> | null = null;
+
   constructor(host: string, port: number = 8100) {
     this.baseUrl = `http://${host}:${port}`;
   }
@@ -150,23 +155,24 @@ export class WDAClient {
   /**
    * Send touch action (tap, drag)
    * Converts down/move/up actions to WDA touch action chains
+   * Fire-and-forget: does not wait for WDA response
    */
-  async touch(action: 'down' | 'move' | 'up', x: number, y: number): Promise<void> {
-    const sessionId = await this.ensureSession();
-
+  touch(action: 'down' | 'move' | 'up', x: number, y: number): void {
     if (action === 'down') {
       // Start a new touch - store initial position
       this.touchActive = true;
       this.touchStartX = x;
       this.touchStartY = y;
-
-      // For a single tap, we'll wait for the 'up' event
-      // For drag, we'll track the movement
     } else if (action === 'move' && this.touchActive) {
       // During drag, movement is tracked but start position stays fixed
       // (Start position is only set on 'down')
     } else if (action === 'up' && this.touchActive) {
       this.touchActive = false;
+
+      // Need session for WDA request
+      if (!this.sessionId) {
+        return;
+      }
 
       // Check if this was a tap (no significant movement) or a drag
       const distance = Math.sqrt(
@@ -174,11 +180,15 @@ export class WDAClient {
       );
 
       if (distance < 10) {
-        // Tap at the original position
-        await this.performTap(sessionId, this.touchStartX, this.touchStartY);
+        // Tap at the original position (fire-and-forget)
+        this.performTap(this.sessionId, this.touchStartX, this.touchStartY).catch((e) =>
+          console.error('[WDA] Tap failed:', e)
+        );
       } else {
-        // Swipe from start to end
-        await this.performSwipe(sessionId, this.touchStartX, this.touchStartY, x, y);
+        // Swipe from start to end (fire-and-forget)
+        this.performSwipe(this.sessionId, this.touchStartX, this.touchStartY, x, y).catch((e) =>
+          console.error('[WDA] Swipe failed:', e)
+        );
       }
     }
   }
@@ -238,35 +248,61 @@ export class WDAClient {
 
   /**
    * Send scroll gesture using WDA's native scroll endpoint
+   * Debounced to accumulate rapid scroll events into a single gesture
    */
-  async scroll(_x: number, _y: number, deltaX: number, deltaY: number): Promise<void> {
-    const sessionId = await this.ensureSession();
+  scroll(_x: number, _y: number, deltaX: number, deltaY: number): void {
+    // Accumulate scroll deltas
+    if (this.pendingScroll) {
+      this.pendingScroll.deltaX += deltaX;
+      this.pendingScroll.deltaY += deltaY;
+    } else {
+      this.pendingScroll = { deltaX, deltaY };
+    }
+
+    // Clear existing timeout and set a new one (debounce)
+    // This ensures we only send ONE scroll request after scrolling stops
+    if (this.scrollTimeoutId) {
+      clearTimeout(this.scrollTimeoutId);
+    }
+
+    this.scrollTimeoutId = setTimeout(() => {
+      this.scrollTimeoutId = null;
+      this.flushScroll();
+    }, this.scrollDebounceMs);
+  }
+
+  /**
+   * Flush pending scroll to WDA (fire-and-forget)
+   */
+  private flushScroll(): void {
+    if (!this.pendingScroll || !this.sessionId) {
+      return;
+    }
+
+    const { deltaX, deltaY } = this.pendingScroll;
+    this.pendingScroll = null;
 
     // Determine scroll direction and distance
-    // WDA scroll uses direction (up/down/left/right) and distance (0-1 fraction of screen)
     const absX = Math.abs(deltaX);
     const absY = Math.abs(deltaY);
 
-    // Scroll in the dominant direction
+    // Fire-and-forget: don't await, just catch errors
     if (absY >= absX && absY > 0.001) {
-      // Vertical scroll - WDA "up" scrolls content up (shows content below)
-      // Our deltaY > 0 means scroll wheel down = content should scroll up
       const direction = deltaY > 0 ? 'up' : 'down';
-      const distance = Math.min(0.5, absY * 2); // Scale and cap at 50% of screen
+      const distance = Math.min(0.5, absY * 2);
 
-      await this.request('POST', `/session/${sessionId}/wda/scroll`, {
+      this.request('POST', `/session/${this.sessionId}/wda/scroll`, {
         direction,
         distance,
-      });
+      }).catch((e) => console.error('[WDA] Scroll failed:', e));
     } else if (absX > 0.001) {
-      // Horizontal scroll
       const direction = deltaX > 0 ? 'left' : 'right';
       const distance = Math.min(0.5, absX * 2);
 
-      await this.request('POST', `/session/${sessionId}/wda/scroll`, {
+      this.request('POST', `/session/${this.sessionId}/wda/scroll`, {
         direction,
         distance,
-      });
+      }).catch((e) => console.error('[WDA] Scroll failed:', e));
     }
   }
 
@@ -308,9 +344,26 @@ export class WDAClient {
   }
 
   /**
+   * Initialize session proactively (call after checkStatus succeeds)
+   * This avoids latency on first touch
+   */
+  async initSession(): Promise<void> {
+    if (!this.sessionId) {
+      await this.createSession();
+    }
+  }
+
+  /**
    * Disconnect and cleanup
    */
   disconnect(): void {
+    // Cancel any pending scroll timeout
+    if (this.scrollTimeoutId) {
+      clearTimeout(this.scrollTimeoutId);
+      this.scrollTimeoutId = null;
+    }
+    this.pendingScroll = null;
+
     // Cancel any pending requests
     if (this.abortController) {
       this.abortController.abort();

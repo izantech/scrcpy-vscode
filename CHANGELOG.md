@@ -59,6 +59,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Fixed iOS touch events not being sent** - Touch down action (action=0) was incorrectly filtered due to JavaScript falsy check
 - **Updated WDA client to use W3C Actions API** - Migrated from legacy `/wda/touch/perform` endpoint to standard W3C WebDriver Actions API (`/actions`) for tap and swipe gestures
 - **Improved iOS scroll performance** - Now uses WDA's native `/wda/scroll` endpoint with direction/distance instead of slow swipe gestures
+- **Reduced iOS input latency** - Touch and scroll are now fire-and-forget (don't wait for WDA response), session is pre-created on connection, and scroll events are debounced to prevent stuttering
 
 ### Known Issues
 

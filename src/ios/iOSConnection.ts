@@ -197,6 +197,8 @@ export class iOSConnection implements IDeviceConnection {
     try {
       const status = await this.wdaClient.checkStatus();
       if (status?.ready !== false) {
+        // Pre-create session to avoid latency on first touch
+        await this.wdaClient.initSession();
         this.wdaReady = true;
         this.updateCapabilities(true);
         await this.refreshWdaWindowSize();
@@ -231,6 +233,8 @@ export class iOSConnection implements IDeviceConnection {
 
       const status = await wdaClient.checkStatus();
       if (status?.ready !== false) {
+        // Pre-create session to avoid latency on first touch
+        await wdaClient.initSession();
         this.wdaReady = true;
         this.updateCapabilities(true);
         await this.refreshWdaWindowSize();
@@ -647,9 +651,8 @@ export class iOSConnection implements IDeviceConnection {
     const absX = x * width;
     const absY = y * height;
 
-    this.wdaClient.touch(wdaAction, absX, absY).catch((error) => {
-      console.error('[WDA] Touch failed:', error);
-    });
+    // touch() is fire-and-forget with internal error handling
+    this.wdaClient.touch(wdaAction, absX, absY);
   }
 
   /**
@@ -673,9 +676,8 @@ export class iOSConnection implements IDeviceConnection {
     const absX = x * width;
     const absY = y * height;
 
-    this.wdaClient.scroll(absX, absY, dx, dy).catch((error) => {
-      console.error('[WDA] Scroll failed:', error);
-    });
+    // scroll() is fire-and-forget with internal debouncing
+    this.wdaClient.scroll(absX, absY, dx, dy);
   }
 
   /**
