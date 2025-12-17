@@ -320,13 +320,14 @@ test_wda() {
 run_wda_only() {
     print_step "Starting WebDriverAgent..."
 
-    cd "$WDA_DIR"
-
-    # Check if WDA is already built
-    if [[ ! -d "build" ]]; then
-        print_error "WebDriverAgent not built yet. Run setup first."
+    # Check if WDA directory exists
+    if [[ ! -d "$WDA_DIR" ]]; then
+        print_error "WebDriverAgent not found at $WDA_DIR"
+        print_info "Run '$0 setup' first to install WebDriverAgent."
         exit 1
     fi
+
+    cd "$WDA_DIR"
 
     print_info "Launching WebDriverAgent on $DEVICE_NAME..."
 
