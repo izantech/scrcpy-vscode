@@ -202,6 +202,7 @@ let deviceSettingsContent: HTMLElement | null = null;
 let deviceSettingsBtn: HTMLElement | null = null;
 let currentDeviceSettings: DeviceUISettings | null = null;
 const pendingSettingChanges = new Set<string>();
+const deviceSettingsCache = new Map<string, DeviceUISettings>();
 
 // Device info tooltip
 let deviceInfoTooltip: HTMLElement | null = null;
@@ -1837,8 +1838,9 @@ function openDeviceSettings() {
     return;
   }
 
-  // Render form immediately with default values and disabled state
-  const defaultSettings: DeviceUISettings = {
+  // Use cached settings if available, otherwise use defaults
+  const cachedSettings = deviceSettingsCache.get(activeDeviceId);
+  const initialSettings: DeviceUISettings = cachedSettings || {
     darkMode: 'auto',
     navigationMode: 'gestural',
     talkbackEnabled: false,
@@ -1848,12 +1850,20 @@ function openDeviceSettings() {
     defaultDensity: 400,
     showLayoutBounds: false,
   };
-  renderDeviceSettingsForm(defaultSettings, true); // true = disabled
+
+  // If we have cached settings, show them enabled immediately
+  // Otherwise show disabled state while fetching
+  const hasCachedSettings = !!cachedSettings;
+  renderDeviceSettingsForm(initialSettings, !hasCachedSettings);
+
+  if (hasCachedSettings) {
+    currentDeviceSettings = cachedSettings;
+  }
 
   // Show overlay
   deviceSettingsOverlay.classList.add('visible');
 
-  // Request settings from extension
+  // Request fresh settings from extension
   vscode.postMessage({ type: 'openDeviceSettings' });
 }
 
@@ -1874,9 +1884,12 @@ function closeDeviceSettings() {
  * Handle device settings loaded from extension
  */
 function handleDeviceSettingsLoaded(settings: DeviceUISettings) {
-  if (!deviceSettingsContent) {
+  if (!deviceSettingsContent || !activeDeviceId) {
     return;
   }
+
+  // Cache settings for this device
+  deviceSettingsCache.set(activeDeviceId, settings);
 
   currentDeviceSettings = settings;
   renderDeviceSettingsForm(settings, false); // false = enabled
@@ -2228,6 +2241,12 @@ function applyDeviceSetting(setting: string, value: unknown, control: HTMLElemen
   // Mark as pending and show loading state
   pendingSettingChanges.add(setting);
   control.classList.add('loading');
+
+  // Update current settings and cache optimistically
+  if (currentDeviceSettings && activeDeviceId) {
+    (currentDeviceSettings as unknown as Record<string, unknown>)[setting] = value;
+    deviceSettingsCache.set(activeDeviceId, { ...currentDeviceSettings });
+  }
 
   // Send to extension
   vscode.postMessage({
