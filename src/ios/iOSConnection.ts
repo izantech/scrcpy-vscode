@@ -456,20 +456,15 @@ export class iOSConnection implements IDeviceConnection {
       return envHelperPath;
     }
 
-    // In development, look for the built binary in native/ios-helper
-    // In production, it's bundled alongside the extension
-    const extensionPath = path.join(__dirname, '..');
+    // __dirname is 'out' folder, go up one level to get extension root
+    const extensionRoot = path.join(__dirname, '..');
 
-    // Try production path first (bundled with extension)
-    const prodPath = path.join(extensionPath, 'ios-helper');
-
-    // Check if running in development by looking for node_modules at project root
-    const projectRoot = path.join(extensionPath, '..');
-    const isDevMode = fs.existsSync(path.join(projectRoot, 'node_modules'));
+    // Check if running in development by looking for node_modules
+    const isDevMode = fs.existsSync(path.join(extensionRoot, 'node_modules'));
 
     if (isDevMode) {
       // Development paths - Swift uses architecture-specific directories
-      const buildDir = path.join(projectRoot, 'native', 'ios-helper', '.build');
+      const buildDir = path.join(extensionRoot, 'native', 'ios-helper', '.build');
       const possiblePaths = [
         path.join(buildDir, 'arm64-apple-macosx', 'release', 'ios-helper'),
         path.join(buildDir, 'x86_64-apple-macosx', 'release', 'ios-helper'),
@@ -483,7 +478,8 @@ export class iOSConnection implements IDeviceConnection {
       }
     }
 
-    return prodPath;
+    // Production path (bundled with extension)
+    return path.join(extensionRoot, 'ios-helper');
   }
 
   // Input methods - implemented via WebDriverAgent (Phase 8)

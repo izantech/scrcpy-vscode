@@ -146,9 +146,16 @@ export class DeviceService {
 
     // Get iOS devices if enabled and on macOS
     let iosDevices: DeviceInfo[] = [];
+    console.log(
+      '[DeviceService] iOS config:',
+      this.iosConfig,
+      'isIOSSupportAvailable:',
+      isIOSSupportAvailable()
+    );
     if (this.iosConfig.enabled && isIOSSupportAvailable()) {
       try {
         iosDevices = await iOSDeviceManager.getAvailableDevices();
+        console.log('[DeviceService] Found iOS devices:', iosDevices.length);
       } catch (error) {
         console.error('Failed to get iOS devices:', error);
       }
