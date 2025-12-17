@@ -329,28 +329,41 @@ run_wda_only() {
 
     cd "$WDA_DIR"
 
-    # Kill any existing iproxy on port 8100
+    # Kill any existing WDA-related processes
+    print_info "Stopping any existing WDA sessions..."
     pkill -f "iproxy.*8100" 2>/dev/null || true
+    pkill -f "xcodebuild.*WebDriverAgent" 2>/dev/null || true
     sleep 1
 
     print_info "Launching WebDriverAgent on $DEVICE_NAME..."
     print_info "This may take a few seconds..."
     echo ""
 
-    # Start xcodebuild in background, suppress most output
+    # Start xcodebuild in background
     xcodebuild test-without-building \
         -project WebDriverAgent.xcodeproj \
         -scheme WebDriverAgentRunner \
         -destination "id=$DEVICE_UDID" \
-        2>&1 | grep -E "(ServerURLHere|error:|warning:.*error|Test.*started|BUILD)" &
+        > /dev/null 2>&1 &
 
     XCODE_PID=$!
     sleep 5
 
     # Start iproxy for USB tunneling
-    iproxy 8100 8100 -u "$DEVICE_UDID" 2>/dev/null &
+    iproxy 8100 8100 -u "$DEVICE_UDID" > /dev/null 2>&1 &
     IPROXY_PID=$!
     sleep 2
+
+    # Set up cleanup trap
+    cleanup() {
+        echo ""
+        print_info "Stopping WebDriverAgent..."
+        kill $XCODE_PID $IPROXY_PID 2>/dev/null
+        pkill -f "iproxy.*8100" 2>/dev/null
+        pkill -f "xcodebuild.*WebDriverAgent" 2>/dev/null
+        exit 0
+    }
+    trap cleanup INT TERM
 
     if curl -s http://localhost:8100/status | grep -q "ready"; then
         print_success "WebDriverAgent is running!"
@@ -358,7 +371,7 @@ run_wda_only() {
         print_info "WDA URL: http://localhost:8100"
         print_info "Press Ctrl+C to stop"
         echo ""
-        trap "kill $XCODE_PID $IPROXY_PID 2>/dev/null; pkill -f 'iproxy.*8100' 2>/dev/null; exit 0" INT TERM
+        # Wait indefinitely until user stops
         wait $XCODE_PID
     else
         print_error "Failed to start WebDriverAgent"
