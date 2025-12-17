@@ -66,6 +66,8 @@ export interface DeviceDetailedInfo {
   storageUsed: number; // bytes
   screenResolution: string; // e.g., "1080x2400"
   ipAddress?: string;
+  // iOS WebDriverAgent status (Phase 8)
+  wdaStatus?: 'connected' | 'connecting' | 'unavailable' | 'disabled';
 }
 
 /**

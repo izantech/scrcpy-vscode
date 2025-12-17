@@ -676,6 +676,29 @@ export class DeviceService {
 
       // Clear any loading status message
       this.appState.clearStatusMessage();
+
+      // Set iOS device info with WDA status (Phase 8)
+      const deviceInfo = connection.getDeviceInfo();
+      let wdaStatus: 'connected' | 'unavailable' | 'disabled' = 'disabled';
+      if (this.iosConfig.webDriverAgentEnabled) {
+        wdaStatus = connection.isWdaReady ? 'connected' : 'unavailable';
+      }
+      this.appState.setDeviceInfo(session.deviceInfo.serial, {
+        serial: session.deviceInfo.serial,
+        model: deviceInfo?.model || session.deviceInfo.model || 'iOS Device',
+        manufacturer: 'Apple',
+        androidVersion: '', // Not applicable for iOS
+        sdkVersion: 0,
+        batteryLevel: 0,
+        batteryCharging: false,
+        storageTotal: 0,
+        storageUsed: 0,
+        screenResolution:
+          connection.deviceWidth && connection.deviceHeight
+            ? `${connection.deviceWidth}x${connection.deviceHeight}`
+            : 'Unknown',
+        wdaStatus,
+      });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       this.appState.updateDeviceConnectionState(session.deviceId, 'disconnected');

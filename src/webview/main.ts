@@ -157,6 +157,8 @@ interface DeviceDetailedInfo {
   storageUsed: number;
   screenResolution: string;
   ipAddress?: string;
+  // iOS WebDriverAgent status (Phase 8)
+  wdaStatus?: 'connected' | 'connecting' | 'unavailable' | 'disabled';
 }
 
 // Global state
@@ -1747,6 +1749,31 @@ function updateTooltipContent(serial: string, info: DeviceDetailedInfo) {
 
   if (ipAddress) {
     content += `<div class="info-row">${escapeHtml(ipAddress)}</div>`;
+  }
+
+  // iOS WDA status (input control)
+  if (platform === 'ios' && info.wdaStatus) {
+    let wdaIcon = '';
+    let wdaText = '';
+    switch (info.wdaStatus) {
+      case 'connected':
+        wdaIcon = '✅';
+        wdaText = 'Input enabled';
+        break;
+      case 'connecting':
+        wdaIcon = '🔄';
+        wdaText = 'Connecting...';
+        break;
+      case 'unavailable':
+        wdaIcon = '⚠️';
+        wdaText = 'Input unavailable';
+        break;
+      case 'disabled':
+        wdaIcon = '⏸️';
+        wdaText = 'Input disabled';
+        break;
+    }
+    content += `<div class="info-row">${wdaIcon} ${wdaText}</div>`;
   }
 
   // Connection type and battery at the bottom, on the same row
