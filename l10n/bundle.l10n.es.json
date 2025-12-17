@@ -1,6 +1,6 @@
 {
   "Settings changed. Reconnecting...": "La configuración ha cambiado. Reconectando...",
-  "No Android devices found.\n\nPlease connect a device and enable USB debugging.": "No se encontraron dispositivos Android.\n\nConecta un dispositivo y activa la depuración USB.",
+  "No devices found.\n\nConnect a device via USB to get started.": "No se encontraron dispositivos.\n\nConecta un dispositivo por USB para empezar.",
   "Connection failed: {0}": "Conexión fallida: {0}",
   "Select scrcpy installation folder": "Selecciona la carpeta de instalación de scrcpy",
   "$(key) Pair new device (Android 11+)": "$(key) Emparejar nuevo dispositivo (Android 11+)",
@@ -32,7 +32,7 @@
   "Connecting to {0}...": "Conectando a {0}...",
   "Connected to {0} over WiFi": "Conectado a {0} por WiFi",
   "WiFi connection failed: {0}": "Error de conexión WiFi: {0}",
-  "No Android devices found. Please connect a device and enable USB debugging.": "No se encontraron dispositivos Android. Conecta un dispositivo y activa la depuración USB.",
+  "No devices found. Please connect a device via USB.": "No se encontraron dispositivos. Conecta un dispositivo por USB.",
   "All available devices are already connected.": "Todos los dispositivos ya están conectados.",
   "Select a device to connect": "Selecciona un dispositivo",
   "Disconnected": "Desconectado",

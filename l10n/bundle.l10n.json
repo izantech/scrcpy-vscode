@@ -1,6 +1,6 @@
 {
   "Settings changed. Reconnecting...": "Settings changed. Reconnecting...",
-  "No Android devices found.\n\nPlease connect a device and enable USB debugging.": "No Android devices found.\n\nPlease connect a device and enable USB debugging.",
+  "No devices found.\n\nConnect a device via USB to get started.": "No devices found.\n\nConnect a device via USB to get started.",
   "Connection failed: {0}": "Connection failed: {0}",
   "Select scrcpy installation folder": "Select scrcpy installation folder",
   "$(key) Pair new device (Android 11+)": "$(key) Pair new device (Android 11+)",
@@ -32,7 +32,7 @@
   "Connecting to {0}...": "Connecting to {0}...",
   "Connected to {0} over WiFi": "Connected to {0} over WiFi",
   "WiFi connection failed: {0}": "WiFi connection failed: {0}",
-  "No Android devices found. Please connect a device and enable USB debugging.": "No Android devices found. Please connect a device and enable USB debugging.",
+  "No devices found. Please connect a device via USB.": "No devices found. Please connect a device via USB.",
   "All available devices are already connected.": "All available devices are already connected.",
   "Select a device to connect": "Select a device to connect",
   "Disconnected": "Disconnected",

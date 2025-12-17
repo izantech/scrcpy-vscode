@@ -373,9 +373,7 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
       if (devices.length === 0) {
         this._appState.setStatusMessage({
           type: 'empty',
-          text: vscode.l10n.t(
-            'No Android devices found.\n\nPlease connect a device and enable USB debugging.'
-          ),
+          text: vscode.l10n.t('No devices found.\n\nConnect a device via USB to get started.'),
         });
         return;
       }
@@ -1214,7 +1212,7 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
 
     if (devices.length === 0) {
       vscode.window.showErrorMessage(
-        vscode.l10n.t('No Android devices found. Please connect a device and enable USB debugging.')
+        vscode.l10n.t('No devices found. Please connect a device via USB.')
       );
       return;
     }

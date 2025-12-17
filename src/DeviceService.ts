@@ -935,9 +935,7 @@ export class DeviceService {
       // No devices left - clear any error/loading messages and show empty state
       this.appState.setStatusMessage({
         type: 'empty',
-        text: vscode.l10n.t(
-          'No Android devices found.\n\nPlease connect a device and enable USB debugging.'
-        ),
+        text: vscode.l10n.t('No devices found.\n\nConnect a device via USB to get started.'),
       });
     } else if (this.appState.getActiveDeviceId() === null) {
       // If removed active device, switch to first available
