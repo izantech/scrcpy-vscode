@@ -1,6 +1,8 @@
 import AVFoundation
 import CoreMedia
 import CoreVideo
+import CoreImage
+import AppKit
 
 /// Delegate protocol for receiving video frames
 protocol ScreenCaptureDelegate: AnyObject {
@@ -22,6 +24,10 @@ class ScreenCapture: NSObject {
     private var videoWidth: Int = 0
     private var videoHeight: Int = 0
     private var hasStarted = false
+
+    // Single frame capture support
+    private var singleFrameCompletion: ((Result<Data, Error>) -> Void)?
+    private var isSingleFrameMode = false
 
     init(device: AVCaptureDevice) {
         self.device = device
@@ -76,6 +82,35 @@ class ScreenCapture: NSObject {
         }
     }
 
+    /// Capture a single frame and return as PNG data
+    func captureOneFrame(completion: @escaping (Result<Data, Error>) -> Void) {
+        isSingleFrameMode = true
+        singleFrameCompletion = completion
+
+        do {
+            try start()
+        } catch {
+            completion(.failure(error))
+        }
+    }
+
+    /// Convert CMSampleBuffer to PNG data
+    private func convertToPNG(_ sampleBuffer: CMSampleBuffer) -> Data? {
+        guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else {
+            return nil
+        }
+
+        let ciImage = CIImage(cvPixelBuffer: pixelBuffer)
+        let context = CIContext()
+
+        guard let cgImage = context.createCGImage(ciImage, from: ciImage.extent) else {
+            return nil
+        }
+
+        let bitmapRep = NSBitmapImageRep(cgImage: cgImage)
+        return bitmapRep.representation(using: .png, properties: [:])
+    }
+
     /// Configure the capture format for best quality
     private func configureFormat() throws {
         // Find the best format (highest resolution)
@@ -112,6 +147,21 @@ extension ScreenCapture: AVCaptureVideoDataOutputSampleBufferDelegate {
         didOutput sampleBuffer: CMSampleBuffer,
         from connection: AVCaptureConnection
     ) {
+        // Handle single-frame capture mode (screenshot)
+        if isSingleFrameMode {
+            isSingleFrameMode = false  // Prevent processing more frames
+
+            if let pngData = convertToPNG(sampleBuffer) {
+                singleFrameCompletion?(.success(pngData))
+            } else {
+                singleFrameCompletion?(.failure(ScreenCaptureError.cannotConvertToPNG))
+            }
+
+            // Stop the session
+            captureSession?.stopRunning()
+            return
+        }
+
         // Notify delegate that we've started (with dimensions)
         if !hasStarted {
             hasStarted = true
@@ -141,6 +191,7 @@ enum ScreenCaptureError: Error, LocalizedError {
     case cannotAddInput
     case cannotAddOutput
     case noSuitableFormat
+    case cannotConvertToPNG
 
     var errorDescription: String? {
         switch self {
@@ -150,6 +201,8 @@ enum ScreenCaptureError: Error, LocalizedError {
             return "Cannot add video output to capture session"
         case .noSuitableFormat:
             return "No suitable video format found"
+        case .cannotConvertToPNG:
+            return "Cannot convert frame to PNG"
         }
     }
 }

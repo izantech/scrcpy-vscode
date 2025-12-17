@@ -39,6 +39,7 @@ enum MessageType {
   VIDEO_FRAME = 0x04,
   ERROR = 0x05,
   STATUS = 0x06,
+  SCREENSHOT = 0x07,
 }
 
 /**
@@ -288,6 +289,7 @@ export class iOSConnection implements IDeviceConnection {
       supportsTouch: wdaConnected,
       supportsKeyboard: wdaConnected,
       supportsSystemButtons: wdaConnected, // home button only
+      supportsVolumeControl: wdaConnected,
     };
   }
 
@@ -598,8 +600,55 @@ export class iOSConnection implements IDeviceConnection {
   }
 
   async takeScreenshot(): Promise<Buffer | null> {
-    // Could implement via helper command in the future
-    return null;
+    if (!this.targetUDID) {
+      return null;
+    }
+
+    const helperPath = this.getHelperPath();
+    if (!helperPath) {
+      throw new Error('iOS helper not found');
+    }
+
+    return new Promise((resolve, reject) => {
+      const proc = spawn(helperPath, ['screenshot', this.targetUDID!]);
+      const chunks: Buffer[] = [];
+
+      proc.stdout.on('data', (chunk: Buffer) => {
+        chunks.push(chunk);
+      });
+
+      proc.stderr.on('data', (data: Buffer) => {
+        console.error('[iOS Screenshot] stderr:', data.toString());
+      });
+
+      proc.on('close', (code) => {
+        if (code === 0) {
+          // Parse binary protocol: type(1) + length(4) + payload
+          const data = Buffer.concat(chunks);
+          if (data.length >= 5) {
+            const type = data.readUInt8(0);
+            const length = data.readUInt32BE(1);
+
+            if (type === MessageType.SCREENSHOT && data.length >= 5 + length) {
+              const pngData = data.slice(5, 5 + length);
+              resolve(pngData);
+              return;
+            } else if (type === MessageType.ERROR) {
+              const errorMsg = data.slice(5, 5 + length).toString('utf-8');
+              reject(new Error(errorMsg));
+              return;
+            }
+          }
+          reject(new Error('Invalid screenshot response'));
+        } else {
+          reject(new Error(`Screenshot failed with code ${code}`));
+        }
+      });
+
+      proc.on('error', (err) => {
+        reject(err);
+      });
+    });
   }
 
   /**

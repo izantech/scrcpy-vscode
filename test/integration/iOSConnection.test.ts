@@ -3,7 +3,8 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { spawn } from 'child_process';
+import { spawn, ChildProcess } from 'child_process';
+import { EventEmitter, Readable } from 'stream';
 import { MockChildProcess, resetMocks as resetChildProcessMocks } from '../mocks/child_process';
 
 // Mock child_process module
@@ -617,8 +618,10 @@ describe('iOSConnection', () => {
       expect(() => connection.sendKey?.()).not.toThrow();
     });
 
-    it('should return null for screenshot', async () => {
-      const result = await connection.takeScreenshot();
+    it('should return null for screenshot when no UDID', async () => {
+      // Create connection without UDID to test null return
+      const noUdidConnection = new iOSConnection(undefined, '/mock/ios-helper');
+      const result = await noUdidConnection.takeScreenshot();
       expect(result).toBeNull();
     });
   });
@@ -662,6 +665,86 @@ describe('iOSConnection', () => {
     it('should not modify capabilities until WDA connects', () => {
       // Without successful WDA connection, touch should remain disabled
       expect(wdaConnection.capabilities.supportsTouch).toBe(false);
+    });
+
+    it('should include volume control in capabilities when WDA connects', () => {
+      // Simulate WDA connection by calling the private updateCapabilities method
+      // Access via type assertion for testing
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (wdaConnection as any).updateCapabilities(true);
+
+      expect(wdaConnection.capabilities.supportsVolumeControl).toBe(true);
+      expect(wdaConnection.capabilities.supportsTouch).toBe(true);
+      expect(wdaConnection.capabilities.supportsKeyboard).toBe(true);
+      expect(wdaConnection.capabilities.supportsSystemButtons).toBe(true);
+    });
+  });
+
+  describe('screenshot', () => {
+    it('should reject when helper exits with error code', async () => {
+      const screenshotConnection = new iOSConnection('SCREENSHOT-TEST-UDID', '/mock/ios-helper');
+
+      // Mock spawn to emit close with error code
+      const mockSpawn = vi.mocked(spawn);
+      mockSpawn.mockImplementationOnce(() => {
+        const mockProcess = new EventEmitter() as ChildProcess;
+        mockProcess.stdout = new EventEmitter() as Readable;
+        mockProcess.stderr = new EventEmitter() as Readable;
+        mockProcess.stdin = null;
+        mockProcess.stdio = [null, mockProcess.stdout, mockProcess.stderr, null, null];
+        mockProcess.pid = 12345;
+        mockProcess.killed = false;
+        mockProcess.kill = vi.fn().mockReturnValue(true);
+
+        setTimeout(() => {
+          mockProcess.emit('close', 1);
+        }, 10);
+
+        return mockProcess;
+      });
+
+      await expect(screenshotConnection.takeScreenshot()).rejects.toThrow(
+        'Screenshot failed with code 1'
+      );
+    });
+
+    it('should parse screenshot response from helper', async () => {
+      const screenshotConnection = new iOSConnection('SCREENSHOT-TEST-UDID', '/mock/ios-helper');
+
+      // Mock spawn to return valid screenshot response
+      const mockSpawn = vi.mocked(spawn);
+      const pngData = Buffer.from('fake-png-data');
+
+      // Create binary protocol message: type(1) + length(4) + payload
+      const responseBuffer = Buffer.alloc(5 + pngData.length);
+      responseBuffer.writeUInt8(0x07, 0); // MessageType.SCREENSHOT
+      responseBuffer.writeUInt32BE(pngData.length, 1);
+      pngData.copy(responseBuffer, 5);
+
+      mockSpawn.mockImplementationOnce(() => {
+        const mockProcess = new EventEmitter() as ChildProcess;
+        mockProcess.stdout = new EventEmitter() as Readable;
+        mockProcess.stderr = new EventEmitter() as Readable;
+        mockProcess.stdin = null;
+        mockProcess.stdio = [null, mockProcess.stdout, mockProcess.stderr, null, null];
+        mockProcess.pid = 12345;
+        mockProcess.killed = false;
+        mockProcess.kill = vi.fn().mockReturnValue(true);
+
+        setTimeout(() => {
+          mockProcess.stdout!.emit('data', responseBuffer);
+          mockProcess.emit('close', 0);
+        }, 10);
+
+        return mockProcess;
+      });
+
+      const result = await screenshotConnection.takeScreenshot();
+      expect(result).toEqual(pngData);
+      expect(mockSpawn).toHaveBeenCalledWith('/mock/ios-helper', [
+        'screenshot',
+        'SCREENSHOT-TEST-UDID',
+      ]);
     });
   });
 });

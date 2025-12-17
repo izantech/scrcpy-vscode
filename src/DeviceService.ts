@@ -1192,9 +1192,14 @@ export class DeviceService {
     const connection = session.connection;
     if (this.isScrcpyConnection(connection)) {
       return connection.takeScreenshot();
+    } else if (this.isiOSConnection(connection)) {
+      const screenshot = await connection.takeScreenshot();
+      if (!screenshot) {
+        throw new Error(vscode.l10n.t('Screenshot not available'));
+      }
+      return screenshot;
     }
-    // iOS screenshot not yet implemented
-    throw new Error(vscode.l10n.t('Screenshot not supported for iOS devices'));
+    throw new Error(vscode.l10n.t('Screenshot not supported'));
   }
 
   async listCameras(): Promise<string> {

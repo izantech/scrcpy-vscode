@@ -9,6 +9,7 @@ enum MessageType: UInt8 {
     case videoFrame = 0x04
     case error = 0x05
     case status = 0x06
+    case screenshot = 0x07
 }
 
 /// Writes binary messages to stdout following the protocol format
@@ -88,6 +89,11 @@ class MessageWriter {
 
         write(type: .videoFrame, payload: payload)
     }
+
+    /// Write screenshot (PNG data)
+    static func writeScreenshot(_ pngData: Data) {
+        write(type: .screenshot, payload: pngData)
+    }
 }
 
 /// Main application for iOS screen capture
@@ -135,6 +141,30 @@ class IOSHelperApp: ScreenCaptureDelegate {
             MessageWriter.writeError("Failed to start capture: \(error.localizedDescription)")
             exit(1)
         }
+    }
+
+    /// Take a single screenshot from a device
+    func takeScreenshot(udid: String) {
+        guard let device = DeviceEnumerator.findDevice(udid: udid) else {
+            MessageWriter.writeError("Device not found: \(udid)")
+            exit(1)
+        }
+
+        // Create screen capture for single frame
+        let capture = ScreenCapture(device: device)
+        capture.captureOneFrame { result in
+            switch result {
+            case .success(let pngData):
+                MessageWriter.writeScreenshot(pngData)
+                exit(0)
+            case .failure(let error):
+                MessageWriter.writeError("Screenshot failed: \(error.localizedDescription)")
+                exit(1)
+            }
+        }
+
+        // Run until callback completes
+        RunLoop.main.run()
     }
 
     // MARK: - ScreenCaptureDelegate
@@ -185,6 +215,7 @@ func printUsage() {
     Usage:
       ios-helper list              List connected iOS devices
       ios-helper stream <UDID>     Stream video from a specific device
+      ios-helper screenshot <UDID> Take a single screenshot from a device
 
     The output is a binary protocol on stdout for consumption by the VS Code extension.
 
@@ -215,6 +246,15 @@ func main() {
         }
         let udid = args[2]
         app.startStream(udid: udid)
+
+    case "screenshot":
+        guard args.count >= 3 else {
+            fputs("Error: screenshot command requires a device UDID\n", stderr)
+            printUsage()
+            exit(1)
+        }
+        let udid = args[2]
+        app.takeScreenshot(udid: udid)
 
     case "-h", "--help", "help":
         printUsage()
