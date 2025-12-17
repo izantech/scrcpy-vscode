@@ -10,6 +10,7 @@ import { ToolNotFoundError, ToolErrorCode, DeviceUISettings } from './types/AppS
 
 export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'scrcpy.deviceView';
+  private static readonly DEVICE_SETTINGS_CACHE_KEY = 'deviceSettingsCache';
 
   private _view?: vscode.WebviewView;
   private _appState?: AppStateManager;
@@ -19,12 +20,15 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
   private _isDisposed = false;
   private _abortController?: AbortController;
   private _toolStatus?: ToolCheckResult;
+  private _globalState?: vscode.Memento;
 
   constructor(
     private readonly _extensionUri: vscode.Uri,
-    toolStatus?: ToolCheckResult
+    toolStatus?: ToolCheckResult,
+    globalState?: vscode.Memento
   ) {
     this._toolStatus = toolStatus;
+    this._globalState = globalState;
   }
 
   public resolveWebviewView(
@@ -611,6 +615,11 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
       case 'ready':
         console.log('Webview ready');
         this._sendSettings();
+        // Send cached device settings to webview
+        this._view?.webview.postMessage({
+          type: 'deviceSettingsCacheLoaded',
+          cache: this.getDeviceSettingsCache(),
+        });
         break;
 
       case 'reconnect':
@@ -671,8 +680,13 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
 
       case 'openDeviceSettings':
         if (this._deviceService) {
+          const deviceId = this._appState?.getActiveDeviceId();
           try {
             const settings = await this._deviceService.getDeviceUISettings();
+            // Save to persistent cache
+            if (deviceId) {
+              this.saveDeviceSettingsToCache(deviceId, settings);
+            }
             this._view?.webview.postMessage({
               type: 'deviceSettingsLoaded',
               settings,
@@ -688,11 +702,20 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
 
       case 'applyDeviceSetting':
         if (this._deviceService && message.setting && message.value !== undefined) {
+          const deviceId = this._appState?.getActiveDeviceId();
           try {
             await this._deviceService.applyDeviceUISetting(
               message.setting as keyof DeviceUISettings,
               message.value as DeviceUISettings[keyof DeviceUISettings]
             );
+            // Update persistent cache
+            if (deviceId) {
+              this.updateDeviceSettingInCache(
+                deviceId,
+                message.setting as keyof DeviceUISettings,
+                message.value as DeviceUISettings[keyof DeviceUISettings]
+              );
+            }
             // Notify webview of success
             this._view?.webview.postMessage({
               type: 'deviceSettingApplied',
@@ -1517,5 +1540,55 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
 
   private _getHtmlForWebview(webview: vscode.Webview): string {
     return getHtmlForWebview(webview, this._extensionUri);
+  }
+
+  /**
+   * Get device settings cache from globalState
+   */
+  private getDeviceSettingsCache(): Record<string, DeviceUISettings> {
+    if (!this._globalState) {
+      return {};
+    }
+    return this._globalState.get<Record<string, DeviceUISettings>>(
+      ScrcpyViewProvider.DEVICE_SETTINGS_CACHE_KEY,
+      {}
+    );
+  }
+
+  /**
+   * Save device settings to persistent cache
+   */
+  private saveDeviceSettingsToCache(deviceId: string, settings: DeviceUISettings): void {
+    if (!this._globalState) {
+      return;
+    }
+    const cache = this.getDeviceSettingsCache();
+    cache[deviceId] = settings;
+    this._globalState.update(ScrcpyViewProvider.DEVICE_SETTINGS_CACHE_KEY, cache);
+  }
+
+  /**
+   * Update a single setting in the persistent cache
+   */
+  private updateDeviceSettingInCache(
+    deviceId: string,
+    setting: keyof DeviceUISettings,
+    value: DeviceUISettings[keyof DeviceUISettings]
+  ): void {
+    if (!this._globalState) {
+      return;
+    }
+    const cache = this.getDeviceSettingsCache();
+    if (cache[deviceId]) {
+      (cache[deviceId] as unknown as Record<string, unknown>)[setting] = value;
+      this._globalState.update(ScrcpyViewProvider.DEVICE_SETTINGS_CACHE_KEY, cache);
+    }
+  }
+
+  /**
+   * Get cached settings for a device
+   */
+  public getDeviceSettingsFromCache(deviceId: string): DeviceUISettings | undefined {
+    return this.getDeviceSettingsCache()[deviceId];
   }
 }

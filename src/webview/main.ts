@@ -918,6 +918,15 @@ function handleMessage(event: MessageEvent) {
       handleDeviceSettingsLoaded(message.settings);
       break;
 
+    case 'deviceSettingsCacheLoaded':
+      // Populate cache from persisted storage
+      if (message.cache) {
+        for (const [deviceId, settings] of Object.entries(message.cache)) {
+          deviceSettingsCache.set(deviceId, settings as DeviceUISettings);
+        }
+      }
+      break;
+
     case 'deviceSettingApplied':
       handleDeviceSettingApplied(message.setting, message.success, message.error);
       break;

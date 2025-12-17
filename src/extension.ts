@@ -15,7 +15,7 @@ export async function activate(context: vscode.ExtensionContext) {
   const toolResult = await checkAllTools(adbPath, scrcpyPath);
 
   // Create provider with tool status
-  provider = new ScrcpyViewProvider(context.extensionUri, toolResult);
+  provider = new ScrcpyViewProvider(context.extensionUri, toolResult, context.globalState);
 
   // Register the webview view provider
   context.subscriptions.push(
