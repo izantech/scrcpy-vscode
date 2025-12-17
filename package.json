@@ -663,7 +663,7 @@
         },
         {
           "command": "scrcpy.launchApp",
-          "when": "view == scrcpy.deviceView && scrcpy.activeDevicePlatform == 'android'",
+          "when": "view == scrcpy.deviceView && scrcpy.supportsAppLaunch",
           "group": "2_device@1"
         },
         {

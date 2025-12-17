@@ -79,10 +79,11 @@ export const IOS_CAPABILITIES: PlatformCapabilities = {
   supportsCameraSource: false,
   supportsScreenOff: false,
 
-  // File operations - none for MVP
+  // File operations - limited
   supportsApkInstall: false,
   supportsFileUpload: false,
-  supportsAppLaunch: false,
+  // App listing via ideviceinstaller works without WDA, launching requires WDA (shows error)
+  supportsAppLaunch: true,
 
   // Clipboard - disabled by default, enabled when WDA connects
   supportsClipboard: false,

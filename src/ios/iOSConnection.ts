@@ -424,7 +424,9 @@ export class iOSConnection implements IDeviceConnection {
       // New capabilities enabled when WDA is connected
       supportsRotation: wdaConnected,
       supportsClipboard: wdaConnected,
-      supportsAppLaunch: wdaConnected,
+      // App listing works via ideviceinstaller (no WDA needed), launching requires WDA
+      // Show menu always, error on launch if WDA not connected
+      supportsAppLaunch: true,
     };
     // Notify listeners of capability changes
     this.onCapabilitiesChanged?.(this._capabilities);
@@ -926,27 +928,71 @@ export class iOSConnection implements IDeviceConnection {
    */
   async launchApp(bundleId: string): Promise<void> {
     if (!this.wdaClient || !this.wdaReady) {
-      throw new Error('WDA not connected');
+      throw new Error(
+        'WebDriverAgent not connected. Use "Start iOS Input Control" from the menu to enable app launching.'
+      );
     }
 
     await this.wdaClient.launchApp(bundleId);
   }
 
   /**
-   * Get list of installed apps on the iOS device via WDA
+   * Get list of installed apps on the iOS device via ideviceinstaller
    * @returns Array of app info with appId (bundle ID) and displayName
    */
   async getInstalledApps(): Promise<Array<{ appId: string; displayName: string }>> {
-    if (!this.wdaClient || !this.wdaReady) {
-      throw new Error('WDA not connected');
+    // Resolve the real UDID for libimobiledevice tools
+    const udid = await this.resolveRealUdid();
+    if (!udid) {
+      throw new Error('Could not resolve device UDID');
     }
 
-    const apps = await this.wdaClient.getInstalledApps();
+    return new Promise((resolve, reject) => {
+      // Run ideviceinstaller to list user-installed apps
+      execFile('ideviceinstaller', ['-u', udid, 'list'], (error, stdout, stderr) => {
+        if (error) {
+          if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+            reject(
+              new Error('ideviceinstaller not found. Install with: brew install ideviceinstaller')
+            );
+          } else {
+            reject(new Error(`Failed to list apps: ${stderr || error.message}`));
+          }
+          return;
+        }
 
-    return apps.map((app) => ({
-      appId: app.CFBundleIdentifier,
-      displayName: app.CFBundleDisplayName || app.CFBundleName,
-    }));
+        // Parse output - format: "bundleId, version, displayName - bundleId"
+        // Example: "com.apple.mobilesafari, 16.3, Safari - com.apple.mobilesafari"
+        const apps: Array<{ appId: string; displayName: string }> = [];
+        const lines = stdout.trim().split('\n');
+
+        for (const line of lines) {
+          if (!line.trim()) {
+            continue;
+          }
+
+          // Try parsing "bundleId, version, displayName" format
+          const parts = line.split(',').map((p) => p.trim());
+          if (parts.length >= 3) {
+            const bundleId = parts[0];
+            // Display name might contain commas, so join everything after version
+            // Also remove any trailing " - bundleId" suffix
+            let displayName = parts.slice(2).join(', ');
+            const dashIndex = displayName.lastIndexOf(' - ');
+            if (dashIndex > 0) {
+              displayName = displayName.substring(0, dashIndex);
+            }
+
+            apps.push({
+              appId: bundleId,
+              displayName: displayName || bundleId,
+            });
+          }
+        }
+
+        resolve(apps);
+      });
+    });
   }
 
   /**

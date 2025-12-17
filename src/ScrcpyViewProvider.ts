@@ -6,7 +6,7 @@ import { ScrcpyConfig } from './android/ScrcpyConnection';
 import { DeviceService } from './DeviceService';
 import { AppStateManager, Unsubscribe } from './AppStateManager';
 import { ToolCheckResult } from './ToolChecker';
-import { ToolNotFoundError, ToolErrorCode } from './types/AppState';
+import { ToolNotFoundError, ToolErrorCode, DeviceState } from './types/AppState';
 
 export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'scrcpy.deviceView';
@@ -284,6 +284,9 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
         type: 'stateSnapshot',
         state: snapshot,
       });
+      // Update VS Code context for menu visibility when active device or capabilities change
+      const activeDevice = snapshot.devices.find((d) => d.deviceId === snapshot.activeDeviceId);
+      this._updateDeviceContexts(activeDevice);
     });
 
     // Create device service with callbacks for high-frequency data
@@ -327,13 +330,7 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
           text: status,
           deviceId: deviceId || undefined,
         });
-        // Update platform context for menu visibility
-        const activeDevice = this._appState.getActiveDevice();
-        vscode.commands.executeCommand(
-          'setContext',
-          'scrcpy.activeDevicePlatform',
-          activeDevice?.platform ?? null
-        );
+        // Note: Device contexts are updated via state subscription
       },
       // Error callback
       (deviceId, message, error) => {
@@ -1126,9 +1123,26 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
           return await this._deviceService!.getInstalledApps();
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
-          vscode.window.showErrorMessage(
-            vscode.l10n.t('Failed to get installed apps: {0}', message)
-          );
+
+          // Check if ideviceinstaller is missing and show helpful prompt
+          if (message.includes('ideviceinstaller not found')) {
+            const action = await vscode.window.showErrorMessage(
+              vscode.l10n.t(
+                'ideviceinstaller is required to list iOS apps. Install it with Homebrew.'
+              ),
+              vscode.l10n.t('Copy Install Command')
+            );
+            if (action) {
+              await vscode.env.clipboard.writeText('brew install ideviceinstaller');
+              vscode.window.showInformationMessage(
+                vscode.l10n.t('Command copied to clipboard: brew install ideviceinstaller')
+              );
+            }
+          } else {
+            vscode.window.showErrorMessage(
+              vscode.l10n.t('Failed to get installed apps: {0}', message)
+            );
+          }
           return null;
         }
       }
@@ -1289,12 +1303,27 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
     }
   }
 
+  /**
+   * Update VS Code context variables for menu visibility based on active device
+   */
+  private _updateDeviceContexts(device?: DeviceState | null): void {
+    const platform = device?.platform ?? null;
+    const capabilities = device?.capabilities;
+
+    vscode.commands.executeCommand('setContext', 'scrcpy.activeDevicePlatform', platform);
+    vscode.commands.executeCommand(
+      'setContext',
+      'scrcpy.supportsAppLaunch',
+      capabilities?.supportsAppLaunch ?? false
+    );
+  }
+
   private async _onViewDisposed() {
     this._isDisposed = true;
     this._abortController?.abort();
     await this._disconnect();
-    // Clear platform context when view is disposed
-    vscode.commands.executeCommand('setContext', 'scrcpy.activeDevicePlatform', null);
+    // Clear all device contexts when view is disposed
+    this._updateDeviceContexts(null);
     while (this._disposables.length) {
       const disposable = this._disposables.pop();
       disposable?.dispose();

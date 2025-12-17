@@ -30,6 +30,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Rotation control** - Rotate iOS device screen via WDA when connected
   - **Clipboard sync** - Bidirectional clipboard sync between PC and iOS device (Ctrl+C/Ctrl+V)
   - **App launcher** - Launch iOS apps by bundle ID, with searchable app list
+    - App listing uses `ideviceinstaller` (works without WDA connection)
+    - App launching requires WDA (shows helpful error with instructions if not connected)
+    - Prompts to install `ideviceinstaller` via Homebrew if not found
 - **iOS screenshots** - Native screenshot capture via ios-helper binary
   - Uses AVFoundation single-frame capture
   - Outputs lossless PNG at device resolution
@@ -75,6 +78,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Resolves CoreMediaIO UID to real iOS UDID for libimobiledevice compatibility
   - Graceful fallback when libimobiledevice is not installed
 - **Improved tooltip layout** - Input status (✅/❌) now displayed on bottom row with battery info; aligned icons with fixed-width column
+- **Capability-based menu visibility** - Menu items now use capability context variables (e.g., `scrcpy.supportsAppLaunch`) instead of platform checks, enabling dynamic updates when WDA connects/disconnects
 
 ### Known Issues
 
