@@ -19,6 +19,7 @@ import { AppStateManager } from './AppStateManager';
 import { DeviceInfo, DeviceDetailedInfo, ConnectionState, VideoCodec } from './types/AppState';
 import { getCapabilities, isIOSSupportAvailable } from './PlatformCapabilities';
 import { iOSConnection, iOSDeviceManager } from './ios';
+import type { iOSConnectionConfig } from './ios/iOSConnection';
 
 // Re-export types for backward compatibility
 export type { DeviceInfo, DeviceDetailedInfo, ConnectionState };
@@ -102,6 +103,12 @@ export class DeviceService {
   private deviceInfoCache = new Map<string, { info: DeviceDetailedInfo; timestamp: number }>();
   private deviceInfoRefreshInterval: NodeJS.Timeout | null = null;
 
+  // iOS configuration (Phase 8)
+  private iosConfig: iOSConnectionConfig = {
+    webDriverAgentEnabled: false,
+    webDriverAgentPort: 8100,
+  };
+
   constructor(
     private appState: AppStateManager,
     private videoFrameCallback: VideoFrameCallback,
@@ -111,6 +118,13 @@ export class DeviceService {
     private config: ScrcpyConfig,
     private clipboardAPI?: ClipboardAPI
   ) {}
+
+  /**
+   * Update iOS configuration (Phase 8)
+   */
+  setIOSConfig(config: iOSConnectionConfig): void {
+    this.iosConfig = config;
+  }
 
   /**
    * Get the ADB command path from config
@@ -608,7 +622,12 @@ export class DeviceService {
    * Connect an iOS device session
    */
   private async connectiOSSession(session: DeviceSession): Promise<void> {
-    const connection = new iOSConnection(session.deviceInfo.serial);
+    // Pass iOS config for WDA support (Phase 8)
+    const connection = new iOSConnection(
+      session.deviceInfo.serial,
+      undefined, // customHelperPath
+      this.iosConfig
+    );
 
     // Wire up video frame callback
     connection.onVideoFrame = (data, isConfig, isKeyFrame, width, height, codec) => {
@@ -982,11 +1001,32 @@ export class DeviceService {
   }
 
   /**
+   * Type guard to check if connection is an iOSConnection
+   */
+  private isiOSConnection(
+    connection: ScrcpyConnection | iOSConnection | null
+  ): connection is iOSConnection {
+    return connection !== null && connection.platform === 'ios';
+  }
+
+  /**
    * Get active Android connection (returns null for iOS devices)
    */
   private getActiveAndroidConnection(): ScrcpyConnection | null {
     const connection = this.getActiveSession()?.connection ?? null;
     return this.isScrcpyConnection(connection) ? connection : null;
+  }
+
+  /**
+   * Get active connection that supports input (Android or iOS with WDA)
+   * Returns the connection if it supports touch input, otherwise null
+   */
+  private getActiveInputConnection(): ScrcpyConnection | iOSConnection | null {
+    const connection = this.getActiveSession()?.connection ?? null;
+    if (connection && connection.capabilities.supportsTouch) {
+      return connection;
+    }
+    return null;
   }
 
   sendTouch(
@@ -996,7 +1036,19 @@ export class DeviceService {
     screenWidth: number,
     screenHeight: number
   ): void {
-    this.getActiveAndroidConnection()?.sendTouch(x, y, action, screenWidth, screenHeight);
+    const connection = this.getActiveInputConnection();
+    if (!connection) {
+      return;
+    }
+
+    if (this.isScrcpyConnection(connection)) {
+      // Android: use existing sendTouch method
+      connection.sendTouch(x, y, action, screenWidth, screenHeight);
+    } else if (this.isiOSConnection(connection)) {
+      // iOS: convert action to code and call sendTouch
+      const actionCode = action === 'down' ? 0 : action === 'up' ? 1 : 2;
+      connection.sendTouch(actionCode, x, y);
+    }
   }
 
   sendMultiTouch(
@@ -1008,6 +1060,7 @@ export class DeviceService {
     screenWidth: number,
     screenHeight: number
   ): void {
+    // Multi-touch only supported on Android currently
     this.getActiveAndroidConnection()?.sendMultiTouch(
       x1,
       y1,
@@ -1020,23 +1073,60 @@ export class DeviceService {
   }
 
   sendKeyDown(keycode: number): void {
-    this.getActiveAndroidConnection()?.sendKeyDown(keycode);
+    const connection = this.getActiveInputConnection();
+    if (!connection) {
+      return;
+    }
+
+    if (this.isScrcpyConnection(connection)) {
+      connection.sendKeyDown(keycode);
+    } else if (this.isiOSConnection(connection)) {
+      connection.sendKey(0, keycode); // 0 = down
+    }
   }
 
   sendKeyUp(keycode: number): void {
-    this.getActiveAndroidConnection()?.sendKeyUp(keycode);
+    const connection = this.getActiveInputConnection();
+    if (!connection) {
+      return;
+    }
+
+    if (this.isScrcpyConnection(connection)) {
+      connection.sendKeyUp(keycode);
+    } else if (this.isiOSConnection(connection)) {
+      connection.sendKey(1, keycode); // 1 = up
+    }
   }
 
   sendText(text: string): void {
-    this.getActiveAndroidConnection()?.sendText(text);
+    const connection = this.getActiveInputConnection();
+    if (!connection) {
+      return;
+    }
+
+    if (this.isScrcpyConnection(connection)) {
+      connection.sendText(text);
+    } else if (this.isiOSConnection(connection)) {
+      connection.injectText(text);
+    }
   }
 
   sendKeyWithMeta(keycode: number, action: 'down' | 'up', metastate: number): void {
+    // Meta keys only supported on Android
     this.getActiveAndroidConnection()?.sendKeyWithMeta(keycode, action, metastate);
   }
 
   sendScroll(x: number, y: number, deltaX: number, deltaY: number): void {
-    this.getActiveAndroidConnection()?.sendScroll(x, y, deltaX, deltaY);
+    const connection = this.getActiveInputConnection();
+    if (!connection) {
+      return;
+    }
+
+    if (this.isScrcpyConnection(connection)) {
+      connection.sendScroll(x, y, deltaX, deltaY);
+    } else if (this.isiOSConnection(connection)) {
+      connection.sendScroll(x, y, deltaX, deltaY);
+    }
   }
 
   updateDimensions(deviceId: string, width: number, height: number): void {

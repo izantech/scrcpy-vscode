@@ -5,6 +5,7 @@ import * as path from 'path';
 import { execFile, spawn, ChildProcess } from 'child_process';
 import { ScrcpyProtocol } from './ScrcpyProtocol';
 import { ToolNotFoundError, ToolErrorCode } from '../types/AppState';
+import { ANDROID_CAPABILITIES, PlatformCapabilities } from '../PlatformCapabilities';
 
 // Video codec type
 export type VideoCodecType = 'h264' | 'h265' | 'av1';
@@ -79,6 +80,9 @@ export interface ClipboardAPI {
 export class ScrcpyConnection {
   /** Platform type for this connection */
   readonly platform = 'android' as const;
+
+  /** Platform capabilities - Android supports all input methods */
+  readonly capabilities: PlatformCapabilities = ANDROID_CAPABILITIES;
 
   private deviceSerial: string | null = null;
   private targetSerial: string | null = null;

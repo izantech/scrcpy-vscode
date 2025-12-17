@@ -136,6 +136,9 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
             'scrcpy.crop',
             'scrcpy.displayId',
             'scrcpy.keyboardMode',
+            // iOS WDA settings
+            'scrcpy.ios.webDriverAgentEnabled',
+            'scrcpy.ios.webDriverAgentPort',
           ];
           const needsReconnect = reconnectSettings.some((s) => e.affectsConfiguration(s));
 
@@ -145,6 +148,7 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
               text: vscode.l10n.t('Settings changed. Reconnecting...'),
             });
             this._deviceService.updateConfig(this._getConfig());
+            this._deviceService.setIOSConfig(this._getIOSConfig());
             await this._deviceService.disconnectAll();
             await this._autoConnectAllDevices();
 
@@ -212,6 +216,17 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
       crop: config.get<string>('crop', ''),
       displayId: config.get<number>('displayId', 0),
       keyboardMode: config.get<'inject' | 'uhid'>('keyboardMode', 'inject'),
+    };
+  }
+
+  /**
+   * Get iOS configuration for WebDriverAgent (Phase 8)
+   */
+  private _getIOSConfig(): { webDriverAgentEnabled: boolean; webDriverAgentPort: number } {
+    const config = vscode.workspace.getConfiguration('scrcpy');
+    return {
+      webDriverAgentEnabled: config.get<boolean>('ios.webDriverAgentEnabled', false),
+      webDriverAgentPort: config.get<number>('ios.webDriverAgentPort', 8100),
     };
   }
 
@@ -345,6 +360,9 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
       // Pass VS Code clipboard API for clipboard sync
       vscode.env.clipboard
     );
+
+    // Set iOS config for WebDriverAgent support
+    this._deviceService.setIOSConfig(this._getIOSConfig());
 
     this._autoConnectAllDevices();
 

@@ -9,6 +9,7 @@
   "config.title.screenshots": "Screenshots",
   "config.title.recording": "Recording",
   "config.title.connection": "Connection",
+  "config.title.iosControl": "iOS: Control",
   "config.scrcpy.path": "Path to scrcpy installation directory (leave empty to use PATH). [Choose directory](command:scrcpy.browseScrcpyPath \"Select scrcpy folder\") | [Reset](command:scrcpy.resetScrcpyPath \"Use system PATH\")",
   "config.scrcpy.adbPath": "Path to ADB executable directory (leave empty to use PATH). [Choose directory](command:scrcpy.browseAdbPath \"Select ADB folder\") | [Reset](command:scrcpy.resetAdbPath \"Use system PATH\")",
   "config.scrcpy.videoCodec": "Video codec for screen capture. H.264 has best compatibility. H.265 offers better quality (requires device encoder support). AV1 requires hardware encoder on device (most devices lack this, causing slow/laggy video).",
@@ -111,5 +112,7 @@
   "command.resetAdbPath": "Reset ADB Path",
   "command.resetScreenshotPath": "Reset Screenshot Save Path",
   "command.resetRecordingPath": "Reset Recording Save Path",
-  "command.resetApkInstallPath": "Reset APK Install Path"
+  "command.resetApkInstallPath": "Reset APK Install Path",
+  "config.scrcpy.ios.webDriverAgentEnabled": "Enable WebDriverAgent for iOS touch and keyboard input control. Requires [WebDriverAgent](https://github.com/appium/WebDriverAgent) running on the iOS device and `iproxy` installed (`brew install libimobiledevice`). *macOS only.*",
+  "config.scrcpy.ios.webDriverAgentPort": "Port number where WebDriverAgent is listening on the iOS device. Default is 8100."
 }

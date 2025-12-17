@@ -431,6 +431,26 @@
             "markdownDescription": "%config.scrcpy.reconnectRetries%"
           }
         }
+      },
+      {
+        "title": "%config.title.iosControl%",
+        "order": 9,
+        "properties": {
+          "scrcpy.ios.webDriverAgentEnabled": {
+            "type": "boolean",
+            "default": false,
+            "order": 0,
+            "markdownDescription": "%config.scrcpy.ios.webDriverAgentEnabled%"
+          },
+          "scrcpy.ios.webDriverAgentPort": {
+            "type": "number",
+            "default": 8100,
+            "order": 1,
+            "minimum": 1,
+            "maximum": 65535,
+            "markdownDescription": "%config.scrcpy.ios.webDriverAgentPort%"
+          }
+        }
       }
     ],
     "commands": [
