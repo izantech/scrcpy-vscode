@@ -334,23 +334,22 @@ export function getHtmlForWebview(webview: vscode.Webview, extensionUri: vscode.
     }
 
     .device-info-tooltip .info-row {
+      display: flex;
+      align-items: center;
       margin: 2px 0;
     }
 
+    .device-info-tooltip .info-row .info-icon {
+      width: 20px;
+      text-align: center;
+      flex-shrink: 0;
+    }
+
     .device-info-tooltip .info-row-header {
-      display: flex;
-      align-items: center;
-      gap: 6px;
       margin-bottom: 4px;
     }
 
-    .device-info-tooltip .info-row-platform {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-
-    .device-info-tooltip .info-row-platform .tab-platform-icon {
+    .device-info-tooltip .info-row .tab-platform-icon {
       width: 14px;
       height: 14px;
       opacity: 0.85;

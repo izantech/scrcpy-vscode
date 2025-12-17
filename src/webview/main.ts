@@ -1052,19 +1052,6 @@ function updateTabConnectionState(tabElement: HTMLElement, state: ConnectionStat
 }
 
 /**
- * Get platform icon SVG for device tabs
- */
-function getPlatformIcon(platform: DevicePlatform): string {
-  if (platform === 'ios') {
-    // Apple logo (simplified)
-    return `<svg class="tab-platform-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M18.71,19.5C17.88,20.74 17,21.95 15.66,21.97C14.32,22 13.89,21.18 12.37,21.18C10.84,21.18 10.37,21.95 9.1,22C7.79,22.05 6.8,20.68 5.96,19.47C4.25,17 2.94,12.45 4.7,9.39C5.57,7.87 7.13,6.91 8.82,6.88C10.1,6.86 11.32,7.75 12.11,7.75C12.89,7.75 14.37,6.68 15.92,6.84C16.57,6.87 18.39,7.1 19.56,8.82C19.47,8.88 17.39,10.1 17.41,12.63C17.44,15.65 20.06,16.66 20.09,16.67C20.06,16.74 19.67,18.11 18.71,19.5M13,3.5C13.73,2.67 14.94,2.04 15.94,2C16.07,3.17 15.6,4.35 14.9,5.19C14.21,6.04 13.07,6.7 11.95,6.61C11.8,5.46 12.36,4.26 13,3.5Z"/></svg>`;
-  } else {
-    // Android robot logo
-    return `<svg class="tab-platform-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M16.61,15.15C16.15,15.15 15.77,14.78 15.77,14.32C15.77,13.86 16.15,13.5 16.61,13.5C17.07,13.5 17.45,13.86 17.45,14.32C17.45,14.78 17.07,15.15 16.61,15.15M7.41,15.15C6.95,15.15 6.57,14.78 6.57,14.32C6.57,13.86 6.95,13.5 7.41,13.5C7.87,13.5 8.24,13.86 8.24,14.32C8.24,14.78 7.87,15.15 7.41,15.15M16.91,10.14L18.58,7.26C18.67,7.09 18.61,6.88 18.45,6.79C18.28,6.69 18.07,6.75 17.97,6.92L16.29,9.83C14.95,9.22 13.5,8.9 12,8.91C10.47,8.91 9,9.24 7.73,9.82L6.04,6.91C5.95,6.74 5.74,6.68 5.57,6.78C5.4,6.87 5.35,7.08 5.44,7.25L7.1,10.13C4.25,11.69 2.29,14.58 2,18H22C21.72,14.59 19.77,11.7 16.91,10.14Z"/></svg>`;
-  }
-}
-
-/**
  * Create a new device session UI
  */
 function createDeviceSession(
@@ -1740,16 +1727,17 @@ function updateTooltipContent(serial: string, info: DeviceDetailedInfo) {
   let content = '<div class="device-info-content">';
 
   // Phone emoji and manufacturer/model on header row
-  const platformIcon = getPlatformIcon(platform);
   if (manufacturer && model) {
-    content += `<div class="info-row info-row-header">📱 <strong>${escapeHtml(manufacturer)} ${escapeHtml(model)}</strong></div>`;
+    content += `<div class="info-row info-row-header"><span class="info-icon">📱</span><strong>${escapeHtml(manufacturer)} ${escapeHtml(model)}</strong></div>`;
   } else {
-    content += `<div class="info-row info-row-header">📱 <strong>${platform === 'ios' ? 'iOS Device' : 'Android Device'}</strong></div>`;
+    content += `<div class="info-row info-row-header"><span class="info-icon">📱</span><strong>${platform === 'ios' ? 'iOS Device' : 'Android Device'}</strong></div>`;
   }
 
   // Platform icon next to OS version
   if (androidVersion) {
-    content += `<div class="info-row info-row-platform">${platformIcon}${platform === 'ios' ? 'iOS' : 'Android'} ${escapeHtml(androidVersion)}`;
+    const osIcon = platform === 'ios' ? '🍎' : '🤖';
+    const osName = platform === 'ios' ? 'iOS' : 'Android';
+    content += `<div class="info-row"><span class="info-icon">${osIcon}</span>${osName} ${escapeHtml(androidVersion)}`;
     if (sdkVersion) {
       content += ` (SDK ${sdkVersion})`;
     }
@@ -1757,53 +1745,33 @@ function updateTooltipContent(serial: string, info: DeviceDetailedInfo) {
   }
 
   if (storageTotal > 0) {
-    content += `<div class="info-row">Storage: ${storageUsedGB} GB / ${storageTotalGB} GB</div>`;
+    content += `<div class="info-row"><span class="info-icon">💾</span>Storage: ${storageUsedGB} GB / ${storageTotalGB} GB</div>`;
   }
 
   if (screenResolution && screenResolution !== 'Unknown') {
     // Parse resolution and format with × symbol
     const match = screenResolution.match(/(\d+)x(\d+)/);
     if (match) {
-      content += `<div class="info-row">🖥️ ${match[1]} × ${match[2]}</div>`;
+      content += `<div class="info-row"><span class="info-icon">🖥️</span>${match[1]} × ${match[2]}</div>`;
     }
   }
 
   if (ipAddress) {
-    content += `<div class="info-row">${escapeHtml(ipAddress)}</div>`;
+    content += `<div class="info-row"><span class="info-icon">🌐</span>${escapeHtml(ipAddress)}</div>`;
   }
 
-  // iOS WDA status (input control)
-  if (platform === 'ios' && info.wdaStatus) {
-    let wdaIcon = '';
-    let wdaText = '';
-    switch (info.wdaStatus) {
-      case 'connected':
-        wdaIcon = '✅';
-        wdaText = 'Input enabled';
-        break;
-      case 'connecting':
-        wdaIcon = '🔄';
-        wdaText = 'Connecting...';
-        break;
-      case 'unavailable':
-        wdaIcon = '⚠️';
-        wdaText = 'Input unavailable';
-        break;
-      case 'disabled':
-        wdaIcon = '⏸️';
-        wdaText = 'Input disabled';
-        break;
-    }
-    content += `<div class="info-row">${wdaIcon} ${wdaText}</div>`;
-  }
-
-  // Connection type and battery at the bottom, on the same row
-  let bottomRow = `${connectionIcon} ${connectionType}`;
+  // Connection type, battery, and input status at the bottom, on the same row
+  let bottomRow = `<span class="info-icon">${connectionIcon}</span>${connectionType}`;
   if (batteryLevel > 0) {
     bottomRow += ` · ${batteryIcon} ${batteryLevel}%`;
     if (batteryCharging) {
       bottomRow += ' ⚡';
     }
+  }
+  // iOS input status (WDA)
+  if (platform === 'ios' && info.wdaStatus) {
+    const inputEnabled = info.wdaStatus === 'connected';
+    bottomRow += ` · ${inputEnabled ? '✅' : '❌'} Input`;
   }
   content += `<div class="info-row info-row-bottom">${bottomRow}</div>`;
 

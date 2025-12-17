@@ -931,4 +931,20 @@ export class iOSConnection implements IDeviceConnection {
   get isWdaReady(): boolean {
     return this.wdaReady;
   }
+
+  /**
+   * Get the resolved real iOS UDID (different from CoreMediaIO UID)
+   * This is needed for libimobiledevice tools like ideviceinfo
+   */
+  get realUdid(): string | null {
+    return this.resolvedWdaUdid;
+  }
+
+  /**
+   * Resolve and return the real iOS UDID
+   * Uses idevice_id to find the actual UDID for libimobiledevice tools
+   */
+  async resolveRealUdid(): Promise<string | null> {
+    return this.resolveWdaDeviceUdid();
+  }
 }

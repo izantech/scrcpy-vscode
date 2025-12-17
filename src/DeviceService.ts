@@ -18,7 +18,7 @@ import { execFile, execFileSync, spawn, ChildProcess } from 'child_process';
 import { AppStateManager } from './AppStateManager';
 import { DeviceInfo, DeviceDetailedInfo, ConnectionState, VideoCodec } from './types/AppState';
 import { getCapabilities, isIOSSupportAvailable } from './PlatformCapabilities';
-import { iOSConnection, iOSDeviceManager } from './ios';
+import { iOSConnection, iOSDeviceManager, mapIOSProductType } from './ios';
 import type { iOSConnectionConfig } from './ios/iOSConnection';
 
 // Re-export types for backward compatibility
@@ -357,6 +357,188 @@ export class DeviceService {
   }
 
   /**
+   * Find a session by its device serial number
+   */
+  private findSessionBySerial(serial: string): DeviceSession | undefined {
+    for (const session of this.sessions.values()) {
+      if (session.deviceInfo.serial === serial) {
+        return session;
+      }
+    }
+    return undefined;
+  }
+
+  /**
+   * Detect the platform (android/ios) for a device serial
+   */
+  private detectPlatformBySerial(serial: string): 'android' | 'ios' {
+    const session = this.findSessionBySerial(serial);
+    return session?.deviceInfo.platform || 'android';
+  }
+
+  /**
+   * Get WDA status for an iOS device
+   */
+  private getWDAStatusForSerial(
+    serial: string
+  ): 'connected' | 'unavailable' | 'disabled' | undefined {
+    const session = this.findSessionBySerial(serial);
+    if (!session?.connection || !this.isiOSConnection(session.connection)) {
+      return undefined;
+    }
+
+    if (!this.iosConfig.webDriverAgentEnabled) {
+      return 'disabled';
+    }
+
+    return session.connection.isWdaReady ? 'connected' : 'unavailable';
+  }
+
+  /**
+   * Get fallback device info for iOS when ideviceinfo is unavailable
+   */
+  private getIOSFallbackInfo(serial: string): DeviceDetailedInfo {
+    const session = this.findSessionBySerial(serial);
+    const connection = session?.connection;
+
+    let screenResolution = 'Unknown';
+    if (connection && this.isiOSConnection(connection)) {
+      if (connection.deviceWidth && connection.deviceHeight) {
+        screenResolution = `${connection.deviceWidth}x${connection.deviceHeight}`;
+      }
+    }
+
+    return {
+      serial,
+      model: session?.deviceInfo.model || 'iOS Device',
+      manufacturer: 'Apple',
+      androidVersion: '', // iOS version unknown
+      sdkVersion: 0,
+      batteryLevel: 0,
+      batteryCharging: false,
+      storageTotal: 0,
+      storageUsed: 0,
+      screenResolution,
+      wdaStatus: this.getWDAStatusForSerial(serial),
+    };
+  }
+
+  /**
+   * Get detailed device information for iOS devices via ideviceinfo
+   */
+  async getiOSDeviceInfo(serial: string): Promise<DeviceDetailedInfo> {
+    // Handle window-based capture devices (e.g., "window:12345")
+    if (serial.startsWith('window:')) {
+      return this.getIOSFallbackInfo(serial);
+    }
+
+    // Get the real iOS UDID from the connection (CoreMediaIO UID != iOS UDID)
+    const session = this.findSessionBySerial(serial);
+    let realUdid: string | null = null;
+    if (session?.connection && this.isiOSConnection(session.connection)) {
+      // Try to get already-resolved UDID, or resolve it now
+      realUdid = session.connection.realUdid || (await session.connection.resolveRealUdid());
+    }
+
+    // If we couldn't get the real UDID, return fallback info
+    if (!realUdid) {
+      console.warn('[DeviceService] Could not resolve real iOS UDID for:', serial);
+      return this.getIOSFallbackInfo(serial);
+    }
+
+    const execIdevice = (args: string[]): Promise<string> => {
+      return new Promise((resolve, reject) => {
+        execFile('ideviceinfo', ['-u', realUdid!, ...args], { timeout: 5000 }, (error, stdout) => {
+          if (error) {
+            reject(error);
+          } else {
+            resolve(stdout.trim());
+          }
+        });
+      });
+    };
+
+    try {
+      // Fetch all device properties in parallel for better performance
+      const [batteryInfo, iosVersion, productType, diskUsage] = await Promise.all([
+        execIdevice(['-q', 'com.apple.mobile.battery']).catch(() => ''),
+        execIdevice(['-k', 'ProductVersion']).catch(() => ''),
+        execIdevice(['-k', 'ProductType']).catch(() => ''),
+        execIdevice(['-q', 'com.apple.disk_usage']).catch(() => ''),
+      ]);
+
+      // Parse battery info
+      let batteryLevel = 0;
+      let batteryCharging = false;
+      if (batteryInfo) {
+        const capacityMatch = batteryInfo.match(/BatteryCurrentCapacity:\s*(\d+)/);
+        if (capacityMatch) {
+          batteryLevel = parseInt(capacityMatch[1], 10);
+        }
+        const chargingMatch = batteryInfo.match(/BatteryIsCharging:\s*(true|false)/i);
+        if (chargingMatch) {
+          batteryCharging = chargingMatch[1].toLowerCase() === 'true';
+        }
+      }
+
+      // Parse storage info
+      let storageTotal = 0;
+      let storageUsed = 0;
+      if (diskUsage) {
+        const totalMatch = diskUsage.match(/TotalDiskCapacity:\s*(\d+)/);
+        const availMatch = diskUsage.match(/AmountDataAvailable:\s*(\d+)/);
+        if (totalMatch) {
+          storageTotal = parseInt(totalMatch[1], 10);
+        }
+        if (availMatch && totalMatch) {
+          const available = parseInt(availMatch[1], 10);
+          storageUsed = storageTotal - available;
+        }
+      }
+
+      // Get screen resolution from active session
+      let screenResolution = 'Unknown';
+      const session = this.findSessionBySerial(serial);
+      if (session?.connection && this.isiOSConnection(session.connection)) {
+        const conn = session.connection;
+        if (conn.deviceWidth && conn.deviceHeight) {
+          screenResolution = `${conn.deviceWidth}x${conn.deviceHeight}`;
+        }
+      }
+
+      // Map ProductType to readable model name
+      const model = mapIOSProductType(productType) || session?.deviceInfo.model || 'iOS Device';
+
+      const info: DeviceDetailedInfo = {
+        serial,
+        model,
+        manufacturer: 'Apple',
+        androidVersion: iosVersion || '', // Reuse field for iOS version
+        sdkVersion: 0, // Not applicable for iOS
+        batteryLevel,
+        batteryCharging,
+        storageTotal,
+        storageUsed,
+        screenResolution,
+        wdaStatus: this.getWDAStatusForSerial(serial),
+      };
+
+      // Update AppState with device info
+      this.appState.setDeviceInfo(serial, info);
+
+      return info;
+    } catch (error) {
+      // Check if ideviceinfo is not installed
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        console.warn(
+          '[DeviceService] ideviceinfo not found. Install with: brew install libimobiledevice'
+        );
+      }
+      return this.getIOSFallbackInfo(serial);
+    }
+  }
+
+  /**
    * Get cached device info or fetch if not cached/expired
    */
   async getCachedDeviceInfo(
@@ -370,8 +552,10 @@ export class DeviceService {
       return cached.info;
     }
 
-    // Fetch fresh info
-    const info = await this.getDeviceInfo(serial);
+    // Fetch fresh info based on platform
+    const platform = this.detectPlatformBySerial(serial);
+    const info =
+      platform === 'ios' ? await this.getiOSDeviceInfo(serial) : await this.getDeviceInfo(serial);
     this.deviceInfoCache.set(serial, { info, timestamp: now });
     return info;
   }
@@ -691,17 +875,20 @@ export class DeviceService {
       // Clear any loading status message
       this.appState.clearStatusMessage();
 
-      // Set iOS device info with WDA status (Phase 8)
-      const deviceInfo = connection.getDeviceInfo();
-      let wdaStatus: 'connected' | 'unavailable' | 'disabled' = 'disabled';
-      if (this.iosConfig.webDriverAgentEnabled) {
-        wdaStatus = connection.isWdaReady ? 'connected' : 'unavailable';
-      }
-      this.appState.setDeviceInfo(session.deviceInfo.serial, {
+      // Set initial WDA status immediately, then fetch full device info
+      const wdaStatus: 'connected' | 'unavailable' | 'disabled' = this.iosConfig
+        .webDriverAgentEnabled
+        ? connection.isWdaReady
+          ? 'connected'
+          : 'unavailable'
+        : 'disabled';
+
+      // Set initial device info with screen resolution from video stream
+      const initialInfo: DeviceDetailedInfo = {
         serial: session.deviceInfo.serial,
-        model: deviceInfo?.model || session.deviceInfo.model || 'iOS Device',
+        model: session.deviceInfo.model || 'iOS Device',
         manufacturer: 'Apple',
-        androidVersion: '', // Not applicable for iOS
+        androidVersion: '', // Will be populated by getiOSDeviceInfo
         sdkVersion: 0,
         batteryLevel: 0,
         batteryCharging: false,
@@ -712,7 +899,21 @@ export class DeviceService {
             ? `${connection.deviceWidth}x${connection.deviceHeight}`
             : 'Unknown',
         wdaStatus,
-      });
+      };
+      this.appState.setDeviceInfo(session.deviceInfo.serial, initialInfo);
+
+      // Fetch full device info in background (non-blocking)
+      this.getiOSDeviceInfo(session.deviceInfo.serial)
+        .then((info) => {
+          // Update with full info while preserving WDA status
+          this.appState.setDeviceInfo(session.deviceInfo.serial, {
+            ...info,
+            wdaStatus: this.getWDAStatusForSerial(session.deviceInfo.serial) || wdaStatus,
+          });
+        })
+        .catch((error) => {
+          console.error('[DeviceService] Failed to fetch iOS device info:', error);
+        });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       this.appState.updateDeviceConnectionState(session.deviceId, 'disconnected');
