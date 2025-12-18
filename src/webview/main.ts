@@ -49,7 +49,6 @@ declare global {
       threeButton: string;
       twoButton: string;
       talkback: string;
-      selectToSpeak: string;
       fontSize: string;
       displaySize: string;
       showLayoutBounds: string;
@@ -87,7 +86,6 @@ interface DeviceUISettings {
   navigationMode: 'gestural' | 'threebutton' | 'twobutton';
   availableNavigationModes: ('gestural' | 'threebutton' | 'twobutton')[];
   talkbackEnabled: boolean;
-  selectToSpeakEnabled: boolean;
   fontScale: number;
   displayDensity: number;
   defaultDensity: number;
@@ -1742,7 +1740,6 @@ function openControlCenter() {
     navigationMode: 'gestural',
     availableNavigationModes: ['threebutton', 'gestural'],
     talkbackEnabled: false,
-    selectToSpeakEnabled: false,
     fontScale: 1.0,
     displayDensity: 400,
     defaultDensity: 400,
@@ -2125,9 +2122,6 @@ function renderControlCenterForm(settings: DeviceUISettings, disabled: boolean) 
     // TalkBack - person with sound waves
     talkback:
       '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12,2A2,2 0 0,1 14,4A2,2 0 0,1 12,6A2,2 0 0,1 10,4A2,2 0 0,1 12,2M10.5,7H13.5A2,2 0 0,1 15.5,9V14.5H14V22H10V14.5H8.5V9A2,2 0 0,1 10.5,7M20,17L22,15V19L20,17M20,7L22,9V5L20,7M20,12L22,10V14L20,12Z"/></svg>',
-    // Select to Speak - text with speaker
-    selectToSpeak:
-      '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M9,5A4,4 0 0,1 13,9A4,4 0 0,1 9,13A4,4 0 0,1 5,9A4,4 0 0,1 9,5M9,15C11.67,15 17,16.34 17,19V21H1V19C1,16.34 6.33,15 9,15M16.76,5.36C18.78,7.56 18.78,10.61 16.76,12.63L15.08,10.94C15.92,9.76 15.92,8.23 15.08,7.05L16.76,5.36M20.07,2C24,6.05 23.97,12.11 20.07,16L18.44,14.37C21.21,11.19 21.21,6.65 18.44,3.63L20.07,2Z"/></svg>',
     // Font size - text resize
     fontSize:
       '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M2,4V7H7V19H10V7H15V4H2M21,9H12V12H15V19H18V12H21V9Z"/></svg>',
@@ -2356,21 +2350,6 @@ function renderControlCenterForm(settings: DeviceUISettings, disabled: boolean) 
   const talkbackToggle = createToggleSwitch('talkbackEnabled', settings.talkbackEnabled, disabled);
   accessibilityGroup.appendChild(
     createSettingsRow(window.l10n.talkback, talkbackToggle, icons.talkback, 'icon-accessibility')
-  );
-
-  // Select to Speak
-  const selectToSpeakToggle = createToggleSwitch(
-    'selectToSpeakEnabled',
-    settings.selectToSpeakEnabled,
-    disabled
-  );
-  accessibilityGroup.appendChild(
-    createSettingsRow(
-      window.l10n.selectToSpeak,
-      selectToSpeakToggle,
-      icons.selectToSpeak,
-      'icon-accessibility'
-    )
   );
 
   controlCenterContent.appendChild(accessibilityGroup);

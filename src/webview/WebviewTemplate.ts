@@ -52,7 +52,6 @@ export function getHtmlForWebview(webview: vscode.Webview, extensionUri: vscode.
     threeButton: vscode.l10n.t('3-Button'),
     twoButton: vscode.l10n.t('2-Button'),
     talkback: vscode.l10n.t('TalkBack'),
-    selectToSpeak: vscode.l10n.t('Select to Speak'),
     fontSize: vscode.l10n.t('Font Size'),
     displaySize: vscode.l10n.t('Display Size'),
     showLayoutBounds: vscode.l10n.t('Layout Bounds'),

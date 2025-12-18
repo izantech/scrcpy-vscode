@@ -80,7 +80,6 @@ export interface DeviceUISettings {
   navigationMode: NavigationMode;
   availableNavigationModes: NavigationMode[];
   talkbackEnabled: boolean;
-  selectToSpeakEnabled: boolean;
   fontScale: number;
   displayDensity: number;
   defaultDensity: number;

@@ -1030,12 +1030,6 @@ export class DeviceService {
     'com.google.android.marvin.talkback/com.google.android.marvin.talkback.TalkBackService';
 
   /**
-   * Select to Speak service identifier
-   */
-  private static readonly SELECT_TO_SPEAK_SERVICE =
-    'com.google.android.marvin.talkback/com.google.android.accessibility.selecttospeak.SelectToSpeakService';
-
-  /**
    * Get current device UI settings via ADB
    */
   async getDeviceUISettings(): Promise<DeviceUISettings> {
@@ -1107,7 +1101,6 @@ export class DeviceService {
     // Parse accessibility services
     const accessibilityServices = accessibilityResult.toLowerCase();
     const talkbackEnabled = accessibilityServices.includes('talkback');
-    const selectToSpeakEnabled = accessibilityServices.includes('selecttospeak');
 
     // Parse font scale
     const fontScale = parseFloat(fontScaleResult) || 1.0;
@@ -1130,7 +1123,6 @@ export class DeviceService {
       navigationMode,
       availableNavigationModes,
       talkbackEnabled,
-      selectToSpeakEnabled,
       fontScale,
       displayDensity,
       defaultDensity,
@@ -1223,32 +1215,6 @@ export class DeviceService {
           .filter((s) => s && !s.toLowerCase().includes('talkback'));
         if (value) {
           services.push(DeviceService.TALKBACK_SERVICE);
-        }
-        const newServices = services.join(':') || 'null';
-        await execAdb([
-          'shell',
-          'settings',
-          'put',
-          'secure',
-          'enabled_accessibility_services',
-          newServices,
-        ]);
-        break;
-      }
-
-      case 'selectToSpeakEnabled': {
-        const currentServices = await execAdb([
-          'shell',
-          'settings',
-          'get',
-          'secure',
-          'enabled_accessibility_services',
-        ]).catch(() => '');
-        const services = currentServices
-          .split(':')
-          .filter((s) => s && !s.toLowerCase().includes('selecttospeak'));
-        if (value) {
-          services.push(DeviceService.SELECT_TO_SPEAK_SERVICE);
         }
         const newServices = services.join(':') || 'null';
         await execAdb([
