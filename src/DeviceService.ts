@@ -1802,21 +1802,21 @@ export class DeviceService {
    * Handle WDA setup completion
    */
   private async handleWDASetupComplete(deviceId: string): Promise<void> {
+    // Give WDA a moment to fully initialize after the script detects it
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+
     // Re-attempt WDA connection
     await this.startIOSInput(deviceId);
 
-    // Clear setup status
+    // Clear setup status from UI
     this.appState.dispatch({
       type: ActionType.SET_WDA_SETUP_STATUS,
       payload: { deviceId, status: null },
     });
 
-    // Clean up manager
-    const manager = this.wdaSetupManagers.get(deviceId);
-    if (manager) {
-      manager.dispose();
-      this.wdaSetupManagers.delete(deviceId);
-    }
+    // NOTE: Do NOT dispose the setup manager here!
+    // The setup script keeps iproxy running, and we're using that iproxy.
+    // The manager will be cleaned up when the session ends (in removeDevice).
 
     // Notify user
     vscode.window.showInformationMessage(vscode.l10n.t('iOS input control enabled!'));

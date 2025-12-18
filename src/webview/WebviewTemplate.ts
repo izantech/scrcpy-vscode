@@ -628,12 +628,15 @@ export function getHtmlForWebview(webview: vscode.Webview, extensionUri: vscode.
 
     .wda-overlay button.loading::before {
       content: '';
+      display: inline-block;
+      flex-shrink: 0;
       width: 14px;
       height: 14px;
       border: 2px solid rgba(255, 255, 255, 0.3);
       border-top-color: var(--vscode-button-foreground, #fff);
       border-radius: 50%;
       animation: wda-spin 0.8s linear infinite;
+      box-sizing: border-box;
     }
 
     @keyframes wda-spin {
