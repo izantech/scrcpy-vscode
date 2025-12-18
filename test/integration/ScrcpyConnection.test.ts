@@ -1378,13 +1378,19 @@ describe('ScrcpyConnection', () => {
       (connection as unknown as { deviceSerial: string }).deviceSerial = 'emulator-5554';
 
       const startPromise = connection.startScrcpy();
+      // Capture rejection immediately to prevent unhandled rejection warning
+      let caughtError: Error | undefined;
+      startPromise.catch((e) => {
+        caughtError = e;
+      });
       await nextTick();
 
       // Simulate server error
       mockServer.simulateError(new Error('EADDRINUSE: address already in use'));
       await nextTick();
 
-      await expect(startPromise).rejects.toThrow(/EADDRINUSE/);
+      expect(caughtError).toBeDefined();
+      expect(caughtError?.message).toMatch(/EADDRINUSE/);
     });
 
     it('should receive sockets in correct order: video, control', async () => {
@@ -1457,13 +1463,19 @@ describe('ScrcpyConnection', () => {
       (connection as unknown as { deviceSerial: string }).deviceSerial = 'emulator-5554';
 
       const startPromise = connection.startScrcpy();
+      // Capture rejection immediately to prevent unhandled rejection warning
+      let caughtError: Error | undefined;
+      startPromise.catch((e) => {
+        caughtError = e;
+      });
       await nextTick();
 
       // Simulate process error
       mockProcess.emit('error', new Error('spawn ENOENT'));
       await nextTick();
 
-      await expect(startPromise).rejects.toThrow(/Failed to start scrcpy server/);
+      expect(caughtError).toBeDefined();
+      expect(caughtError?.message).toMatch(/Failed to start scrcpy server/);
     });
 
     it('should handle scrcpy process exit during connection', async () => {
@@ -1497,13 +1509,19 @@ describe('ScrcpyConnection', () => {
       (connection as unknown as { deviceSerial: string }).deviceSerial = 'emulator-5554';
 
       const startPromise = connection.startScrcpy();
+      // Capture rejection immediately to prevent unhandled rejection warning
+      let caughtError: Error | undefined;
+      startPromise.catch((e) => {
+        caughtError = e;
+      });
       await nextTick();
 
       // Simulate process exit before connection completes
       mockProcess.emit('exit', 1);
       await nextTick();
 
-      await expect(startPromise).rejects.toThrow(/exited with code/);
+      expect(caughtError).toBeDefined();
+      expect(caughtError?.message).toMatch(/exited with code/);
     });
   });
 
