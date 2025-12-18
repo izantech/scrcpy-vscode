@@ -10,14 +10,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **iOS Control Center style UI** - Unified glass-morphism design with backdrop blur, entrance animations, and pill-shaped buttons across all overlays (status, screenshot preview, tooltip, recording indicator, stats badge)
-- **Redesigned Control Center** - Floating collapsible sections with glass effect, colorful gradient icons, cycle buttons, improved toggle/slider contrast, clickable rows, OKLCH gradient mask on scroll
+- **Redesigned Control Center** - Floating collapsible sections (Display, Audio & Volume, System Shortcuts, Accessibility, Developer) with glass effect, colorful gradient icons, cycle buttons, improved toggle/slider contrast, clickable rows, OKLCH gradient mask on scroll
 - **Toolbar reorganization** - Power button moved to left, Control Center button to right; toolbar dims when Control Center is open
 
 ### Added
 
-- **Control Center groups** - Display (orientation), Audio & Volume, System Shortcuts (notification/settings panels), Accessibility, Developer
 - **Touch ripple visualization** - Animated ripples at touch points via `scrcpy.showTouchRipples` setting
-- **Accessibility** - CSS design tokens, `prefers-reduced-motion` support, visible focus states for keyboard navigation
+- **Accessibility improvements** - CSS design tokens, `prefers-reduced-motion` support, visible focus states for keyboard navigation
 - **WiFi connection timeout** - 15 second timeout to prevent hanging on unreachable devices
 
 ### Fixed
@@ -27,9 +26,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
-- **Contextual dropdown menu** - Replaced by unified Control Center popup with all controls
-- **Standalone rotation button** - Orientation now controlled via Display group in Control Center
-- **Select to Speak toggle** - Removed as it's incompatible with scrcpy's touch injection
+- **Contextual dropdown menu** - Replaced by Control Center with unified access to all controls
+- **Standalone rotation button** - Orientation now controlled via Display section in Control Center
+- **Select to Speak toggle** - Incompatible with scrcpy's touch injection
 
 ## [0.1.3] - 2025-12-16
 

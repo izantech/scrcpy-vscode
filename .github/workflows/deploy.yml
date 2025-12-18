@@ -46,6 +46,17 @@ jobs:
           echo "Final version to release: $VERSION"
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
+      - name: Update CHANGELOG for release
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+          DATE=$(date +%Y-%m-%d)
+
+          # Insert new version header after [Unreleased], moving content under new version
+          sed -i "s/^## \[Unreleased\]$/## [Unreleased]\n\n## [$VERSION] - $DATE/" CHANGELOG.md
+
+          # Add version link at the top of the links section
+          sed -i "0,/^\[0\.[0-9]/s//[$VERSION]: https:\/\/github.com\/izantech\/scrcpy-vscode\/releases\/tag\/$VERSION\n&/" CHANGELOG.md
+
       - name: Build extension
         run: npm run package
 
@@ -75,10 +86,10 @@ jobs:
           NEXT_VERSION=$(node -p "require('./package.json').version")
           echo "Next version: $NEXT_VERSION"
 
-      - name: Commit and push version bump
+      - name: Commit and push changes
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add package.json package-lock.json
-          git commit -m "chore: bump version to $(node -p "require('./package.json').version")"
+          git add package.json package-lock.json CHANGELOG.md
+          git commit -m "chore: release ${{ steps.version.outputs.version }}"
           git push

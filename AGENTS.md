@@ -79,10 +79,11 @@ The project uses **GitHub Actions** for continuous integration and deployment.
 
 1. Runs full CI pipeline
 2. Resolves version (auto-bumps if tag already exists)
-3. Builds production package
-4. Publishes to VS Code Marketplace and Open VSX
-5. Creates GitHub Release with tag
-6. Bumps patch version for next release and commits to main
+3. Updates CHANGELOG.md (replaces `[Unreleased]` with version and date)
+4. Builds production package
+5. Publishes to VS Code Marketplace and Open VSX
+6. Creates GitHub Release with tag
+7. Bumps patch version for next release and commits changes (package.json, CHANGELOG.md)
 
 ### Required GitHub Secrets
 
@@ -111,9 +112,10 @@ Go to Actions → Deploy → Run workflow
 
 1. CI runs (lint, format, compile, tests)
 2. Version resolved (auto-bumps patch if tag already exists)
-3. Publishes to VS Code Marketplace and Open VSX
-4. Creates GitHub Release with tag (e.g., `0.1.2`)
-5. Bumps `package.json` to next patch version and commits to main
+3. CHANGELOG.md updated (replaces `[Unreleased]` with version and date)
+4. Publishes to VS Code Marketplace and Open VSX
+5. Creates GitHub Release with tag (e.g., `0.1.2`)
+6. Bumps `package.json` to next patch version and commits changes
 
 **Note:** You only need to manually update the version in `package.json` when you want to release a new major or minor version.
 
