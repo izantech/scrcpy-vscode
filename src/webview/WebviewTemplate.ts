@@ -20,6 +20,8 @@ export function getHtmlForWebview(webview: vscode.Webview, extensionUri: vscode.
   const changeToLandscape = vscode.l10n.t('Change to landscape');
   const power = vscode.l10n.t('Power');
   const startRecording = vscode.l10n.t('Start recording');
+  const startIOSInput = vscode.l10n.t('Start iOS Input Control');
+  const startWdaOverlay = vscode.l10n.t('Start WDA to enable touch input');
   const openNotificationPanel = vscode.l10n.t('Open notification panel');
   const openSettingsPanel = vscode.l10n.t('Open settings panel');
   const moreOptions = vscode.l10n.t('More options');
@@ -42,6 +44,8 @@ export function getHtmlForWebview(webview: vscode.Webview, extensionUri: vscode.
     screenshotPreview: vscode.l10n.t('Screenshot Preview'),
     save: vscode.l10n.t('Save'),
     copy: vscode.l10n.t('Copy'),
+    startWdaOverlay,
+    startIOSInput,
     toolWarningAdb: vscode.l10n.t('ADB is not installed or not in PATH'),
     toolWarningScrcpy: vscode.l10n.t('scrcpy is not installed or not in PATH'),
     toolWarningBoth: vscode.l10n.t('ADB and scrcpy are not installed'),
@@ -534,6 +538,45 @@ export function getHtmlForWebview(webview: vscode.Webview, extensionUri: vscode.
       display: none;
     }
 
+    /* WDA overlay button */
+    .wda-overlay {
+      position: absolute;
+      bottom: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: none;
+      z-index: 6;
+    }
+
+    .wda-overlay.visible {
+      display: flex;
+    }
+
+    .wda-overlay button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 8px 14px;
+      border-radius: 999px;
+      border: 1px solid var(--vscode-button-secondaryBackground, #3a3d41);
+      background: var(--vscode-button-secondaryBackground, #3a3d41);
+      color: var(--vscode-button-secondaryForeground, #ccc);
+      cursor: pointer;
+      font-family: var(--vscode-font-family);
+      font-size: 12px;
+      transition: background 0.1s;
+    }
+
+    .wda-overlay button:hover {
+      background: var(--vscode-button-secondaryHoverBackground, #45494e);
+    }
+
+    .wda-overlay button.loading {
+      pointer-events: none;
+      opacity: 0.7;
+    }
+
     /* Info overlay - appears on top of video with semi-transparent background */
     .status.info-overlay {
       background: rgba(0, 0, 0, 0.75);
@@ -829,6 +872,10 @@ export function getHtmlForWebview(webview: vscode.Webview, extensionUri: vscode.
       <div id="status" class="status">
         <div class="spinner"></div>
         <div id="status-text">${connectingToDevice}</div>
+      </div>
+      <!-- WDA overlay -->
+      <div id="wda-overlay" class="wda-overlay">
+        <button id="wda-overlay-btn">${startWdaOverlay}</button>
       </div>
       <!-- Stats display -->
       <div id="stats" class="stats hidden"></div>

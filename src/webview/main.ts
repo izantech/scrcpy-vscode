@@ -28,6 +28,8 @@ declare global {
       statsFormat: string;
       extendedStatsFormat: string;
       startRecording: string;
+      startWdaOverlay: string;
+      startIOSInput: string;
       stopRecording: string;
       recording: string;
       screenshotPreview: string;
@@ -178,6 +180,8 @@ let screenshotPreviewImage: HTMLImageElement;
 let screenshotSaveBtn: HTMLElement;
 let screenshotCopyBtn: HTMLElement;
 let screenshotCloseBtn: HTMLElement;
+let wdaOverlay: HTMLElement;
+let wdaOverlayBtn: HTMLElement;
 
 // Device sessions
 const sessions = new Map<string, DeviceSessionUI>();
@@ -223,6 +227,8 @@ function initialize() {
   screenshotSaveBtn = document.getElementById('screenshot-save-btn') as HTMLElement;
   screenshotCopyBtn = document.getElementById('screenshot-copy-btn') as HTMLElement;
   screenshotCloseBtn = document.getElementById('screenshot-close-btn') as HTMLElement;
+  wdaOverlay = document.getElementById('wda-overlay') as HTMLElement;
+  wdaOverlayBtn = document.getElementById('wda-overlay-btn') as HTMLElement;
 
   if (!canvasContainer || !tabBar || !statusElement || !statusTextElement) {
     console.error('Required DOM elements not found');
@@ -378,6 +384,17 @@ function initialize() {
     });
   }
 
+  // WebDriverAgent connect button (iOS input)
+  if (wdaOverlayBtn) {
+    wdaOverlayBtn.addEventListener('click', () => {
+      if (!activeDeviceId) {
+        return;
+      }
+      wdaOverlayBtn.classList.add('loading');
+      vscode.postMessage({ type: 'startIOSInput', deviceId: activeDeviceId });
+    });
+  }
+
   // Screenshot button
   screenshotBtn = document.getElementById('screenshot-btn');
   if (screenshotBtn) {
@@ -502,6 +519,30 @@ function formatBitrate(bitsPerSecond: number): string {
   return `${mbps.toFixed(1)} Mbps`;
 }
 
+function updateWdaOverlay(): void {
+  if (!wdaOverlay || !wdaOverlayBtn) {
+    return;
+  }
+
+  const session = activeDeviceId ? sessions.get(activeDeviceId) : undefined;
+  const isIos = session?.platform === 'ios';
+  const info = session ? deviceInfoCache.get(session.deviceInfo.serial) : undefined;
+  const status = info?.wdaStatus;
+  const isConnecting = status === 'connecting';
+
+  // Show overlay only for iOS, when WDA is not connected/disabled
+  const shouldShowOverlay = isIos && status !== 'connected' && status !== 'disabled';
+  wdaOverlay.classList.toggle('visible', shouldShowOverlay);
+
+  if (!shouldShowOverlay) {
+    wdaOverlayBtn.classList.remove('loading');
+    return;
+  }
+
+  wdaOverlayBtn.classList.toggle('loading', isConnecting);
+  wdaOverlayBtn.textContent = window.l10n.startWdaOverlay;
+}
+
 /**
  * Update rotate button icon based on current orientation
  */
@@ -574,6 +615,8 @@ function updateToolbarForCapabilities(capabilities: PlatformCapabilities | null)
   if (settingsBtn) {
     settingsBtn.style.display = hasFullSystemAccess ? '' : 'none';
   }
+
+  updateWdaOverlay();
 }
 
 /**
@@ -891,6 +934,8 @@ function handleStateSnapshot(state: AppStateSnapshot): void {
   if (state.devices.length > 0) {
     tabBar.classList.remove('hidden');
   }
+
+  updateWdaOverlay();
 }
 
 /**

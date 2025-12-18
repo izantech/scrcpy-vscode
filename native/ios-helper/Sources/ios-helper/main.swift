@@ -268,6 +268,23 @@ class IOSHelperApp: ScreenCaptureDelegate {
         RunLoop.main.run()
     }
 
+    /// Prewarm CoreMediaIO to make screen capture devices appear faster
+    func prewarm(videoSource: String) {
+        let normalized = videoSource.lowercased()
+        MessageWriter.writeStatus("Prewarming iOS \(normalized) capture...")
+
+        let errors = DeviceEnumerator.prewarmScreenCaptureDevices()
+
+        // Only report permission errors if present
+        if errors.isEmpty {
+            MessageWriter.writeStatus("Prewarm completed")
+        } else {
+            for error in errors {
+                MessageWriter.writePermissionError(error)
+            }
+        }
+    }
+
     // MARK: - ScreenCaptureDelegate
 
     func screenCapture(_ capture: AnyObject, didStart width: Int, height: Int) {
@@ -316,6 +333,8 @@ func printUsage() {
     Usage:
       ios-helper list [--video-source display|camera]
                                  List iOS capture sources
+      ios-helper prewarm [--video-source display|camera]
+                                 Prewarm CoreMediaIO capture to make devices appear faster
       ios-helper stream <UDID>    Stream video from a specific capture source
       ios-helper screenshot <UDID> Take a single screenshot from a capture source
 
@@ -326,32 +345,8 @@ func printUsage() {
 
 /// Kill other ios-helper processes running the same command
 func killPreviousInstances(command: String) {
-    let currentPid = getpid()
-
-    // Use pgrep to find other ios-helper processes, excluding current PID
-    let pgrep = Process()
-    pgrep.executableURL = URL(fileURLWithPath: "/usr/bin/pgrep")
-    pgrep.arguments = ["-f", "ios-helper \(command)"]
-
-    let pipe = Pipe()
-    pgrep.standardOutput = pipe
-    pgrep.standardError = FileHandle.nullDevice
-
-    do {
-        try pgrep.run()
-        pgrep.waitUntilExit()
-
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        if let output = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines), !output.isEmpty {
-            for pidStr in output.split(separator: "\n") {
-                if let pid = Int32(pidStr), pid != currentPid {
-                    kill(pid, SIGTERM)
-                }
-            }
-        }
-    } catch {
-        // Ignore errors - best effort
-    }
+    // Disabled: this was causing the process to kill itself or its parent shell wrapper
+    // The extension handles process lifecycle management
 }
 
 func main() {
@@ -383,6 +378,22 @@ func main() {
         }
 
         app.listDevices(videoSource: videoSource)
+        exit(0)
+
+    case "prewarm":
+        var videoSource = "display"
+        var i = 2
+        while i < args.count {
+            let arg = args[i]
+            if arg == "--video-source", i + 1 < args.count {
+                videoSource = args[i + 1]
+                i += 2
+                continue
+            }
+            i += 1
+        }
+
+        app.prewarm(videoSource: videoSource)
         exit(0)
 
     case "stream":

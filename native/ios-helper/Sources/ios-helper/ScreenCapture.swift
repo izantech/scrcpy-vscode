@@ -40,6 +40,13 @@ class ScreenCapture: NSObject {
         let session = AVCaptureSession()
         self.captureSession = session
 
+        // Add observers for session state
+        NotificationCenter.default.addObserver(self, selector: #selector(sessionDidStartRunning), name: .AVCaptureSessionDidStartRunning, object: session)
+        NotificationCenter.default.addObserver(self, selector: #selector(sessionDidStopRunning), name: .AVCaptureSessionDidStopRunning, object: session)
+        NotificationCenter.default.addObserver(self, selector: #selector(sessionWasInterrupted), name: .AVCaptureSessionWasInterrupted, object: session)
+        NotificationCenter.default.addObserver(self, selector: #selector(sessionInterruptionEnded), name: .AVCaptureSessionInterruptionEnded, object: session)
+        NotificationCenter.default.addObserver(self, selector: #selector(sessionRuntimeError), name: .AVCaptureSessionRuntimeError, object: session)
+
         // Configure session for high quality
         session.beginConfiguration()
 
@@ -65,13 +72,36 @@ class ScreenCapture: NSObject {
         self.videoOutput = videoOutput
 
         // Configure format to get highest resolution (best-effort)
-        configureFormat()
+        // configureFormat() -- forcing format can cause issues on some devices/macOS versions
 
         session.commitConfiguration()
 
         // Start the session
         sessionQueue.async {
             session.startRunning()
+        }
+    }
+
+    @objc private func sessionDidStartRunning(notification: NSNotification) {
+        fputs("[ScreenCapture] AVCaptureSession started running\n", stderr)
+    }
+
+    @objc private func sessionDidStopRunning(notification: NSNotification) {
+        fputs("[ScreenCapture] AVCaptureSession stopped running\n", stderr)
+    }
+
+    @objc private func sessionWasInterrupted(notification: NSNotification) {
+        // Detailed interruption reasons are not available on macOS via AVCaptureSessionInterruptionReasonKey
+        fputs("[ScreenCapture] AVCaptureSession interrupted\n", stderr)
+    }
+
+    @objc private func sessionInterruptionEnded(notification: NSNotification) {
+        fputs("[ScreenCapture] AVCaptureSession interruption ended\n", stderr)
+    }
+
+    @objc private func sessionRuntimeError(notification: NSNotification) {
+        if let error = notification.userInfo?[AVCaptureSessionErrorKey] as? Error {
+            fputs("[ScreenCapture] AVCaptureSession runtime error: \(error.localizedDescription)\n", stderr)
         }
     }
 
@@ -200,7 +230,12 @@ extension ScreenCapture: AVCaptureVideoDataOutputSampleBufferDelegate {
         didDrop sampleBuffer: CMSampleBuffer,
         from connection: AVCaptureConnection
     ) {
-        // Frame dropped - could log this if needed
+        // Frame dropped - log reason
+        if let reasonAttachment = CMGetAttachment(sampleBuffer, key: kCMSampleBufferAttachmentKey_DroppedFrameReason, attachmentModeOut: nil) {
+            fputs("[ScreenCapture] Frame dropped. Reason: \(reasonAttachment)\n", stderr)
+        } else {
+            fputs("[ScreenCapture] Frame dropped (unknown reason)\n", stderr)
+        }
     }
 }
 

@@ -2,7 +2,7 @@
  * iOS Device Manager - handles device discovery via ios-helper CLI
  */
 
-import { spawn } from 'child_process';
+import { spawn, spawnSync } from 'child_process';
 import * as fs from 'fs';
 import * as vscode from 'vscode';
 import { DeviceInfo } from '../IDeviceConnection';
@@ -51,6 +51,8 @@ export class iOSDeviceManager {
   static async getAvailableDevices(
     videoSource: 'display' | 'camera' = 'display'
   ): Promise<DeviceInfo[]> {
+    this.killStaleHelpers('list');
+
     // If a list operation is already in progress, return its promise
     if (this.pendingListOperation) {
       console.log('[iOSDeviceManager] List operation already in progress, waiting...');
@@ -71,6 +73,8 @@ export class iOSDeviceManager {
   private static async listDevicesInternal(
     videoSource: 'display' | 'camera'
   ): Promise<DeviceInfo[]> {
+    this.killStaleHelpers('list');
+
     if (!isIOSSupportAvailable()) {
       console.log('[iOSDeviceManager] iOS support not available');
       return [];
@@ -176,12 +180,55 @@ export class iOSDeviceManager {
         resolve([]);
       });
 
-      // Timeout after 15 seconds
+      // Timeout after 20 seconds
       setTimeout(() => {
         proc.kill();
         resolve([]);
-      }, 15000);
+      }, 20000);
     });
+  }
+
+  /**
+   * Prewarm CoreMediaIO capture to make muxed devices appear faster
+   */
+  static async prewarm(videoSource: 'display' | 'camera' = 'display'): Promise<void> {
+    if (!isIOSSupportAvailable()) {
+      return;
+    }
+
+    this.killStaleHelpers('prewarm');
+
+    const helperPath = this.getHelperPath();
+    if (!fs.existsSync(helperPath)) {
+      return;
+    }
+
+    const isNodeScript = helperPath.endsWith('.js');
+    const command = isNodeScript ? 'node' : helperPath;
+    const args = isNodeScript
+      ? [helperPath, 'prewarm', '--video-source', videoSource]
+      : ['prewarm', '--video-source', videoSource];
+
+    // Fire-and-forget prewarm; logs go to stderr/stdout for diagnostics
+    spawn(command, args, { stdio: ['ignore', 'ignore', 'pipe'] }).on('error', (error) => {
+      console.warn('[iOSDeviceManager] prewarm failed:', error);
+    });
+  }
+
+  /**
+   * Kill stale ios-helper processes for the given command to avoid conflicts
+   */
+  static killStaleHelpers(command: 'list' | 'stream' | 'prewarm'): void {
+    if (process.platform !== 'darwin') {
+      return;
+    }
+
+    try {
+      // Best-effort: ignore errors (pkill returns 1 if no process matched)
+      spawnSync('pkill', ['-f', `ios-helper ${command}`], { stdio: 'ignore' });
+    } catch {
+      // Ignore failures; we'll continue with a fresh process
+    }
   }
 
   /**

@@ -105,7 +105,9 @@ export class DeviceService {
 
   // iOS device polling (since there's no equivalent to adb track-devices)
   private iosDevicePollingInterval: NodeJS.Timeout | null = null;
+  private isPollingIOS = false;
   private knownIOSDeviceSerials = new Set<string>();
+  private iosPrewarmDone = false;
 
   // iOS configuration (Phase 8)
   private iosConfig: iOSConnectionConfig = {
@@ -614,13 +616,26 @@ export class DeviceService {
 
     // Poll every 3 seconds for iOS device changes
     this.iosDevicePollingInterval = setInterval(async () => {
-      if (!this.appState.isMonitoring()) {
+      if (!this.appState.isMonitoring() || this.isPollingIOS) {
         return;
       }
+
+      // Skip polling if we have an active iOS connection to avoid CoreMediaIO conflicts
+      if (this.hasActiveIOSSession()) {
+        return;
+      }
+
+      this.isPollingIOS = true;
 
       try {
         const iosDevices = await iOSDeviceManager.getAvailableDevices(this.config.videoSource);
         const currentSerials = new Set(iosDevices.map((d) => d.serial));
+
+        // Re-check active session after potentially long poll
+        if (this.hasActiveIOSSession()) {
+          this.isPollingIOS = false;
+          return;
+        }
 
         console.log(
           '[DeviceService] iOS poll: found',
@@ -634,21 +649,17 @@ export class DeviceService {
         // Find new iOS devices and auto-connect
         if (this.config.autoConnect) {
           for (const device of iosDevices) {
+            // ... (rest of new device detection)
             // Skip if already known or already has a session (any state)
             if (this.knownIOSDeviceSerials.has(device.serial)) {
-              console.log('[DeviceService] iOS device already known:', device.serial);
               continue;
             }
             if (this.findSessionBySerial(device.serial)) {
-              console.log('[DeviceService] iOS device already has session:', device.serial);
               continue;
             }
 
             console.log('[DeviceService] New iOS device detected:', device.serial);
-
-            // Mark as known BEFORE connecting to prevent duplicate attempts
             this.knownIOSDeviceSerials.add(device.serial);
-
             this.statusCallback('', vscode.l10n.t('Connecting to {0}...', device.name));
 
             try {
@@ -656,29 +667,43 @@ export class DeviceService {
               console.log('[DeviceService] iOS device connected successfully:', device.serial);
             } catch (error) {
               console.error('[DeviceService] Failed to connect to iOS device:', error);
-              // Keep in knownIOSDeviceSerials to prevent immediate retry
-              // Will be cleared when device is unplugged and replugged
             }
           }
         }
 
         // Handle disconnected iOS devices
-        for (const serial of Array.from(this.knownIOSDeviceSerials)) {
-          if (!currentSerials.has(serial)) {
-            console.log('[DeviceService] iOS device disconnected:', serial);
-            this.knownIOSDeviceSerials.delete(serial);
+        // ONLY if no active session (double-check to avoid killing a session that just started)
+        if (!this.hasActiveIOSSession()) {
+          for (const serial of Array.from(this.knownIOSDeviceSerials)) {
+            if (!currentSerials.has(serial)) {
+              console.log('[DeviceService] iOS device disconnected:', serial);
+              this.knownIOSDeviceSerials.delete(serial);
 
-            // Remove the disconnected device from sessions
-            const session = this.findSessionBySerial(serial);
-            if (session) {
-              this.removeDevice(session.deviceId);
+              const session = this.findSessionBySerial(serial);
+              if (session) {
+                this.removeDevice(session.deviceId);
+              }
             }
           }
         }
       } catch (error) {
         console.error('[DeviceService] iOS device polling error:', error);
+      } finally {
+        this.isPollingIOS = false;
       }
     }, 3000);
+  }
+
+  /**
+   * Check if there is any active iOS session
+   */
+  private hasActiveIOSSession(): boolean {
+    for (const session of this.sessions.values()) {
+      if (session.deviceInfo.platform === 'ios' && !session.isDisposed && session.connection) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /**
@@ -977,7 +1002,12 @@ export class DeviceService {
     };
 
     // Wire up status and error callbacks
-    connection.onStatus = (status) => this.statusCallback(session.deviceId, status);
+    connection.onStatus = (status) => {
+      if (this.isiOSConnection(connection) && status.startsWith('WDA:')) {
+        return; // Keep WDA handling transparent; use overlay instead
+      }
+      this.statusCallback(session.deviceId, status);
+    };
     connection.onError = (error) => this.handleDisconnect(session, error);
 
     // Wire up capabilities change callback (for WDA connection status)
@@ -1510,6 +1540,54 @@ export class DeviceService {
     await connection?.copyToHost?.();
   }
 
+  /**
+   * Manually start WebDriverAgent for the current (or specified) iOS session
+   */
+  async startIOSInput(deviceId?: string): Promise<void> {
+    const session = deviceId ? this.sessions.get(deviceId) : this.getActiveSession();
+    if (!session || session.deviceInfo.platform !== 'ios') {
+      return;
+    }
+
+    if (!this.iosConfig.webDriverAgentEnabled) {
+      this.statusCallback(
+        session.deviceId,
+        vscode.l10n.t('Enable WebDriverAgent in settings to start iOS input control.')
+      );
+      return;
+    }
+
+    const connection = session.connection;
+    if (!connection || !this.isiOSConnection(connection)) {
+      return;
+    }
+
+    if (connection.isWdaReady) {
+      return;
+    }
+
+    const serial = session.deviceInfo.serial;
+    const existingInfo = this.appState.getDeviceInfo(serial) ?? this.getIOSFallbackInfo(serial);
+    this.appState.setDeviceInfo(serial, { ...existingInfo, wdaStatus: 'connecting' });
+
+    const success = await connection.startWda();
+
+    const latestInfo = this.appState.getDeviceInfo(serial) ?? existingInfo;
+    const wdaStatus: 'connected' | 'unavailable' = success ? 'connected' : 'unavailable';
+    this.appState.setDeviceInfo(serial, { ...latestInfo, wdaStatus });
+
+    if (!success) {
+      this.statusCallback(
+        session.deviceId,
+        vscode.l10n.t('WebDriverAgent unavailable. Use the setup script to start it.')
+      );
+      return;
+    }
+
+    // Ensure capabilities propagate after WDA connects
+    this.appState.updateDevice(session.deviceId, { capabilities: connection.capabilities });
+  }
+
   rotateDevice(): void {
     const connection = this.getActiveSession()?.connection;
     connection?.rotate?.();
@@ -1679,6 +1757,14 @@ export class DeviceService {
 
     // Start adb track-devices process
     this.startTrackDevices();
+
+    // Prewarm iOS screen capture to make muxed devices appear faster
+    if (this.iosConfig.enabled && this.config.videoSource === 'display' && !this.iosPrewarmDone) {
+      this.iosPrewarmDone = true;
+      void iOSDeviceManager.prewarm(this.config.videoSource).catch((error) => {
+        console.warn('[DeviceService] iOS prewarm failed:', error);
+      });
+    }
 
     // Start iOS device polling (if enabled)
     this.startIOSDevicePolling();

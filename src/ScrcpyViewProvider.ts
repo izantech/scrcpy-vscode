@@ -569,6 +569,12 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
         }
         break;
 
+      case 'startIOSInput':
+        if (this._deviceService) {
+          await this._deviceService.startIOSInput(message.deviceId);
+        }
+        break;
+
       case 'screenshot':
         await this._takeAndSaveScreenshot();
         break;
