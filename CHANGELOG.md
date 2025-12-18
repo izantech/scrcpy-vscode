@@ -100,6 +100,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Graceful fallback when libimobiledevice is not installed
 - **Improved tooltip layout** - Input status (✅/❌) now displayed on bottom row with battery info; aligned icons with fixed-width column
 - **Capability-based menu visibility** - Menu items now use capability context variables (e.g., `scrcpy.supportsAppLaunch`) instead of platform checks, enabling dynamic updates when WDA connects/disconnects
+- **Fixed WDA setup iproxy lifecycle** - Setup script process now kept alive after completion so iproxy continues running for touch input
 
 ### Known Issues
 
