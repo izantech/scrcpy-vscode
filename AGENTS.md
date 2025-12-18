@@ -554,12 +554,11 @@ test/
     - Disconnect the device and verify it's removed from the list
     - Optional: Disable iOS support via `scrcpy.ios.enabled: false`
     - Verify iOS devices no longer appear when disabled
-21. Test iOS setup commands (macOS only):
-    - Run command "Setup iOS Input Control (WebDriverAgent)"
-    - Verify terminal opens with guided setup script
-    - Script should check Xcode, iproxy, and connected devices
-    - Run command "Start iOS Input Control"
-    - Verify terminal opens and attempts to launch WDA
+21. Test iOS setup command (macOS only):
+    - Run command "Setup iOS Input Control (WebDriverAgent)" or click "Start WDA" overlay button
+    - Verify in-extension setup runs with progress UI
+    - Setup should check Xcode, iproxy, and connected devices
+    - WDA should auto-connect when setup completes
 22. Test iOS input with WebDriverAgent:
     - Prerequisites:
       - macOS with Xcode installed

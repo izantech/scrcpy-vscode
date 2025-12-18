@@ -108,13 +108,13 @@ class ScreenCapture: NSObject {
 
     @objc private func sessionWasInterrupted(notification: NSNotification) {
         // Detailed interruption reasons are not available on macOS via AVCaptureSessionInterruptionReasonKey
+        // Note: Don't send SCREEN_OFF here - interruptions can happen during normal startup
+        // Lock detection is handled via ideviceinfo polling in TypeScript
         fputs("[ScreenCapture] AVCaptureSession interrupted\n", stderr)
-        MessageWriter.writeStatus("SCREEN_OFF")
     }
 
     @objc private func sessionInterruptionEnded(notification: NSNotification) {
         fputs("[ScreenCapture] AVCaptureSession interruption ended\n", stderr)
-        MessageWriter.writeStatus("SCREEN_ON")
     }
 
     @objc private func sessionRuntimeError(notification: NSNotification) {

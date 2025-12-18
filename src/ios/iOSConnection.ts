@@ -164,7 +164,7 @@ export class iOSConnection implements IDeviceConnection {
     console.log('[iOSConnection] Running:', command, args);
 
     this.helperProcess = spawn(command, args, {
-      stdio: ['pipe', 'pipe', 'pipe'],
+      stdio: ['ignore', 'pipe', 'pipe'],
     });
 
     this.helperProcess.stdout?.on('data', (chunk: Buffer) => {
@@ -906,6 +906,12 @@ export class iOSConnection implements IDeviceConnection {
 
     // Poll every 2 seconds
     this.lockStateTimer = setInterval(async () => {
+      // Don't check lock state until we've received at least one frame
+      // This prevents false "screen off" detection during initial connection
+      if (!this.hasReceivedFirstFrame) {
+        return;
+      }
+
       // Use ideviceinfo to detect lock state (more reliable than WDA)
       const isLocked = await this.checkLockStateViaIdeviceinfo();
 
@@ -1200,7 +1206,7 @@ export class iOSConnection implements IDeviceConnection {
   async launchApp(bundleId: string): Promise<void> {
     if (!this.wdaClient || !this.wdaReady) {
       throw new Error(
-        'WebDriverAgent not connected. Use "Start iOS Input Control" from the menu to enable app launching.'
+        'WebDriverAgent not connected. Click "Start WDA" on the video overlay to enable app launching.'
       );
     }
 

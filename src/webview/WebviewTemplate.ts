@@ -16,7 +16,6 @@ export function getHtmlForWebview(webview: vscode.Webview, extensionUri: vscode.
   const takeScreenshot = vscode.l10n.t('Take screenshot');
   const power = vscode.l10n.t('Power');
   const startRecording = vscode.l10n.t('Start recording');
-  const startIOSInput = vscode.l10n.t('Start iOS Input Control');
   const startWdaOverlay = vscode.l10n.t('Launch WDA for touch input');
   const controlCenter = vscode.l10n.t('Control Center');
 
@@ -39,7 +38,6 @@ export function getHtmlForWebview(webview: vscode.Webview, extensionUri: vscode.
     save: vscode.l10n.t('Save'),
     copy: vscode.l10n.t('Copy'),
     startWdaOverlay,
-    startIOSInput,
     toolWarningAdb: vscode.l10n.t('ADB is not installed or not in PATH'),
     toolWarningScrcpy: vscode.l10n.t('scrcpy is not installed or not in PATH'),
     toolWarningBoth: vscode.l10n.t('ADB and scrcpy are not installed'),

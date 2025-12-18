@@ -88,15 +88,13 @@ iOS device mirroring is **automatically enabled** on macOS. Just connect your de
 
 #### Enable Touch Input (One-Time Setup)
 
-To control your iOS device (tap, swipe, type), run the guided setup:
+To control your iOS device (tap, swipe, type), click the **"Start WDA"** button shown on the iOS video overlay, or run:
 
 1. Open Command Palette (`Cmd+Shift+P`)
 2. Run **"Setup iOS Input Control (WebDriverAgent)"**
-3. Follow the terminal prompts
+3. Follow the prompts to build and install WDA
 
-The script will install prerequisites, clone WebDriverAgent, guide you through Xcode signing, and build WDA for your device.
-
-After setup, run **"Start iOS Input Control"** to launch WDA, then enable it in Settings > scrcpy > iOS: Web Driver Agent Enabled.
+The setup will install prerequisites, clone WebDriverAgent, guide you through Xcode signing, and build WDA for your device. Once complete, touch input is automatically enabled.
 
 For manual setup, see [iOS Input Control Guide](docs/ios-input-control-research.md).
 
@@ -118,7 +116,6 @@ For manual setup, see [iOS Input Control Guide](docs/ios-input-control-research.
 | `Scrcpy: Install APK`                 | Install APK on device       |
 | `Scrcpy: Upload Files to Device`      | Upload to /sdcard/Download/ |
 | `Scrcpy: Setup iOS Input Control`     | One-time WDA setup (macOS)  |
-| `Scrcpy: Start iOS Input Control`     | Launch WDA for touch input  |
 
 ## Settings
 

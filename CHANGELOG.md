@@ -51,9 +51,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `scrcpy.ios.enabled` - Enable/disable iOS device support (auto-enabled on macOS)
   - `scrcpy.ios.webDriverAgentEnabled` - Enable/disable WDA input control
   - `scrcpy.ios.webDriverAgentPort` - WDA port (default: 8100)
-- **iOS setup commands**
-  - `Setup iOS Input Control (WebDriverAgent)` - Guided one-time setup for WDA
-  - `Start iOS Input Control` - Launch WDA for touch/keyboard input
+- **iOS setup command** - `Setup iOS Input Control (WebDriverAgent)` - Guided one-time setup for WDA with in-extension progress UI
 
 ### Changed
 

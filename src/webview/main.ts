@@ -29,7 +29,6 @@ declare global {
       extendedStatsFormat: string;
       startRecording: string;
       startWdaOverlay: string;
-      startIOSInput: string;
       stopRecording: string;
       recording: string;
       screenshotPreview: string;

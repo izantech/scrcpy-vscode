@@ -511,11 +511,6 @@
         "icon": "$(device-desktop)"
       },
       {
-        "command": "scrcpy.startIOSInput",
-        "title": "%command.startIOSInput%",
-        "icon": "$(play)"
-      },
-      {
         "command": "scrcpy.switchToTab1",
         "title": "%command.switchToTab1%"
       },
@@ -675,11 +670,6 @@
           "command": "scrcpy.listCameras",
           "when": "view == scrcpy.deviceView && scrcpy.activeDevicePlatform == 'android'",
           "group": "2_device@3"
-        },
-        {
-          "command": "scrcpy.startIOSInput",
-          "when": "view == scrcpy.deviceView && isMac",
-          "group": "3_ios@1"
         }
       ]
     },

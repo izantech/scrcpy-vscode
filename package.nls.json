@@ -113,7 +113,6 @@
   "command.resetScreenshotPath": "Reset Screenshot Save Path",
   "command.resetRecordingPath": "Reset Recording Save Path",
   "command.resetApkInstallPath": "Reset APK Install Path",
-  "command.startIOSInput": "📲 Start iOS Input Control",
   "config.scrcpy.ios.enabled": "Enable iOS device support. iOS devices are auto-detected on macOS. Disable to hide iOS devices from the device list. *macOS only.*",
   "config.scrcpy.ios.webDriverAgentEnabled": "Enable WebDriverAgent for iOS touch and keyboard input control. Requires [WebDriverAgent](https://github.com/appium/WebDriverAgent) running on the iOS device and `iproxy` installed (`brew install libimobiledevice`). *macOS only.*",
   "config.scrcpy.ios.webDriverAgentPort": "Port number where WebDriverAgent is listening on the iOS device. Default is 8100."
