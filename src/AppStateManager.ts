@@ -5,6 +5,7 @@
  * Components subscribe to state changes and receive complete snapshots.
  */
 
+import * as vscode from 'vscode';
 import {
   AppState,
   AppStateSnapshot,
@@ -13,9 +14,9 @@ import {
   ToolStatus,
   WebviewSettings,
   StatusMessage,
-  ConnectionState,
-  VideoCodec,
+  DeviceUISettings,
 } from './types/AppState';
+import { ActionType, AppAction } from './types/Actions';
 
 /**
  * Listener function type for state changes
@@ -31,11 +32,26 @@ export type Unsubscribe = () => void;
  * Centralized state manager for the application
  */
 export class AppStateManager {
+  private static readonly ALLOWED_DEVICES_KEY = 'scrcpy.allowedAutoConnectDevices';
+  private static readonly BLOCKED_DEVICES_KEY = 'scrcpy.blockedAutoConnectDevices';
+  private static readonly CONTROL_CENTER_CACHE_KEY = 'controlCenterCache';
+
   private state: AppState;
   private listeners = new Set<StateListener>();
   private notifyScheduled = false;
 
-  constructor() {
+  constructor(private storage?: vscode.Memento) {
+    const allowedDevices = storage
+      ? storage.get<string[]>(AppStateManager.ALLOWED_DEVICES_KEY, [])
+      : [];
+    const blockedDevices = storage
+      ? storage.get<string[]>(AppStateManager.BLOCKED_DEVICES_KEY, [])
+      : [];
+
+    const controlCenterCache = storage
+      ? storage.get<Record<string, DeviceUISettings>>(AppStateManager.CONTROL_CENTER_CACHE_KEY, {})
+      : {};
+
     this.state = {
       devices: new Map(),
       activeDeviceId: null,
@@ -51,7 +67,191 @@ export class AppStateManager {
       statusMessage: undefined,
       deviceInfo: new Map(),
       isMonitoring: false,
+      allowedAutoConnectDevices: new Set(allowedDevices),
+      blockedAutoConnectDevices: new Set(blockedDevices),
+      controlCenterCache,
     };
+  }
+
+  /**
+   * Dispatch an action to update the state
+   */
+  public dispatch(action: AppAction): void {
+    if (this.reducer(action)) {
+      this.notifyListeners();
+    }
+  }
+
+  /**
+   * Reducer to handle state transitions
+   * Returns true if state was modified
+   */
+  private reducer(action: AppAction): boolean {
+    switch (action.type) {
+      case ActionType.ADD_DEVICE: {
+        this.state.devices.set(action.payload.deviceId, { ...action.payload });
+        return true;
+      }
+      case ActionType.REMOVE_DEVICE: {
+        const { deviceId } = action.payload;
+        const device = this.state.devices.get(deviceId);
+        if (this.state.devices.delete(deviceId)) {
+          if (device) {
+            this.state.deviceInfo.delete(device.serial);
+          }
+          if (this.state.activeDeviceId === deviceId) {
+            this.state.activeDeviceId = null;
+          }
+          return true;
+        }
+        return false;
+      }
+      case ActionType.UPDATE_DEVICE: {
+        const { deviceId, updates } = action.payload;
+        const device = this.state.devices.get(deviceId);
+        if (device) {
+          this.state.devices.set(deviceId, { ...device, ...updates });
+          return true;
+        }
+        return false;
+      }
+      case ActionType.SET_ACTIVE_DEVICE: {
+        const { deviceId } = action.payload;
+        if (this.state.activeDeviceId !== deviceId) {
+          // Update isActive flags
+          for (const [id, device] of this.state.devices) {
+            const isActive = id === deviceId;
+            if (device.isActive !== isActive) {
+              this.state.devices.set(id, { ...device, isActive });
+            }
+          }
+          this.state.activeDeviceId = deviceId;
+          return true;
+        }
+        return false;
+      }
+      case ActionType.UPDATE_SETTINGS: {
+        this.state.settings = { ...this.state.settings, ...action.payload };
+        return true;
+      }
+      case ActionType.UPDATE_TOOL_STATUS: {
+        this.state.toolStatus = { ...action.payload };
+        return true;
+      }
+      case ActionType.SET_STATUS_MESSAGE: {
+        const newMessage = action.payload ? { ...action.payload } : undefined;
+        // Simple equality check
+        const currentJson = JSON.stringify(this.state.statusMessage);
+        const newJson = JSON.stringify(newMessage);
+        if (currentJson !== newJson) {
+          this.state.statusMessage = newMessage;
+          return true;
+        }
+        return false;
+      }
+      case ActionType.SET_DEVICE_INFO: {
+        this.state.deviceInfo.set(action.payload.serial, { ...action.payload.info });
+        return true;
+      }
+      case ActionType.REMOVE_DEVICE_INFO: {
+        if (this.state.deviceInfo.delete(action.payload.serial)) {
+          return true;
+        }
+        return false;
+      }
+      case ActionType.CLEAR_DEVICE_INFO: {
+        if (this.state.deviceInfo.size > 0) {
+          this.state.deviceInfo.clear();
+          return true;
+        }
+        return false;
+      }
+      case ActionType.SET_MONITORING: {
+        if (this.state.isMonitoring !== action.payload.isMonitoring) {
+          this.state.isMonitoring = action.payload.isMonitoring;
+          // Monitoring state change does not trigger UI update
+          return false;
+        }
+        return false;
+      }
+      case ActionType.CLEAR_ALL_DEVICES: {
+        if (
+          this.state.devices.size > 0 ||
+          this.state.activeDeviceId !== null ||
+          this.state.deviceInfo.size > 0
+        ) {
+          this.state.devices.clear();
+          this.state.activeDeviceId = null;
+          this.state.deviceInfo.clear();
+          return true;
+        }
+        return false;
+      }
+      case ActionType.RESET: {
+        this.state.devices.clear();
+        this.state.activeDeviceId = null;
+        this.state.statusMessage = undefined;
+        this.state.deviceInfo.clear();
+        this.state.isMonitoring = false;
+        return true;
+      }
+      case ActionType.SET_ALLOWED_AUTO_CONNECT: {
+        this.state.allowedAutoConnectDevices = new Set(action.payload.serials);
+        this.persistAllowedDevices();
+        return true;
+      }
+      case ActionType.ADD_ALLOWED_AUTO_CONNECT: {
+        if (!this.state.allowedAutoConnectDevices.has(action.payload.serial)) {
+          this.state.allowedAutoConnectDevices.add(action.payload.serial);
+          this.persistAllowedDevices();
+          return true;
+        }
+        return false;
+      }
+      case ActionType.REMOVE_ALLOWED_AUTO_CONNECT: {
+        if (this.state.allowedAutoConnectDevices.delete(action.payload.serial)) {
+          this.persistAllowedDevices();
+          return true;
+        }
+        return false;
+      }
+      case ActionType.ADD_BLOCKED_AUTO_CONNECT: {
+        if (!this.state.blockedAutoConnectDevices.has(action.payload.serial)) {
+          this.state.blockedAutoConnectDevices.add(action.payload.serial);
+          this.persistBlockedDevices();
+          return true;
+        }
+        return false;
+      }
+      case ActionType.REMOVE_BLOCKED_AUTO_CONNECT: {
+        if (this.state.blockedAutoConnectDevices.delete(action.payload.serial)) {
+          this.persistBlockedDevices();
+          return true;
+        }
+        return false;
+      }
+      case ActionType.SET_CONTROL_CENTER_CACHE: {
+        this.state.controlCenterCache = action.payload.cache;
+        this.persistControlCenterCache();
+        return true;
+      }
+      case ActionType.SAVE_CONTROL_CENTER_TO_CACHE: {
+        this.state.controlCenterCache[action.payload.deviceId] = action.payload.settings;
+        this.persistControlCenterCache();
+        return true;
+      }
+      case ActionType.UPDATE_DEVICE_SETTING_IN_CACHE: {
+        const { deviceId, setting, value } = action.payload;
+        if (this.state.controlCenterCache[deviceId]) {
+          (this.state.controlCenterCache[deviceId] as unknown as Record<string, unknown>)[setting] =
+            value;
+          this.persistControlCenterCache();
+          return true;
+        }
+        return false;
+      }
+    }
+    return false;
   }
 
   /**
@@ -66,14 +266,10 @@ export class AppStateManager {
       toolStatus: { ...this.state.toolStatus },
       statusMessage: this.state.statusMessage ? { ...this.state.statusMessage } : undefined,
       deviceInfo: Object.fromEntries(this.state.deviceInfo),
+      allowedAutoConnectDevices: Array.from(this.state.allowedAutoConnectDevices),
+      blockedAutoConnectDevices: Array.from(this.state.blockedAutoConnectDevices),
+      controlCenterCache: { ...this.state.controlCenterCache },
     };
-  }
-
-  /**
-   * Get the raw state (for internal use by DeviceService)
-   */
-  getRawState(): Readonly<AppState> {
-    return this.state;
   }
 
   /**
@@ -110,40 +306,12 @@ export class AppStateManager {
     });
   }
 
-  // ==================== Device State Mutations ====================
-
-  /**
-   * Add a new device
-   */
-  addDevice(device: DeviceState): void {
-    this.state.devices.set(device.deviceId, { ...device });
-    this.notifyListeners();
-  }
-
-  /**
-   * Remove a device
-   */
-  removeDevice(deviceId: string): void {
-    const device = this.state.devices.get(deviceId);
-    const existed = this.state.devices.delete(deviceId);
-    if (existed) {
-      // Clear cached device info for the removed device
-      if (device) {
-        this.state.deviceInfo.delete(device.serial);
-      }
-
-      // Clear active device if it was the removed one
-      if (this.state.activeDeviceId === deviceId) {
-        this.state.activeDeviceId = null;
-      }
-      this.notifyListeners();
-    }
-  }
+  // ==================== Read-Only Accessors ====================
 
   /**
    * Get a device by ID
    */
-  getDevice(deviceId: string): DeviceState | undefined {
+  getDevice(deviceId: string): Readonly<DeviceState> | undefined {
     return this.state.devices.get(deviceId);
   }
 
@@ -157,7 +325,7 @@ export class AppStateManager {
   /**
    * Get device by serial
    */
-  getDeviceBySerial(serial: string): DeviceState | undefined {
+  getDeviceBySerial(serial: string): Readonly<DeviceState> | undefined {
     for (const device of this.state.devices.values()) {
       if (device.serial === serial) {
         return device;
@@ -181,64 +349,6 @@ export class AppStateManager {
   }
 
   /**
-   * Update a device's state
-   */
-  updateDevice(deviceId: string, updates: Partial<DeviceState>): void {
-    const device = this.state.devices.get(deviceId);
-    if (device) {
-      this.state.devices.set(deviceId, { ...device, ...updates });
-      this.notifyListeners();
-    }
-  }
-
-  /**
-   * Update device connection state
-   */
-  updateDeviceConnectionState(deviceId: string, connectionState: ConnectionState): void {
-    this.updateDevice(deviceId, { connectionState });
-  }
-
-  /**
-   * Update device video dimensions
-   */
-  updateDeviceVideoDimensions(
-    deviceId: string,
-    width: number,
-    height: number,
-    codec?: VideoCodec
-  ): void {
-    const updates: Partial<DeviceState> = {
-      videoDimensions: { width, height },
-    };
-    if (codec) {
-      updates.videoCodec = codec;
-    }
-    this.updateDevice(deviceId, updates);
-  }
-
-  // ==================== Active Device ====================
-
-  /**
-   * Set the active device
-   */
-  setActiveDevice(deviceId: string | null): void {
-    if (this.state.activeDeviceId === deviceId) {
-      return;
-    }
-
-    // Update isActive flags on all devices
-    for (const [id, device] of this.state.devices) {
-      const isActive = id === deviceId;
-      if (device.isActive !== isActive) {
-        this.state.devices.set(id, { ...device, isActive });
-      }
-    }
-
-    this.state.activeDeviceId = deviceId;
-    this.notifyListeners();
-  }
-
-  /**
    * Get the active device ID
    */
   getActiveDeviceId(): string | null {
@@ -248,120 +358,39 @@ export class AppStateManager {
   /**
    * Get the active device state
    */
-  getActiveDevice(): DeviceState | undefined {
+  getActiveDevice(): Readonly<DeviceState> | undefined {
     if (!this.state.activeDeviceId) {
       return undefined;
     }
     return this.state.devices.get(this.state.activeDeviceId);
   }
 
-  // ==================== Settings ====================
-
-  /**
-   * Update settings
-   */
-  updateSettings(settings: Partial<WebviewSettings>): void {
-    this.state.settings = { ...this.state.settings, ...settings };
-    this.notifyListeners();
-  }
-
   /**
    * Get current settings
    */
-  getSettings(): WebviewSettings {
+  getSettings(): Readonly<WebviewSettings> {
     return { ...this.state.settings };
-  }
-
-  // ==================== Tool Status ====================
-
-  /**
-   * Update tool status
-   */
-  updateToolStatus(toolStatus: ToolStatus): void {
-    this.state.toolStatus = { ...toolStatus };
-    this.notifyListeners();
   }
 
   /**
    * Get tool status
    */
-  getToolStatus(): ToolStatus {
+  getToolStatus(): Readonly<ToolStatus> {
     return { ...this.state.toolStatus };
-  }
-
-  // ==================== Status Message ====================
-
-  /**
-   * Set status message
-   */
-  setStatusMessage(message: StatusMessage | undefined): void {
-    this.state.statusMessage = message ? { ...message } : undefined;
-    this.notifyListeners();
-  }
-
-  /**
-   * Clear status message
-   */
-  clearStatusMessage(): void {
-    if (this.state.statusMessage) {
-      this.state.statusMessage = undefined;
-      this.notifyListeners();
-    }
   }
 
   /**
    * Get status message
    */
-  getStatusMessage(): StatusMessage | undefined {
+  getStatusMessage(): Readonly<StatusMessage> | undefined {
     return this.state.statusMessage ? { ...this.state.statusMessage } : undefined;
-  }
-
-  // ==================== Device Info ====================
-
-  /**
-   * Set device detailed info
-   */
-  setDeviceInfo(serial: string, info: DeviceDetailedInfo): void {
-    this.state.deviceInfo.set(serial, { ...info });
-    this.notifyListeners();
   }
 
   /**
    * Get device detailed info
    */
-  getDeviceInfo(serial: string): DeviceDetailedInfo | undefined {
+  getDeviceInfo(serial: string): Readonly<DeviceDetailedInfo> | undefined {
     return this.state.deviceInfo.get(serial);
-  }
-
-  /**
-   * Remove device detailed info
-   */
-  removeDeviceInfo(serial: string): void {
-    if (this.state.deviceInfo.delete(serial)) {
-      this.notifyListeners();
-    }
-  }
-
-  /**
-   * Clear all device info
-   */
-  clearDeviceInfo(): void {
-    if (this.state.deviceInfo.size > 0) {
-      this.state.deviceInfo.clear();
-      this.notifyListeners();
-    }
-  }
-
-  // ==================== Monitoring State ====================
-
-  /**
-   * Set monitoring state
-   */
-  setMonitoring(isMonitoring: boolean): void {
-    if (this.state.isMonitoring !== isMonitoring) {
-      this.state.isMonitoring = isMonitoring;
-      // Note: monitoring state is not sent to webview, only used internally
-    }
   }
 
   /**
@@ -371,33 +400,59 @@ export class AppStateManager {
     return this.state.isMonitoring;
   }
 
-  // ==================== Bulk Operations ====================
-
   /**
-   * Clear all devices
+   * Check if a device is allowed to auto-connect
    */
-  clearAllDevices(): void {
-    const hadDevices = this.state.devices.size > 0;
-    const hadActiveDevice = this.state.activeDeviceId !== null;
-    const hadDeviceInfo = this.state.deviceInfo.size > 0;
-
-    if (hadDevices || hadActiveDevice || hadDeviceInfo) {
-      this.state.devices.clear();
-      this.state.activeDeviceId = null;
-      this.state.deviceInfo.clear();
-      this.notifyListeners();
-    }
+  isAllowedAutoConnectDevice(serial: string): boolean {
+    return this.state.allowedAutoConnectDevices.has(serial);
   }
 
   /**
-   * Reset to initial state
+   * Check if a device is blocked from auto-connect (manual disconnect)
    */
-  reset(): void {
-    this.state.devices.clear();
-    this.state.activeDeviceId = null;
-    this.state.statusMessage = undefined;
-    this.state.deviceInfo.clear();
-    this.state.isMonitoring = false;
-    this.notifyListeners();
+  isBlockedAutoConnectDevice(serial: string): boolean {
+    return this.state.blockedAutoConnectDevices.has(serial);
+  }
+
+  /**
+   * Get cached settings for a device
+   */
+  getControlCenterFromCache(deviceId: string): DeviceUISettings | undefined {
+    return this.state.controlCenterCache[deviceId];
+  }
+
+  /**
+   * Get full control center cache
+   */
+  getControlCenterCache(): Readonly<Record<string, DeviceUISettings>> {
+    return this.state.controlCenterCache;
+  }
+
+  // ==================== Auto-Connect State (Actions) ====================
+
+  private persistAllowedDevices(): void {
+    if (this.storage) {
+      this.storage.update(
+        AppStateManager.ALLOWED_DEVICES_KEY,
+        Array.from(this.state.allowedAutoConnectDevices)
+      );
+    }
+  }
+
+  private persistBlockedDevices(): void {
+    if (this.storage) {
+      this.storage.update(
+        AppStateManager.BLOCKED_DEVICES_KEY,
+        Array.from(this.state.blockedAutoConnectDevices)
+      );
+    }
+  }
+
+  // ==================== Control Center Cache (Actions) ====================
+
+  private persistControlCenterCache(): void {
+    if (this.storage) {
+      this.storage.update(AppStateManager.CONTROL_CENTER_CACHE_KEY, this.state.controlCenterCache);
+    }
   }
 }

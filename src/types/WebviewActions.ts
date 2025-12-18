@@ -5,6 +5,8 @@
  * The webview sends these typed actions instead of managing state locally.
  */
 
+import type { DeviceUISettings } from './AppState';
+
 /**
  * Touch action type
  */
@@ -109,7 +111,15 @@ export type WebviewAction =
   | { type: 'getDeviceInfo'; serial: string }
 
   // Dimension updates (from video parsing)
-  | { type: 'dimensionsChanged'; deviceId: string; width: number; height: number };
+  | { type: 'dimensionsChanged'; deviceId: string; width: number; height: number }
+
+  // Control Center
+  | { type: 'openControlCenter' }
+  | {
+      type: 'applyControlCenterSetting';
+      setting: keyof DeviceUISettings;
+      value: DeviceUISettings[keyof DeviceUISettings];
+    };
 
 /**
  * Type guard to check if an object is a WebviewAction

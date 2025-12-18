@@ -107,7 +107,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added WebDriverAgent setup guide with troubleshooting
 - Updated AGENTS.md with iOS architecture and manual testing instructions
 
-## [0.1.2] - 2025-12-16
+## [Unreleased] - Control Center
+
+### Changed
+
+- **Redesigned Control Center** - Complete visual overhaul with floating opaque sections (Display, Appearance, Audio & Volume, System Shortcuts, Accessibility, Developer)
+- **Floating sections** - Removed container wrapper, sections now float independently with opaque backgrounds
+- **Collapsible sections** - Click section headers to collapse/expand, state persists across sessions via localStorage
+- **New setting icons** - Each setting now has a distinctive colorful gradient icon (moon for dark mode, palette for appearance group, accessibility symbols, etc.)
+- **Cycle buttons** - Replaced segmented controls with cycle buttons for Orientation, Dark Mode, and Navigation Mode that cycle through options on click
+- **Improved control contrast** - Enhanced toggle switches, sliders, and buttons with better visibility against dark backgrounds
+- **Clickable toggle rows** - Entire row is now clickable to toggle switches, not just the switch itself
+- **Compact layout** - Control center uses 75% width with hidden scrollbars, extends to toolbar edge
+- **Toolbar reorganization** - Power button moved to left group, Control Center button moved to right group
+- **OKLCH gradient mask** - Perceptually uniform fade effect at top edge when scrolling
+- **Renamed to Control Center** - Full codebase refactor from "Device Settings" to "Control Center"
+
+### Added
+
+- **Display group** - New settings group with screen orientation control (Auto/Portrait/Landscape)
+- **Proper orientation control** - Orientation button now sets device rotation lock via ADB settings instead of just rotating 90°
+- **Audio & Volume group** - Consolidated audio forwarding toggle with volume up/down buttons
+- **System Shortcuts group** - Quick access to Notification Panel and Settings Panel
+- **WiFi connection timeout** - Added 15 second timeout to prevent hanging on unreachable devices
+- **Control Center button active state** - Button highlights when Control Center is open (like macOS)
+- **Dimmed toolbar** - Other toolbar buttons dim when Control Center is open
+- **Click outside to close** - Clicking anywhere outside Control Center closes it
+- **Dynamic scroll fade** - Top fade effect only appears when scrolled down
+- Localization strings for new settings groups and controls
+
+### Fixed
+
+- **Orientation change stale frame** - Canvas now clears immediately when changing orientation to avoid displaying outdated frames while waiting for new video stream
+- **Cycle button width** - Fixed width prevents slider resizing when label text changes
+- **Orientation flash** - Fixed brief wrong orientation when switching modes by setting user_rotation before disabling auto-rotate
+
+### Removed
+
+- **Contextual dropdown menu** - Replaced by unified Control Center popup with all controls
+- **Standalone rotation button** - Orientation now controlled via Display group in Control Center
+- **Select to Speak toggle** - Removed as it's incompatible with scrcpy's touch injection
+
+## [0.1.3] - 2025-12-16
 
 ### Added
 
@@ -136,6 +177,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed potential race conditions from partial state updates
 - Canvas now properly resizes when frame dimensions change (e.g., device rotation)
 - Status overlays scoped per device tab and stale device info cleared on disconnect
+
+## [0.1.2] - 2025-12-15
+
+### Changed
+
+- Updated extension icon to official scrcpy icon with "unofficial" ribbon
+
+### Fixed
+
+- Correct extension ID in settings command
 
 ## [0.1.1] - 2025-12-15
 
@@ -196,6 +247,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - English (default)
 - Spanish
 
+[0.1.3]: https://github.com/izantech/scrcpy-vscode/releases/tag/0.1.3
 [0.1.2]: https://github.com/izantech/scrcpy-vscode/releases/tag/0.1.2
 [0.1.1]: https://github.com/izantech/scrcpy-vscode/releases/tag/0.1.1
 [0.1.0]: https://github.com/izantech/scrcpy-vscode/releases/tag/0.1.0

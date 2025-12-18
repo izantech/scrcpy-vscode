@@ -1,3 +1,9 @@
+/**
+ * Scrcpy view provider that wires AppStateManager, DeviceService, and the webview.
+ *
+ * Responsible for building the webview, routing messages, and keeping state in sync
+ * with VS Code configuration changes.
+ */
 import * as vscode from 'vscode';
 import * as os from 'os';
 import * as path from 'path';
@@ -6,7 +12,8 @@ import { ScrcpyConfig } from './android/ScrcpyConnection';
 import { DeviceService } from './DeviceService';
 import { AppStateManager, Unsubscribe } from './AppStateManager';
 import { ToolCheckResult } from './ToolChecker';
-import { ToolNotFoundError, ToolErrorCode, DeviceState } from './types/AppState';
+import { ToolNotFoundError, ToolErrorCode, DeviceState, DeviceUISettings } from './types/AppState';
+import { ActionType } from './types/Actions';
 
 export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'scrcpy.deviceView';
@@ -22,9 +29,13 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
 
   constructor(
     private readonly _extensionUri: vscode.Uri,
-    toolStatus?: ToolCheckResult
+    toolStatus?: ToolCheckResult,
+    globalState?: vscode.Memento
   ) {
     this._toolStatus = toolStatus;
+    // Create centralized state manager with storage for persistence immediately
+    // to ensure single source of truth from start.
+    this._appState = new AppStateManager(globalState);
   }
 
   public resolveWebviewView(
@@ -50,7 +61,7 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
       this._deviceService.stopDeviceMonitoring();
       this._deviceService.disconnectAll().catch(() => {});
       this._deviceService = undefined;
-      this._appState = undefined;
+      // Do NOT destroy AppStateManager, it holds persistent state.
     }
 
     // Reset disposed state
@@ -144,9 +155,12 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
           const needsReconnect = reconnectSettings.some((s) => e.affectsConfiguration(s));
 
           if (needsReconnect && this._deviceService) {
-            this._appState?.setStatusMessage({
-              type: 'loading',
-              text: vscode.l10n.t('Settings changed. Reconnecting...'),
+            this._appState?.dispatch({
+              type: ActionType.SET_STATUS_MESSAGE,
+              payload: {
+                type: 'loading',
+                text: vscode.l10n.t('Settings changed. Reconnecting...'),
+              },
             });
             this._deviceService.updateConfig(this._getConfig());
             this._deviceService.setIOSConfig(this._getIOSConfig());
@@ -156,7 +170,10 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
             // Clear loading message if devices connected successfully
             // (empty state and errors are handled within _autoConnectAllDevices and removeDevice)
             if (this._appState && this._appState.getDeviceCount() > 0) {
-              this._appState.clearStatusMessage();
+              this._appState.dispatch({
+                type: ActionType.SET_STATUS_MESSAGE,
+                payload: undefined,
+              });
             }
           }
         }
@@ -178,9 +195,12 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
     this._toolStatus = toolStatus;
     // Update AppStateManager if it exists (state snapshot will be sent automatically)
     if (this._appState) {
-      this._appState.updateToolStatus({
-        adbAvailable: toolStatus.adb.isAvailable,
-        scrcpyAvailable: toolStatus.scrcpy.isAvailable,
+      this._appState.dispatch({
+        type: ActionType.UPDATE_TOOL_STATUS,
+        payload: {
+          adbAvailable: toolStatus.adb.isAvailable,
+          scrcpyAvailable: toolStatus.scrcpy.isAvailable,
+        },
       });
     }
   }
@@ -243,10 +263,13 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
       return;
     }
     const config = vscode.workspace.getConfiguration('scrcpy');
-    this._appState.updateSettings({
-      showStats: config.get<boolean>('showStats', false),
-      showExtendedStats: config.get<boolean>('showExtendedStats', false),
-      audioEnabled: config.get<boolean>('audio', true),
+    this._appState.dispatch({
+      type: ActionType.UPDATE_SETTINGS,
+      payload: {
+        showStats: config.get<boolean>('showStats', false),
+        showExtendedStats: config.get<boolean>('showExtendedStats', false),
+        audioEnabled: config.get<boolean>('audio', true),
+      },
     });
   }
 
@@ -257,21 +280,31 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
 
     const config = this._getConfig();
 
-    // Create centralized state manager
-    this._appState = new AppStateManager();
+    // AppStateManager is created in constructor now.
+    // Ensure we have one
+    if (!this._appState) {
+      // Should not happen as per constructor
+      return;
+    }
 
     // Initialize settings and tool status in state
     const vsConfig = vscode.workspace.getConfiguration('scrcpy');
-    this._appState.updateSettings({
-      showStats: vsConfig.get<boolean>('showStats', false),
-      showExtendedStats: vsConfig.get<boolean>('showExtendedStats', false),
-      audioEnabled: vsConfig.get<boolean>('audio', true),
+    this._appState.dispatch({
+      type: ActionType.UPDATE_SETTINGS,
+      payload: {
+        showStats: vsConfig.get<boolean>('showStats', false),
+        showExtendedStats: vsConfig.get<boolean>('showExtendedStats', false),
+        audioEnabled: vsConfig.get<boolean>('audio', true),
+      },
     });
 
     if (this._toolStatus) {
-      this._appState.updateToolStatus({
-        adbAvailable: this._toolStatus.adb.isAvailable,
-        scrcpyAvailable: this._toolStatus.scrcpy.isAvailable,
+      this._appState.dispatch({
+        type: ActionType.UPDATE_TOOL_STATUS,
+        payload: {
+          adbAvailable: this._toolStatus.adb.isAvailable,
+          scrcpyAvailable: this._toolStatus.scrcpy.isAvailable,
+        },
       });
     }
 
@@ -328,10 +361,13 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
         // Use 'info' type for screen-off notifications (shown as overlay on video)
         const isScreenOffMessage =
           status.includes('screen is off') || status.includes('Wake your iOS device');
-        this._appState.setStatusMessage({
-          type: isScreenOffMessage ? 'info' : 'loading',
-          text: status,
-          deviceId: deviceId || undefined,
+        this._appState.dispatch({
+          type: ActionType.SET_STATUS_MESSAGE,
+          payload: {
+            type: isScreenOffMessage ? 'info' : 'loading',
+            text: status,
+            deviceId: deviceId || undefined,
+          },
         });
         // Note: Device contexts are updated via state subscription
       },
@@ -344,24 +380,33 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
         // Handle tool-not-found errors by updating tool status
         if (error instanceof ToolNotFoundError) {
           if (error.code === ToolErrorCode.SCRCPY_NOT_FOUND) {
-            this._appState.updateToolStatus({
-              adbAvailable: this._toolStatus?.adb.isAvailable ?? true,
-              scrcpyAvailable: false,
+            this._appState.dispatch({
+              type: ActionType.UPDATE_TOOL_STATUS,
+              payload: {
+                adbAvailable: this._toolStatus?.adb.isAvailable ?? true,
+                scrcpyAvailable: false,
+              },
             });
           } else if (error.code === ToolErrorCode.ADB_NOT_FOUND) {
-            this._appState.updateToolStatus({
-              adbAvailable: false,
-              scrcpyAvailable: this._toolStatus?.scrcpy.isAvailable ?? true,
+            this._appState.dispatch({
+              type: ActionType.UPDATE_TOOL_STATUS,
+              payload: {
+                adbAvailable: false,
+                scrcpyAvailable: this._toolStatus?.scrcpy.isAvailable ?? true,
+              },
             });
           }
           // Don't show error message - the webview will show missing dependency warning
           return;
         }
 
-        this._appState.setStatusMessage({
-          type: 'error',
-          text: message,
-          deviceId: deviceId || undefined,
+        this._appState.dispatch({
+          type: ActionType.SET_STATUS_MESSAGE,
+          payload: {
+            type: 'error',
+            text: message,
+            deviceId: deviceId || undefined,
+          },
         });
       },
       config,
@@ -385,9 +430,12 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
     }
 
     // Show loading while checking for devices (will be replaced by connection status or empty state)
-    this._appState.setStatusMessage({
-      type: 'loading',
-      text: vscode.l10n.t('Searching for devices...'),
+    this._appState.dispatch({
+      type: ActionType.SET_STATUS_MESSAGE,
+      payload: {
+        type: 'loading',
+        text: vscode.l10n.t('Searching for devices...'),
+      },
     });
 
     try {
@@ -397,33 +445,56 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
       }
 
       if (devices.length === 0) {
-        this._appState.setStatusMessage({
-          type: 'empty',
-          text: vscode.l10n.t('No devices found.\n\nConnect a device via USB to get started.'),
+        this._appState.dispatch({
+          type: ActionType.SET_STATUS_MESSAGE,
+          payload: {
+            type: 'empty',
+            text: vscode.l10n.t('No devices found.\n\nConnect a device via USB to get started.'),
+          },
         });
         return;
       }
 
       // Connect to all available devices (including WiFi devices already in ADB)
       // This ensures WiFi connections persist across window reloads
+      let connectedAny = false;
       for (const device of devices) {
         if (signal?.aborted || !this._deviceService) {
           return;
         }
+        if (this._appState?.isBlockedAutoConnectDevice(device.serial)) {
+          continue;
+        }
         try {
           await this._deviceService.addDevice(device);
+          connectedAny = true;
         } catch {
           // Continue connecting other devices even if one fails
         }
+      }
+
+      if (!connectedAny) {
+        this._appState.dispatch({
+          type: ActionType.SET_STATUS_MESSAGE,
+          payload: {
+            type: 'empty',
+            text: vscode.l10n.t(
+              'No Android devices found.\n\nPlease connect a device and enable USB debugging.'
+            ),
+          },
+        });
       }
     } catch (error) {
       if (signal?.aborted || !this._deviceService) {
         return;
       }
       const message = error instanceof Error ? error.message : String(error);
-      this._appState.setStatusMessage({
-        type: 'error',
-        text: vscode.l10n.t('Connection failed: {0}', message),
+      this._appState.dispatch({
+        type: ActionType.SET_STATUS_MESSAGE,
+        payload: {
+          type: 'error',
+          text: vscode.l10n.t('Connection failed: {0}', message),
+        },
       });
     }
   }
@@ -452,6 +523,8 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
     data?: number[];
     mimeType?: string;
     duration?: number;
+    setting?: string;
+    value?: unknown;
   }) {
     switch (message.type) {
       case 'touch':
@@ -646,6 +719,11 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
       case 'ready':
         console.log('Webview ready');
         this._sendSettings();
+        // Send cached device settings to webview
+        this._view?.webview.postMessage({
+          type: 'controlCenterCacheLoaded',
+          cache: this._appState?.getControlCenterCache() || {},
+        });
         break;
 
       case 'reconnect':
@@ -699,6 +777,69 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
               type: 'deviceInfo',
               serial: message.serial,
               info: null,
+            });
+          }
+        }
+        break;
+
+      case 'openControlCenter':
+        if (this._deviceService) {
+          const deviceId = this._appState?.getActiveDeviceId();
+          try {
+            const settings = await this._deviceService.getDeviceUISettings();
+            // Save to persistent cache
+            if (deviceId) {
+              this._appState?.dispatch({
+                type: ActionType.SAVE_CONTROL_CENTER_TO_CACHE,
+                payload: { deviceId, settings },
+              });
+            }
+            this._view?.webview.postMessage({
+              type: 'controlCenterLoaded',
+              settings,
+            });
+          } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            vscode.window.showErrorMessage(
+              vscode.l10n.t('Failed to load device settings: {0}', errorMessage)
+            );
+          }
+        }
+        break;
+
+      case 'applyControlCenterSetting':
+        if (this._deviceService && message.setting && message.value !== undefined) {
+          const deviceId = this._appState?.getActiveDeviceId();
+          try {
+            await this._deviceService.applyDeviceUISetting(
+              message.setting as keyof DeviceUISettings,
+              message.value as DeviceUISettings[keyof DeviceUISettings]
+            );
+            // Update persistent cache
+            if (deviceId) {
+              this._appState?.dispatch({
+                type: ActionType.UPDATE_DEVICE_SETTING_IN_CACHE,
+                payload: {
+                  deviceId,
+                  setting: message.setting as keyof DeviceUISettings,
+                  value: message.value as DeviceUISettings[keyof DeviceUISettings],
+                },
+              });
+            }
+            // Notify webview of success
+            this._view?.webview.postMessage({
+              type: 'deviceSettingApplied',
+              setting: message.setting,
+              success: true,
+            });
+          } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            // Notify webview of failure
+            this._view?.webview.postMessage({
+              type: 'deviceSettingApplied',
+              setting: message.setting,
+              success: false,
+              error: errorMessage,
             });
           }
         }

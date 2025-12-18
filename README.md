@@ -1,14 +1,12 @@
 <p align="center">
-  <a href="https://marketplace.visualstudio.com/items?itemName=izantech.scrcpy-vscode">
-    <img src="media/icon.png" width="128" alt="Scrcpy for VS Code"/>
-  </a>
+  <img src="media/icon.png" width="128" alt="Scrcpy for VS Code"/>
 </p>
 
 # Scrcpy for VS Code
 
-[![Visual Studio Marketplace Version](https://img.shields.io/visual-studio-marketplace/v/izantech.scrcpy-vscode)](https://marketplace.visualstudio.com/items?itemName=izantech.scrcpy-vscode)
-[![Visual Studio Marketplace Installs](https://img.shields.io/visual-studio-marketplace/azure-devops/installs/total/izantech.scrcpy-vscode)](https://marketplace.visualstudio.com/items?itemName=izantech.scrcpy-vscode)
-[![Visual Studio Marketplace Rating](https://img.shields.io/visual-studio-marketplace/stars/izantech.scrcpy-vscode)](https://marketplace.visualstudio.com/items?itemName=izantech.scrcpy-vscode)
+![Version](https://img.shields.io/open-vsx/v/izantech/scrcpy-vscode?label=version)
+[![VS Marketplace](https://img.shields.io/badge/VS_Marketplace-Install-0078d4?logo=visualstudiocode&logoColor=white)](https://marketplace.visualstudio.com/items?itemName=izantech.scrcpy-vscode)
+[![Open VSX](https://img.shields.io/badge/Open_VSX-Install-a60ee5?logo=vscodium&logoColor=white)](https://open-vsx.org/extension/izantech/scrcpy-vscode)
 
 Display and control your Android device screen directly within VS Code, similar to Android Studio's "Running Devices" feature. Also supports iOS device mirroring on macOS (experimental).
 

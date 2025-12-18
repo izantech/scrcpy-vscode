@@ -26,12 +26,12 @@ export default defineConfig({
         'src/webview/AudioRenderer.ts', // WebAudio (requires real context)
         'src/webview/WebviewTemplate.ts', // HTML template (no logic)
       ],
-      // Coverage thresholds - set lower initially, increase as coverage improves
+      // Coverage thresholds - increased after protocol parsing tests
       thresholds: {
-        lines: 45,
-        functions: 45,
-        branches: 35,
-        statements: 45,
+        lines: 60,
+        functions: 60,
+        branches: 50,
+        statements: 60,
       },
     },
 

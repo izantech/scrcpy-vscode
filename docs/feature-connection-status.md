@@ -46,7 +46,7 @@ The connection status feature is implemented using a centralized state managemen
    - Connection states: `connecting`, `connected`, `disconnected`, `reconnecting`
 
 2. **Device Service (DeviceService.ts)**
-   - Updates connection state via `AppStateManager.updateDeviceConnectionState()`
+   - Updates connection state by dispatching `ActionType.UPDATE_DEVICE` with connectionState changes
    - Manages connection lifecycle and auto-reconnect logic
 
 3. **Bridge (ScrcpyViewProvider.ts)**
@@ -83,15 +83,24 @@ class DeviceSession {
 
   async connect(): Promise<void> {
     this.connectionState = 'connecting';
-    this.appState.updateDeviceConnectionState(this.deviceId, 'connecting');
+    this.appState.dispatch({
+      type: ActionType.UPDATE_DEVICE,
+      payload: { deviceId: this.deviceId, updates: { connectionState: 'connecting' } },
+    });
 
     try {
       // ... connection logic ...
       this.connectionState = 'connected';
-      this.appState.updateDeviceConnectionState(this.deviceId, 'connected');
+      this.appState.dispatch({
+        type: ActionType.UPDATE_DEVICE,
+        payload: { deviceId: this.deviceId, updates: { connectionState: 'connected' } },
+      });
     } catch (error) {
       this.connectionState = 'disconnected';
-      this.appState.updateDeviceConnectionState(this.deviceId, 'disconnected');
+      this.appState.dispatch({
+        type: ActionType.UPDATE_DEVICE,
+        payload: { deviceId: this.deviceId, updates: { connectionState: 'disconnected' } },
+      });
       throw error;
     }
   }
@@ -100,14 +109,20 @@ class DeviceSession {
     // Retry loop for auto-reconnect
     while (this.retryCount < maxRetries && !this.isDisposed) {
       this.connectionState = 'reconnecting';
-      this.appState.updateDeviceConnectionState(this.deviceId, 'reconnecting');
+      this.appState.dispatch({
+        type: ActionType.UPDATE_DEVICE,
+        payload: { deviceId: this.deviceId, updates: { connectionState: 'reconnecting' } },
+      });
 
       // ... reconnect logic ...
     }
 
     // All retries exhausted
     this.connectionState = 'disconnected';
-    this.appState.updateDeviceConnectionState(this.deviceId, 'disconnected');
+    this.appState.dispatch({
+      type: ActionType.UPDATE_DEVICE,
+      payload: { deviceId: this.deviceId, updates: { connectionState: 'disconnected' } },
+    });
   }
 }
 ```

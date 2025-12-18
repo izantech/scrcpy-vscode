@@ -1,6 +1,13 @@
 import { describe, it, expect, vi } from 'vitest';
 import { AppStateManager } from '../../src/AppStateManager';
-import { DeviceDetailedInfo, DeviceState } from '../../src/types/AppState';
+import {
+  DeviceDetailedInfo,
+  DeviceState,
+  StatusMessage,
+  ToolStatus,
+  WebviewSettings,
+} from '../../src/types/AppState';
+import { ActionType } from '../../src/types/Actions';
 
 const flushMicrotasks = () => new Promise<void>((resolve) => queueMicrotask(resolve));
 
@@ -29,6 +36,50 @@ function createDeviceInfo(serial: string): DeviceDetailedInfo {
   };
 }
 
+const addDevice = (appState: AppStateManager, device: DeviceState) =>
+  appState.dispatch({ type: ActionType.ADD_DEVICE, payload: device });
+
+const updateDevice = (appState: AppStateManager, deviceId: string, updates: Partial<DeviceState>) =>
+  appState.dispatch({ type: ActionType.UPDATE_DEVICE, payload: { deviceId, updates } });
+
+const setActiveDevice = (appState: AppStateManager, deviceId: string | null) =>
+  appState.dispatch({ type: ActionType.SET_ACTIVE_DEVICE, payload: { deviceId } });
+
+const updateSettings = (appState: AppStateManager, settings: Partial<WebviewSettings>) =>
+  appState.dispatch({
+    type: ActionType.UPDATE_SETTINGS,
+    payload: settings,
+  });
+
+const updateToolStatus = (appState: AppStateManager, toolStatus: ToolStatus) =>
+  appState.dispatch({
+    type: ActionType.UPDATE_TOOL_STATUS,
+    payload: toolStatus,
+  });
+
+const setStatusMessage = (appState: AppStateManager, message: StatusMessage | undefined) =>
+  appState.dispatch({ type: ActionType.SET_STATUS_MESSAGE, payload: message });
+
+const setDeviceInfo = (appState: AppStateManager, serial: string, info: DeviceDetailedInfo) =>
+  appState.dispatch({ type: ActionType.SET_DEVICE_INFO, payload: { serial, info } });
+
+const removeDevice = (appState: AppStateManager, deviceId: string) =>
+  appState.dispatch({ type: ActionType.REMOVE_DEVICE, payload: { deviceId } });
+
+const removeDeviceInfo = (appState: AppStateManager, serial: string) =>
+  appState.dispatch({ type: ActionType.REMOVE_DEVICE_INFO, payload: { serial } });
+
+const clearDeviceInfo = (appState: AppStateManager) =>
+  appState.dispatch({ type: ActionType.CLEAR_DEVICE_INFO });
+
+const clearAllDevices = (appState: AppStateManager) =>
+  appState.dispatch({ type: ActionType.CLEAR_ALL_DEVICES });
+
+const setMonitoring = (appState: AppStateManager, isMonitoring: boolean) =>
+  appState.dispatch({ type: ActionType.SET_MONITORING, payload: { isMonitoring } });
+
+const resetState = (appState: AppStateManager) => appState.dispatch({ type: ActionType.RESET });
+
 describe('AppStateManager', () => {
   it('should return undefined for active device when none is set', () => {
     const appState = new AppStateManager();
@@ -42,10 +93,10 @@ describe('AppStateManager', () => {
 
     appState.subscribe(listener);
 
-    appState.addDevice(createDevice('device_1', 'serial_1', true));
-    appState.updateSettings({ showStats: true });
-    appState.updateToolStatus({ adbAvailable: false, scrcpyAvailable: true });
-    appState.setStatusMessage({ type: 'loading', text: 'Connecting...', deviceId: 'device_1' });
+    addDevice(appState, createDevice('device_1', 'serial_1', true));
+    updateSettings(appState, { showStats: true });
+    updateToolStatus(appState, { adbAvailable: false, scrcpyAvailable: true });
+    setStatusMessage(appState, { type: 'loading', text: 'Connecting...', deviceId: 'device_1' });
 
     await flushMicrotasks();
 
@@ -63,13 +114,13 @@ describe('AppStateManager', () => {
     const listener = vi.fn();
 
     const unsubscribe = appState.subscribe(listener);
-    appState.updateSettings({ showStats: true });
+    updateSettings(appState, { showStats: true });
     await flushMicrotasks();
 
     expect(listener).toHaveBeenCalledTimes(1);
 
     unsubscribe();
-    appState.updateSettings({ showStats: false });
+    updateSettings(appState, { showStats: false });
     await flushMicrotasks();
 
     expect(listener).toHaveBeenCalledTimes(1);
@@ -85,7 +136,7 @@ describe('AppStateManager', () => {
     appState.subscribe(badListener);
     appState.subscribe(goodListener);
 
-    appState.updateSettings({ showStats: true });
+    updateSettings(appState, { showStats: true });
     await flushMicrotasks();
 
     expect(badListener).toHaveBeenCalledTimes(1);
@@ -96,9 +147,9 @@ describe('AppStateManager', () => {
   it('should clone snapshot fields that are meant to be immutable to consumers', () => {
     const appState = new AppStateManager();
 
-    appState.updateSettings({ showStats: true });
-    appState.updateToolStatus({ adbAvailable: false, scrcpyAvailable: true });
-    appState.setStatusMessage({ type: 'loading', text: 'Hello' });
+    updateSettings(appState, { showStats: true });
+    updateToolStatus(appState, { adbAvailable: false, scrcpyAvailable: true });
+    setStatusMessage(appState, { type: 'loading', text: 'Hello' });
 
     const snapshot = appState.getSnapshot();
     snapshot.settings.showStats = false;
@@ -117,7 +168,7 @@ describe('AppStateManager', () => {
     const appState = new AppStateManager();
     const device = createDevice('device_1', 'serial_1', false);
 
-    appState.addDevice(device);
+    addDevice(appState, device);
     device.name = 'Mutated name';
 
     expect(appState.getDeviceCount()).toBe(1);
@@ -133,7 +184,7 @@ describe('AppStateManager', () => {
     const listener = vi.fn();
 
     appState.subscribe(listener);
-    appState.updateDevice('missing', { name: 'Nope' });
+    updateDevice(appState, 'missing', { name: 'Nope' });
     await flushMicrotasks();
 
     expect(listener).not.toHaveBeenCalled();
@@ -141,22 +192,27 @@ describe('AppStateManager', () => {
 
   it('should update device fields and preserve videoCodec when codec not provided', () => {
     const appState = new AppStateManager();
-    appState.addDevice(createDevice('device_1', 'serial_1'));
+    addDevice(appState, createDevice('device_1', 'serial_1'));
 
     const updates = { name: 'Updated name' };
-    appState.updateDevice('device_1', updates);
+    updateDevice(appState, 'device_1', updates);
     updates.name = 'Mutated updates';
 
     expect(appState.getDevice('device_1')?.name).toBe('Updated name');
 
-    appState.updateDeviceConnectionState('device_1', 'connecting');
+    updateDevice(appState, 'device_1', { connectionState: 'connecting' });
     expect(appState.getDevice('device_1')?.connectionState).toBe('connecting');
 
-    appState.updateDeviceVideoDimensions('device_1', 100, 200, 'h265');
+    updateDevice(appState, 'device_1', {
+      videoDimensions: { width: 100, height: 200 },
+      videoCodec: 'h265',
+    });
     expect(appState.getDevice('device_1')?.videoDimensions).toEqual({ width: 100, height: 200 });
     expect(appState.getDevice('device_1')?.videoCodec).toBe('h265');
 
-    appState.updateDeviceVideoDimensions('device_1', 120, 220);
+    updateDevice(appState, 'device_1', {
+      videoDimensions: { width: 120, height: 220 },
+    });
     expect(appState.getDevice('device_1')?.videoDimensions).toEqual({ width: 120, height: 220 });
     expect(appState.getDevice('device_1')?.videoCodec).toBe('h265');
   });
@@ -166,9 +222,9 @@ describe('AppStateManager', () => {
     const listener = vi.fn();
     appState.subscribe(listener);
 
-    appState.addDevice(createDevice('device_1', 'serial_1', true));
-    appState.addDevice(createDevice('device_2', 'serial_2', true));
-    appState.setActiveDevice('device_2');
+    addDevice(appState, createDevice('device_1', 'serial_1', true));
+    addDevice(appState, createDevice('device_2', 'serial_2', true));
+    setActiveDevice(appState, 'device_2');
 
     await flushMicrotasks();
 
@@ -179,7 +235,7 @@ describe('AppStateManager', () => {
     expect(snapshot.devices.filter((d) => d.isActive).map((d) => d.deviceId)).toEqual(['device_2']);
 
     // Setting the same active device should not trigger another notification
-    appState.setActiveDevice('device_2');
+    setActiveDevice(appState, 'device_2');
     await flushMicrotasks();
     expect(listener).toHaveBeenCalledTimes(1);
 
@@ -190,12 +246,12 @@ describe('AppStateManager', () => {
   it('should update and protect settings/toolStatus getters from external mutation', () => {
     const appState = new AppStateManager();
 
-    appState.updateSettings({ showStats: true });
+    updateSettings(appState, { showStats: true });
     const settings = appState.getSettings();
     settings.showStats = false;
     expect(appState.getSettings().showStats).toBe(true);
 
-    appState.updateToolStatus({ adbAvailable: false, scrcpyAvailable: false });
+    updateToolStatus(appState, { adbAvailable: false, scrcpyAvailable: false });
     const toolStatus = appState.getToolStatus();
     toolStatus.adbAvailable = true;
     expect(appState.getToolStatus().adbAvailable).toBe(false);
@@ -206,21 +262,21 @@ describe('AppStateManager', () => {
     const listener = vi.fn();
     appState.subscribe(listener);
 
-    appState.clearStatusMessage();
+    setStatusMessage(appState, undefined);
     await flushMicrotasks();
     expect(listener).not.toHaveBeenCalled();
 
-    appState.setStatusMessage({ type: 'loading', text: 'Loading...' });
+    setStatusMessage(appState, { type: 'loading', text: 'Loading...' });
     await flushMicrotasks();
     expect(listener).toHaveBeenCalledTimes(1);
     expect(appState.getStatusMessage()?.text).toBe('Loading...');
 
-    appState.clearStatusMessage();
+    setStatusMessage(appState, undefined);
     await flushMicrotasks();
     expect(listener).toHaveBeenCalledTimes(2);
     expect(appState.getStatusMessage()).toBeUndefined();
 
-    appState.clearStatusMessage();
+    setStatusMessage(appState, undefined);
     await flushMicrotasks();
     expect(listener).toHaveBeenCalledTimes(2);
   });
@@ -230,11 +286,11 @@ describe('AppStateManager', () => {
     const listener = vi.fn();
     appState.subscribe(listener);
 
-    appState.setStatusMessage({ type: 'loading', text: 'Loading...' });
+    setStatusMessage(appState, { type: 'loading', text: 'Loading...' });
     await flushMicrotasks();
     expect(listener).toHaveBeenCalledTimes(1);
 
-    appState.setStatusMessage(undefined);
+    setStatusMessage(appState, undefined);
     await flushMicrotasks();
     expect(listener).toHaveBeenCalledTimes(2);
     expect(appState.getSnapshot().statusMessage).toBeUndefined();
@@ -246,18 +302,18 @@ describe('AppStateManager', () => {
     appState.subscribe(listener);
 
     expect(appState.isMonitoring()).toBe(false);
-    appState.setMonitoring(false);
+    setMonitoring(appState, false);
     await flushMicrotasks();
     expect(appState.isMonitoring()).toBe(false);
     expect(listener).not.toHaveBeenCalled();
 
-    appState.setMonitoring(true);
+    setMonitoring(appState, true);
     await flushMicrotasks();
 
     expect(appState.isMonitoring()).toBe(true);
     expect(listener).not.toHaveBeenCalled();
 
-    appState.setMonitoring(false);
+    setMonitoring(appState, false);
     await flushMicrotasks();
 
     expect(appState.isMonitoring()).toBe(false);
@@ -269,11 +325,11 @@ describe('AppStateManager', () => {
     const listener = vi.fn();
     appState.subscribe(listener);
 
-    appState.clearAllDevices();
+    clearAllDevices(appState);
     await flushMicrotasks();
     expect(listener).not.toHaveBeenCalled();
 
-    appState.setDeviceInfo('serial_1', {
+    setDeviceInfo(appState, 'serial_1', {
       serial: 'serial_1',
       model: 'Model 1',
       manufacturer: 'Manufacturer 1',
@@ -290,7 +346,7 @@ describe('AppStateManager', () => {
     expect(listener).toHaveBeenCalledTimes(1);
     expect(Object.keys(appState.getSnapshot().deviceInfo)).toHaveLength(1);
 
-    appState.clearAllDevices();
+    clearAllDevices(appState);
     await flushMicrotasks();
 
     expect(listener).toHaveBeenCalledTimes(2);
@@ -302,14 +358,14 @@ describe('AppStateManager', () => {
   it('should remove a non-active device without clearing activeDeviceId', () => {
     const appState = new AppStateManager();
 
-    appState.addDevice(createDevice('device_1', 'serial_1', false));
-    appState.addDevice(createDevice('device_2', 'serial_2', true));
-    appState.setActiveDevice('device_2');
+    addDevice(appState, createDevice('device_1', 'serial_1', false));
+    addDevice(appState, createDevice('device_2', 'serial_2', true));
+    setActiveDevice(appState, 'device_2');
 
-    appState.setDeviceInfo('serial_1', createDeviceInfo('serial_1'));
-    appState.setDeviceInfo('serial_2', createDeviceInfo('serial_2'));
+    setDeviceInfo(appState, 'serial_1', createDeviceInfo('serial_1'));
+    setDeviceInfo(appState, 'serial_2', createDeviceInfo('serial_2'));
 
-    appState.removeDevice('device_1');
+    removeDevice(appState, 'device_1');
 
     expect(appState.getActiveDeviceId()).toBe('device_2');
     expect(appState.getSnapshot().devices.map((d) => d.deviceId)).toEqual(['device_2']);
@@ -321,7 +377,7 @@ describe('AppStateManager', () => {
     const listener = vi.fn();
     appState.subscribe(listener);
 
-    appState.removeDevice('missing');
+    removeDevice(appState, 'missing');
     await flushMicrotasks();
 
     expect(listener).not.toHaveBeenCalled();
@@ -332,15 +388,15 @@ describe('AppStateManager', () => {
     const listener = vi.fn();
     appState.subscribe(listener);
 
-    appState.removeDeviceInfo('missing');
+    removeDeviceInfo(appState, 'missing');
     await flushMicrotasks();
     expect(listener).not.toHaveBeenCalled();
 
-    appState.setDeviceInfo('serial_1', createDeviceInfo('serial_1'));
+    setDeviceInfo(appState, 'serial_1', createDeviceInfo('serial_1'));
     await flushMicrotasks();
     expect(listener).toHaveBeenCalledTimes(1);
 
-    appState.removeDeviceInfo('serial_1');
+    removeDeviceInfo(appState, 'serial_1');
     await flushMicrotasks();
     expect(listener).toHaveBeenCalledTimes(2);
     expect(appState.getSnapshot().deviceInfo).toEqual({});
@@ -351,20 +407,20 @@ describe('AppStateManager', () => {
     const listener = vi.fn();
     appState.subscribe(listener);
 
-    appState.clearDeviceInfo();
+    clearDeviceInfo(appState);
     await flushMicrotasks();
     expect(listener).not.toHaveBeenCalled();
 
-    appState.setDeviceInfo('serial_1', createDeviceInfo('serial_1'));
+    setDeviceInfo(appState, 'serial_1', createDeviceInfo('serial_1'));
     await flushMicrotasks();
     expect(listener).toHaveBeenCalledTimes(1);
 
-    appState.clearDeviceInfo();
+    clearDeviceInfo(appState);
     await flushMicrotasks();
     expect(listener).toHaveBeenCalledTimes(2);
     expect(appState.getSnapshot().deviceInfo).toEqual({});
 
-    appState.clearDeviceInfo();
+    clearDeviceInfo(appState);
     await flushMicrotasks();
     expect(listener).toHaveBeenCalledTimes(2);
   });
@@ -374,16 +430,16 @@ describe('AppStateManager', () => {
     const listener = vi.fn();
     appState.subscribe(listener);
 
-    appState.addDevice(createDevice('device_1', 'serial_1', true));
-    appState.setActiveDevice('device_1');
-    appState.setStatusMessage({ type: 'loading', text: 'Loading...', deviceId: 'device_1' });
-    appState.setDeviceInfo('serial_1', createDeviceInfo('serial_1'));
-    appState.setMonitoring(true);
+    addDevice(appState, createDevice('device_1', 'serial_1', true));
+    setActiveDevice(appState, 'device_1');
+    setStatusMessage(appState, { type: 'loading', text: 'Loading...', deviceId: 'device_1' });
+    setDeviceInfo(appState, 'serial_1', createDeviceInfo('serial_1'));
+    setMonitoring(appState, true);
     await flushMicrotasks();
 
     listener.mockClear();
 
-    appState.reset();
+    resetState(appState);
     await flushMicrotasks();
 
     expect(listener).toHaveBeenCalledTimes(1);
@@ -395,25 +451,33 @@ describe('AppStateManager', () => {
     expect(appState.isMonitoring()).toBe(false);
   });
 
-  it('should expose raw state for internal use', () => {
+  it('should allow dispatching actions directly', async () => {
     const appState = new AppStateManager();
-    const raw = appState.getRawState();
-    expect(raw.devices).toBeInstanceOf(Map);
-    expect(raw.deviceInfo).toBeInstanceOf(Map);
-    expect(raw.activeDeviceId).toBeNull();
+    const listener = vi.fn();
+    appState.subscribe(listener);
+
+    appState.dispatch({
+      type: ActionType.SET_STATUS_MESSAGE,
+      payload: { type: 'loading', text: 'Dispatched...' },
+    });
+
+    await flushMicrotasks();
+
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(appState.getStatusMessage()?.text).toBe('Dispatched...');
   });
 
   it('should remove deviceInfo when device is removed', () => {
     const appState = new AppStateManager();
 
-    appState.addDevice({
+    addDevice(appState, {
       deviceId: 'device_1',
       serial: 'serial_1',
       name: 'Device 1',
       connectionState: 'connected',
       isActive: true,
     });
-    appState.setActiveDevice('device_1');
+    setActiveDevice(appState, 'device_1');
 
     const info: DeviceDetailedInfo = {
       serial: 'serial_1',
@@ -429,10 +493,10 @@ describe('AppStateManager', () => {
       ipAddress: '192.168.1.100',
     };
 
-    appState.setDeviceInfo('serial_1', info);
+    setDeviceInfo(appState, 'serial_1', info);
     expect(appState.getDeviceInfo('serial_1')).toBeDefined();
 
-    appState.removeDevice('device_1');
+    removeDevice(appState, 'device_1');
 
     expect(appState.getDeviceCount()).toBe(0);
     expect(appState.getDeviceInfo('serial_1')).toBeUndefined();
@@ -442,7 +506,7 @@ describe('AppStateManager', () => {
   it('should clear deviceInfo when clearing all devices', () => {
     const appState = new AppStateManager();
 
-    appState.addDevice({
+    addDevice(appState, {
       deviceId: 'device_1',
       serial: 'serial_1',
       name: 'Device 1',
@@ -450,7 +514,7 @@ describe('AppStateManager', () => {
       isActive: false,
     });
 
-    appState.addDevice({
+    addDevice(appState, {
       deviceId: 'device_2',
       serial: 'serial_2',
       name: 'Device 2',
@@ -458,9 +522,9 @@ describe('AppStateManager', () => {
       isActive: true,
     });
 
-    appState.setActiveDevice('device_2');
+    setActiveDevice(appState, 'device_2');
 
-    appState.setDeviceInfo('serial_1', {
+    setDeviceInfo(appState, 'serial_1', {
       serial: 'serial_1',
       model: 'Model 1',
       manufacturer: 'Manufacturer 1',
@@ -473,7 +537,7 @@ describe('AppStateManager', () => {
       screenResolution: '1080x2400',
     });
 
-    appState.setDeviceInfo('serial_2', {
+    setDeviceInfo(appState, 'serial_2', {
       serial: 'serial_2',
       model: 'Model 2',
       manufacturer: 'Manufacturer 2',
@@ -488,7 +552,7 @@ describe('AppStateManager', () => {
 
     expect(Object.keys(appState.getSnapshot().deviceInfo)).toHaveLength(2);
 
-    appState.clearAllDevices();
+    clearAllDevices(appState);
 
     expect(appState.getDeviceCount()).toBe(0);
     expect(appState.getActiveDeviceId()).toBeNull();

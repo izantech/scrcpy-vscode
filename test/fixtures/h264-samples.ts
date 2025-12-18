@@ -182,3 +182,157 @@ export function createScrcpyVideoHeader(
 
   return header;
 }
+
+// ============================================
+// Protocol Test Fixtures
+// ============================================
+
+/**
+ * Audio codec ID constant for Opus
+ */
+export const AUDIO_OPUS_CODEC_ID = 0x6f707573; // "opus"
+
+/**
+ * Video codec ID constants
+ */
+export const VIDEO_CODEC_IDS = {
+  H264: 0x68323634,
+  H265: 0x68323635,
+  AV1: 0x00617631,
+};
+
+/**
+ * Create a device name header (64 bytes, null-padded)
+ */
+export function createDeviceNameHeader(name: string): Buffer {
+  const header = Buffer.alloc(64);
+  const nameBytes = Buffer.from(name, 'utf-8');
+  nameBytes.copy(header, 0, 0, Math.min(nameBytes.length, 64));
+  return header;
+}
+
+/**
+ * Create video codec metadata (12 bytes: codec_id + width + height)
+ */
+export function createVideoCodecMeta(codecId: number, width: number, height: number): Buffer {
+  const meta = Buffer.alloc(12);
+  meta.writeUInt32BE(codecId, 0);
+  meta.writeUInt32BE(width, 4);
+  meta.writeUInt32BE(height, 8);
+  return meta;
+}
+
+/**
+ * Create audio codec metadata (4 bytes: codec_id)
+ */
+export function createAudioCodecMeta(codecId: number = AUDIO_OPUS_CODEC_ID): Buffer {
+  const meta = Buffer.alloc(4);
+  meta.writeUInt32BE(codecId, 0);
+  return meta;
+}
+
+/**
+ * Create a video packet with header
+ * @param pts - Presentation timestamp
+ * @param isConfig - Set config flag (bit 63)
+ * @param isKeyFrame - Set keyframe flag (bit 62)
+ * @param data - Packet payload data
+ */
+export function createVideoPacket(
+  pts: bigint,
+  isConfig: boolean,
+  isKeyFrame: boolean,
+  data: Buffer
+): Buffer {
+  const packet = Buffer.alloc(12 + data.length);
+
+  // Build pts_flags: 8 bytes
+  let ptsFlags = pts;
+  if (isConfig) {
+    ptsFlags |= 1n << 63n;
+  }
+  if (isKeyFrame) {
+    ptsFlags |= 1n << 62n;
+  }
+  packet.writeBigUInt64BE(ptsFlags, 0);
+
+  // Packet size: 4 bytes
+  packet.writeUInt32BE(data.length, 8);
+
+  // Packet data
+  data.copy(packet, 12);
+
+  return packet;
+}
+
+/**
+ * Create an audio packet with header (same format as video)
+ */
+export function createAudioPacket(pts: bigint, isConfig: boolean, data: Buffer): Buffer {
+  const packet = Buffer.alloc(12 + data.length);
+
+  let ptsFlags = pts;
+  if (isConfig) {
+    ptsFlags |= 1n << 63n;
+  }
+  packet.writeBigUInt64BE(ptsFlags, 0);
+  packet.writeUInt32BE(data.length, 8);
+  data.copy(packet, 12);
+
+  return packet;
+}
+
+/**
+ * Device message type constants
+ */
+export const DEVICE_MESSAGE_TYPE = {
+  CLIPBOARD: 0,
+  ACK_CLIPBOARD: 1,
+  UHID_OUTPUT: 2,
+};
+
+/**
+ * Create a clipboard device message
+ * Format: type (1) + text_length (4) + text (variable)
+ */
+export function createClipboardMessage(text: string): Buffer {
+  const textBuf = Buffer.from(text, 'utf-8');
+  const msg = Buffer.alloc(5 + textBuf.length);
+  msg.writeUInt8(DEVICE_MESSAGE_TYPE.CLIPBOARD, 0);
+  msg.writeUInt32BE(textBuf.length, 1);
+  textBuf.copy(msg, 5);
+  return msg;
+}
+
+/**
+ * Create an ACK_CLIPBOARD device message
+ * Format: type (1) + sequence (8)
+ */
+export function createAckClipboardMessage(sequence: bigint): Buffer {
+  const msg = Buffer.alloc(9);
+  msg.writeUInt8(DEVICE_MESSAGE_TYPE.ACK_CLIPBOARD, 0);
+  msg.writeBigUInt64BE(sequence, 1);
+  return msg;
+}
+
+/**
+ * Create a UHID_OUTPUT device message
+ * Format: type (1) + id (2) + data_length (2) + data (variable)
+ */
+export function createUhidOutputMessage(id: number, data: Buffer): Buffer {
+  const msg = Buffer.alloc(5 + data.length);
+  msg.writeUInt8(DEVICE_MESSAGE_TYPE.UHID_OUTPUT, 0);
+  msg.writeUInt16BE(id, 1);
+  msg.writeUInt16BE(data.length, 3);
+  data.copy(msg, 5);
+  return msg;
+}
+
+/**
+ * Create an unknown device message (for testing unknown type handling)
+ */
+export function createUnknownDeviceMessage(type: number): Buffer {
+  const msg = Buffer.alloc(1);
+  msg.writeUInt8(type, 0);
+  return msg;
+}

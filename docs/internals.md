@@ -34,20 +34,25 @@ scrcpy-vscode/
 
 ## State Management
 
-The extension uses centralized state management through `AppStateManager`:
+The extension uses centralized state management through `AppStateManager` with a Redux-like action/dispatch pattern:
 
 ```
 ┌─────────────────────────────────────────────────────────┐
 │                    AppStateManager                       │
 │              (Single Source of Truth)                    │
 ├─────────────────────────────────────────────────────────┤
+│ State:                                                  │
 │ • devices: Map<serial, DeviceState>                     │
 │ • activeDeviceId: string | null                         │
 │ • settings: ScrcpyConfig                                │
 │ • toolStatus: { adb, scrcpy }                           │
 │ • statusMessage: string                                 │
 │ • deviceInfo: Map<serial, DeviceInfo>                   │
+│ • allowedAutoConnectDevices: Set<string>                │
+│ • blockedAutoConnectDevices: Set<string>                │
+│ • controlCenterCache: Record<string, DeviceUISettings>  │
 ├─────────────────────────────────────────────────────────┤
+│ dispatch(action) → reducer() → notifyListeners()        │
 │ subscribe() → StateSnapshot on every change             │
 │ (batched via microtask scheduling)                      │
 └─────────────────────────────────────────────────────────┘
@@ -59,17 +64,54 @@ The extension uses centralized state management through `AppStateManager`:
 └─────────────────────────────────────────────────────────┘
 ```
 
+### Action-Based State Updates
+
+State is modified exclusively through typed actions dispatched to the reducer:
+
+```typescript
+// Example: Update device connection state
+appState.dispatch({
+  type: ActionType.UPDATE_DEVICE,
+  payload: { deviceId, updates: { connectionState: 'connected' } },
+});
+
+// Example: Add device to auto-connect list
+appState.dispatch({
+  type: ActionType.ADD_ALLOWED_AUTO_CONNECT,
+  payload: { serial: deviceSerial },
+});
+```
+
+### Action Types (`types/Actions.ts`)
+
+- **Device actions**: `ADD_DEVICE`, `REMOVE_DEVICE`, `UPDATE_DEVICE`, `SET_ACTIVE_DEVICE`, `CLEAR_ALL_DEVICES`
+- **Settings/status actions**: `UPDATE_SETTINGS`, `UPDATE_TOOL_STATUS`, `SET_STATUS_MESSAGE`
+- **Device info actions**: `SET_DEVICE_INFO`, `REMOVE_DEVICE_INFO`, `CLEAR_DEVICE_INFO`
+- **Auto-connect actions**: `ADD_ALLOWED_AUTO_CONNECT`, `REMOVE_ALLOWED_AUTO_CONNECT`, `ADD_BLOCKED_AUTO_CONNECT`, `REMOVE_BLOCKED_AUTO_CONNECT`
+- **Control Center cache actions**: `SET_CONTROL_CENTER_CACHE`, `SAVE_CONTROL_CENTER_TO_CACHE`, `UPDATE_DEVICE_SETTING_IN_CACHE`
+
+### Persistence
+
+The following state is persisted to VS Code's workspace storage (`vscode.Memento`):
+
+- **allowedAutoConnectDevices**: Devices that should auto-connect when plugged in
+- **blockedAutoConnectDevices**: Devices manually disconnected (excluded from auto-reconnect)
+- **controlCenterCache**: Per-device UI settings (brightness, volume, etc.)
+
 ### Key Principles
 
 1. **Single Source of Truth**: All state lives in `AppStateManager`
-2. **Unidirectional Flow**: WebView receives snapshots, sends typed actions back
-3. **Batched Updates**: Multiple state mutations are batched into single snapshot
-4. **No State Duplication**: WebView renders from received state, doesn't store copies
+2. **Action-Based Mutations**: State changes only via `dispatch(action)` → predictable state transitions
+3. **Unidirectional Flow**: WebView receives snapshots, sends typed actions back
+4. **Batched Updates**: Multiple state mutations are batched into single snapshot
+5. **No State Duplication**: WebView renders from received state, doesn't store copies
+6. **Persistence**: Auto-connect preferences and UI settings survive extension restarts
 
 ### State Types
 
 - `DeviceState`: Connection status, error info per device
 - `AppStateSnapshot`: Complete state sent to webview
+- `AppAction`: Union type of all typed actions (from `types/Actions.ts`)
 - `WebviewActions`: Typed action messages from webview to extension
 
 ## Data Flow

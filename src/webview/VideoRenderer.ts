@@ -629,4 +629,13 @@ export class VideoRenderer {
     this.pendingFrames = [];
     this.pendingConfig = null;
   }
+
+  /**
+   * Clear the canvas (used when orientation changes to avoid stale frames)
+   */
+  clear() {
+    if (this.ctx) {
+      this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    }
+  }
 }

@@ -16,7 +16,16 @@ import {
 } from './android/ScrcpyConnection';
 import { execFile, execFileSync, spawn, ChildProcess } from 'child_process';
 import { AppStateManager } from './AppStateManager';
-import { DeviceInfo, DeviceDetailedInfo, ConnectionState, VideoCodec } from './types/AppState';
+import {
+  DeviceInfo,
+  DeviceDetailedInfo,
+  ConnectionState,
+  VideoCodec,
+  DeviceUISettings,
+  DarkMode,
+  NavigationMode,
+} from './types/AppState';
+import { ActionType } from './types/Actions';
 import { getCapabilities, isIOSSupportAvailable } from './PlatformCapabilities';
 import { iOSConnection, iOSDeviceManager, mapIOSProductType } from './ios';
 import type { iOSConnectionConfig } from './ios/iOSConnection';
@@ -316,7 +325,7 @@ export class DeviceService {
       };
 
       // Update AppState with device info
-      this.appState.setDeviceInfo(serial, info);
+      this.appState.dispatch({ type: ActionType.SET_DEVICE_INFO, payload: { serial, info } });
 
       return info;
     } catch {
@@ -530,7 +539,10 @@ export class DeviceService {
       };
 
       // Update AppState with device info
-      this.appState.setDeviceInfo(serial, info);
+      this.appState.dispatch({
+        type: ActionType.SET_DEVICE_INFO,
+        payload: { serial, info },
+      });
 
       return info;
     } catch (error) {
@@ -732,7 +744,10 @@ export class DeviceService {
         console.log(`[DeviceService] Stopping iOS connection: ${deviceId}`);
         session.connection.disconnect();
         session.connection = null;
-        this.appState.updateDeviceConnectionState(deviceId, 'disconnected');
+        this.appState.dispatch({
+          type: ActionType.UPDATE_DEVICE,
+          payload: { deviceId, updates: { connectionState: 'disconnected' } },
+        });
       }
     }
 
@@ -799,7 +814,7 @@ export class DeviceService {
     const adbCmd = this.getAdbCommand();
 
     return new Promise((resolve, reject) => {
-      execFile(adbCmd, ['connect', address], (error, stdout, stderr) => {
+      execFile(adbCmd, ['connect', address], { timeout: 15000 }, (error, stdout, stderr) => {
         if (error) {
           reject(new Error(stderr || error.message));
           return;
@@ -913,19 +928,32 @@ export class DeviceService {
     }
 
     // Add device to AppState
-    this.appState.addDevice({
-      deviceId,
-      serial: deviceInfo.serial,
-      name: deviceInfo.name,
-      model: deviceInfo.model,
-      platform: deviceInfo.platform,
-      capabilities: getCapabilities(deviceInfo.platform),
-      connectionState: 'connecting',
-      isActive: true,
+    this.appState.dispatch({
+      type: ActionType.ADD_DEVICE,
+      payload: {
+        deviceId,
+        serial: deviceInfo.serial,
+        name: deviceInfo.name,
+        model: deviceInfo.model,
+        platform: deviceInfo.platform,
+        capabilities: getCapabilities(deviceInfo.platform),
+        connectionState: 'connecting',
+        isActive: true,
+      },
     });
 
     // Set as active device
-    this.appState.setActiveDevice(deviceId);
+    this.appState.dispatch({ type: ActionType.SET_ACTIVE_DEVICE, payload: { deviceId } });
+
+    // Add to allowed list for auto-connect (persistently)
+    this.appState.dispatch({
+      type: ActionType.ADD_ALLOWED_AUTO_CONNECT,
+      payload: { serial: deviceInfo.serial },
+    });
+    this.appState.dispatch({
+      type: ActionType.REMOVE_BLOCKED_AUTO_CONNECT,
+      payload: { serial: deviceInfo.serial },
+    });
 
     try {
       await this.connectSession(session);
@@ -933,7 +961,7 @@ export class DeviceService {
       // Error already reported via callback
       // Remove failed session
       this.sessions.delete(deviceId);
-      this.appState.removeDevice(deviceId);
+      this.appState.dispatch({ type: ActionType.REMOVE_DEVICE, payload: { deviceId } });
 
       // Switch to first available session
       const deviceIds = this.appState.getDeviceIds();
@@ -951,7 +979,10 @@ export class DeviceService {
    */
   private async connectSession(session: DeviceSession): Promise<void> {
     // Update state to connecting
-    this.appState.updateDeviceConnectionState(session.deviceId, 'connecting');
+    this.appState.dispatch({
+      type: ActionType.UPDATE_DEVICE,
+      payload: { deviceId: session.deviceId, updates: { connectionState: 'connecting' } },
+    });
 
     if (session.deviceInfo.platform === 'ios') {
       await this.connectiOSSession(session);
@@ -978,12 +1009,16 @@ export class DeviceService {
       if (width && height) {
         session.lastWidth = width;
         session.lastHeight = height;
-        this.appState.updateDeviceVideoDimensions(
-          session.deviceId,
-          width,
-          height,
-          codec as VideoCodec | undefined
-        );
+        this.appState.dispatch({
+          type: ActionType.UPDATE_DEVICE,
+          payload: {
+            deviceId: session.deviceId,
+            updates: {
+              videoDimensions: { width, height },
+              videoCodec: codec as VideoCodec | undefined,
+            },
+          },
+        });
       }
       if (codec) {
         session.lastCodec = codec;
@@ -1012,7 +1047,10 @@ export class DeviceService {
 
     // Wire up capabilities change callback (for WDA connection status)
     connection.onCapabilitiesChanged = (capabilities) => {
-      this.appState.updateDevice(session.deviceId, { capabilities });
+      this.appState.dispatch({
+        type: ActionType.UPDATE_DEVICE,
+        payload: { deviceId: session.deviceId, updates: { capabilities } },
+      });
     };
 
     session.connection = connection;
@@ -1025,10 +1063,13 @@ export class DeviceService {
       session.retryCount = 0;
 
       // Update state to connected
-      this.appState.updateDeviceConnectionState(session.deviceId, 'connected');
+      this.appState.dispatch({
+        type: ActionType.UPDATE_DEVICE,
+        payload: { deviceId: session.deviceId, updates: { connectionState: 'connected' } },
+      });
 
       // Clear any loading status message
-      this.appState.clearStatusMessage();
+      this.appState.dispatch({ type: ActionType.SET_STATUS_MESSAGE, payload: undefined });
 
       // Set initial WDA status immediately, then fetch full device info
       const wdaStatus: 'connected' | 'unavailable' | 'disabled' = this.iosConfig
@@ -1055,15 +1096,24 @@ export class DeviceService {
             : 'Unknown',
         wdaStatus,
       };
-      this.appState.setDeviceInfo(session.deviceInfo.serial, initialInfo);
+      this.appState.dispatch({
+        type: ActionType.SET_DEVICE_INFO,
+        payload: { serial: session.deviceInfo.serial, info: initialInfo },
+      });
 
       // Fetch full device info in background (non-blocking)
       this.getiOSDeviceInfo(session.deviceInfo.serial)
         .then((info) => {
           // Update with full info while preserving WDA status
-          this.appState.setDeviceInfo(session.deviceInfo.serial, {
-            ...info,
-            wdaStatus: this.getWDAStatusForSerial(session.deviceInfo.serial) || wdaStatus,
+          this.appState.dispatch({
+            type: ActionType.SET_DEVICE_INFO,
+            payload: {
+              serial: session.deviceInfo.serial,
+              info: {
+                ...info,
+                wdaStatus: this.getWDAStatusForSerial(session.deviceInfo.serial) || wdaStatus,
+              },
+            },
           });
         })
         .catch((error) => {
@@ -1071,7 +1121,10 @@ export class DeviceService {
         });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      this.appState.updateDeviceConnectionState(session.deviceId, 'disconnected');
+      this.appState.dispatch({
+        type: ActionType.UPDATE_DEVICE,
+        payload: { deviceId: session.deviceId, updates: { connectionState: 'disconnected' } },
+      });
       this.errorCallback(session.deviceId, message, error instanceof Error ? error : undefined);
       throw error;
     }
@@ -1093,12 +1146,16 @@ export class DeviceService {
           session.lastWidth = width;
           session.lastHeight = height;
           // Update AppState with dimensions
-          this.appState.updateDeviceVideoDimensions(
-            session.deviceId,
-            width,
-            height,
-            codec as VideoCodec | undefined
-          );
+          this.appState.dispatch({
+            type: ActionType.UPDATE_DEVICE,
+            payload: {
+              deviceId: session.deviceId,
+              updates: {
+                videoDimensions: { width, height },
+                ...(codec ? { videoCodec: codec as VideoCodec } : {}),
+              },
+            },
+          });
         }
         if (codec) {
           session.lastCodec = codec;
@@ -1143,10 +1200,13 @@ export class DeviceService {
       session.retryCount = 0;
 
       // Update state to connected
-      this.appState.updateDeviceConnectionState(session.deviceId, 'connected');
+      this.appState.dispatch({
+        type: ActionType.UPDATE_DEVICE,
+        payload: { deviceId: session.deviceId, updates: { connectionState: 'connected' } },
+      });
 
       // Clear any loading status message now that we're connected
-      this.appState.clearStatusMessage();
+      this.appState.dispatch({ type: ActionType.SET_STATUS_MESSAGE, payload: undefined });
 
       // Notify if we fell back to a different codec
       if (session.effectiveCodec !== this.config.videoCodec) {
@@ -1187,7 +1247,10 @@ export class DeviceService {
       }
 
       // No more fallbacks available
-      this.appState.updateDeviceConnectionState(session.deviceId, 'disconnected');
+      this.appState.dispatch({
+        type: ActionType.UPDATE_DEVICE,
+        payload: { deviceId: session.deviceId, updates: { connectionState: 'disconnected' } },
+      });
       this.errorCallback(session.deviceId, message, error instanceof Error ? error : undefined);
       throw error;
     }
@@ -1198,7 +1261,17 @@ export class DeviceService {
    */
   private async handleDisconnect(session: DeviceSession, error: string): Promise<void> {
     // Don't reconnect if disposed or already reconnecting
-    if (session.isDisposed || session.isReconnecting) {
+    if (
+      session.isDisposed ||
+      session.isReconnecting ||
+      this.appState.isBlockedAutoConnectDevice(session.deviceInfo.serial)
+    ) {
+      this.appState.dispatch({
+        type: ActionType.UPDATE_DEVICE,
+        payload: { deviceId: session.deviceId, updates: { connectionState: 'disconnected' } },
+      });
+      this.errorCallback(session.deviceId, error);
+      this.handleSessionFailed(session.deviceId);
       return;
     }
 
@@ -1209,7 +1282,10 @@ export class DeviceService {
       session.isReconnecting = true;
       session.retryCount++;
 
-      this.appState.updateDeviceConnectionState(session.deviceId, 'reconnecting');
+      this.appState.dispatch({
+        type: ActionType.UPDATE_DEVICE,
+        payload: { deviceId: session.deviceId, updates: { connectionState: 'reconnecting' } },
+      });
 
       this.statusCallback(
         session.deviceId,
@@ -1241,7 +1317,10 @@ export class DeviceService {
     }
 
     // All retries exhausted
-    this.appState.updateDeviceConnectionState(session.deviceId, 'disconnected');
+    this.appState.dispatch({
+      type: ActionType.UPDATE_DEVICE,
+      payload: { deviceId: session.deviceId, updates: { connectionState: 'disconnected' } },
+    });
     this.errorCallback(session.deviceId, error);
     this.handleSessionFailed(session.deviceId);
   }
@@ -1267,7 +1346,7 @@ export class DeviceService {
 
     // Activate new session
     newSession.isPaused = false;
-    this.appState.setActiveDevice(deviceId);
+    this.appState.dispatch({ type: ActionType.SET_ACTIVE_DEVICE, payload: { deviceId } });
 
     // Resume - send cached frames
     this.resumeSession(newSession);
@@ -1329,6 +1408,14 @@ export class DeviceService {
     // Mark as manually closed to prevent auto-reconnect
     const deviceSerial = session.deviceInfo.serial;
     this.knownDeviceSerials.add(deviceSerial);
+    this.appState.dispatch({
+      type: ActionType.REMOVE_ALLOWED_AUTO_CONNECT,
+      payload: { serial: deviceSerial },
+    });
+    this.appState.dispatch({
+      type: ActionType.ADD_BLOCKED_AUTO_CONNECT,
+      payload: { serial: deviceSerial },
+    });
 
     session.isDisposed = true;
     if (session.connection) {
@@ -1338,16 +1425,19 @@ export class DeviceService {
     this.sessions.delete(deviceId);
 
     // Remove from AppState
-    this.appState.removeDevice(deviceId);
+    this.appState.dispatch({ type: ActionType.REMOVE_DEVICE, payload: { deviceId } });
 
     // Check remaining devices
     const deviceIds = this.appState.getDeviceIds();
 
     if (deviceIds.length === 0) {
       // No devices left - clear any error/loading messages and show empty state
-      this.appState.setStatusMessage({
-        type: 'empty',
-        text: vscode.l10n.t('No devices found.\n\nConnect a device via USB to get started.'),
+      this.appState.dispatch({
+        type: ActionType.SET_STATUS_MESSAGE,
+        payload: {
+          type: 'empty',
+          text: vscode.l10n.t('No devices found.\n\nConnect a device via USB to get started.'),
+        },
       });
     } else if (this.appState.getActiveDeviceId() === null) {
       // If removed active device, switch to first available
@@ -1568,13 +1658,19 @@ export class DeviceService {
 
     const serial = session.deviceInfo.serial;
     const existingInfo = this.appState.getDeviceInfo(serial) ?? this.getIOSFallbackInfo(serial);
-    this.appState.setDeviceInfo(serial, { ...existingInfo, wdaStatus: 'connecting' });
+    this.appState.dispatch({
+      type: ActionType.SET_DEVICE_INFO,
+      payload: { serial, info: { ...existingInfo, wdaStatus: 'connecting' } },
+    });
 
     const success = await connection.startWda();
 
     const latestInfo = this.appState.getDeviceInfo(serial) ?? existingInfo;
     const wdaStatus: 'connected' | 'unavailable' = success ? 'connected' : 'unavailable';
-    this.appState.setDeviceInfo(serial, { ...latestInfo, wdaStatus });
+    this.appState.dispatch({
+      type: ActionType.SET_DEVICE_INFO,
+      payload: { serial, info: { ...latestInfo, wdaStatus } },
+    });
 
     if (!success) {
       this.statusCallback(
@@ -1585,7 +1681,10 @@ export class DeviceService {
     }
 
     // Ensure capabilities propagate after WDA connects
-    this.appState.updateDevice(session.deviceId, { capabilities: connection.capabilities });
+    this.appState.dispatch({
+      type: ActionType.UPDATE_DEVICE,
+      payload: { deviceId: session.deviceId, updates: { capabilities: connection.capabilities } },
+    });
   }
 
   rotateDevice(): void {
@@ -1666,6 +1765,270 @@ export class DeviceService {
     return connection.listDisplays();
   }
 
+  // ==================== Device UI Settings ====================
+
+  /**
+   * TalkBack service identifier
+   */
+  private static readonly TALKBACK_SERVICE =
+    'com.google.android.marvin.talkback/com.google.android.marvin.talkback.TalkBackService';
+
+  /**
+   * Get current device UI settings via ADB
+   */
+  async getDeviceUISettings(): Promise<DeviceUISettings> {
+    const session = this.getActiveSession();
+    if (!session?.connection) {
+      throw new Error(vscode.l10n.t('No active device'));
+    }
+
+    const serial = session.deviceInfo.serial;
+    const adbCmd = this.getAdbCommand();
+
+    const execAdb = (args: string[]): Promise<string> => {
+      return new Promise((resolve, reject) => {
+        execFile(adbCmd, ['-s', serial, ...args], { timeout: 5000 }, (error, stdout, stderr) => {
+          if (error) {
+            reject(new Error(stderr || error.message));
+          } else {
+            resolve(stdout.trim());
+          }
+        });
+      });
+    };
+
+    // Fetch all settings in parallel
+    const [
+      nightModeResult,
+      overlayResult,
+      accessibilityResult,
+      fontScaleResult,
+      densityResult,
+      layoutBoundsResult,
+      autoRotateResult,
+      userRotationResult,
+    ] = await Promise.all([
+      execAdb(['shell', 'cmd', 'uimode', 'night']).catch(() => ''),
+      execAdb(['shell', 'cmd', 'overlay', 'list']).catch(() => ''),
+      execAdb(['shell', 'settings', 'get', 'secure', 'enabled_accessibility_services']).catch(
+        () => ''
+      ),
+      execAdb(['shell', 'settings', 'get', 'system', 'font_scale']).catch(() => '1.0'),
+      execAdb(['shell', 'wm', 'density']).catch(() => ''),
+      execAdb(['shell', 'getprop', 'debug.layout']).catch(() => ''),
+      execAdb(['shell', 'settings', 'get', 'system', 'accelerometer_rotation']).catch(() => '1'),
+      execAdb(['shell', 'settings', 'get', 'system', 'user_rotation']).catch(() => '0'),
+    ]);
+
+    // Parse dark mode from "cmd uimode night" output (e.g., "Night mode: yes")
+    let darkMode: DarkMode = 'auto';
+    const nightModeLower = nightModeResult.toLowerCase();
+    if (nightModeLower.includes('yes')) {
+      darkMode = 'dark';
+    } else if (nightModeLower.includes('no')) {
+      darkMode = 'light';
+    }
+
+    // Parse available navigation modes from overlay list
+    const availableNavigationModes: NavigationMode[] = ['threebutton']; // Always available as default
+    if (overlayResult.includes('com.android.internal.systemui.navbar.gestural')) {
+      availableNavigationModes.push('gestural');
+    }
+    if (overlayResult.includes('com.android.internal.systemui.navbar.twobutton')) {
+      availableNavigationModes.push('twobutton');
+    }
+
+    // Parse current navigation mode from overlay list
+    let navigationMode: NavigationMode = 'threebutton';
+    if (overlayResult.includes('[x] com.android.internal.systemui.navbar.gestural')) {
+      navigationMode = 'gestural';
+    } else if (overlayResult.includes('[x] com.android.internal.systemui.navbar.twobutton')) {
+      navigationMode = 'twobutton';
+    }
+
+    // Parse accessibility services
+    const accessibilityServices = accessibilityResult.toLowerCase();
+    const talkbackEnabled = accessibilityServices.includes('talkback');
+
+    // Parse font scale
+    const fontScale = parseFloat(fontScaleResult) || 1.0;
+
+    // Parse display density
+    let displayDensity = 0;
+    let defaultDensity = 0;
+    const densityMatch = densityResult.match(/Physical density:\s*(\d+)/);
+    const overrideMatch = densityResult.match(/Override density:\s*(\d+)/);
+    if (densityMatch) {
+      defaultDensity = parseInt(densityMatch[1], 10);
+      displayDensity = overrideMatch ? parseInt(overrideMatch[1], 10) : defaultDensity;
+    }
+
+    // Parse layout bounds
+    const showLayoutBounds = layoutBoundsResult === 'true';
+
+    // Parse orientation
+    // accelerometer_rotation: 1 = auto-rotate enabled, 0 = disabled
+    // user_rotation: 0 = portrait, 1 = landscape, 2 = reverse portrait, 3 = reverse landscape
+    type Orientation = 'auto' | 'portrait' | 'landscape';
+    let orientation: Orientation = 'auto';
+    const autoRotate = autoRotateResult.trim() === '1';
+    if (autoRotate) {
+      orientation = 'auto';
+    } else {
+      const userRotation = parseInt(userRotationResult.trim(), 10) || 0;
+      // 0 or 2 = portrait variants, 1 or 3 = landscape variants
+      orientation = userRotation === 1 || userRotation === 3 ? 'landscape' : 'portrait';
+    }
+
+    return {
+      darkMode,
+      navigationMode,
+      availableNavigationModes,
+      talkbackEnabled,
+      fontScale,
+      displayDensity,
+      defaultDensity,
+      showLayoutBounds,
+      orientation,
+    };
+  }
+
+  /**
+   * Apply a single device UI setting via ADB
+   */
+  async applyDeviceUISetting<K extends keyof DeviceUISettings>(
+    setting: K,
+    value: DeviceUISettings[K]
+  ): Promise<void> {
+    const session = this.getActiveSession();
+    if (!session?.connection) {
+      throw new Error(vscode.l10n.t('No active device'));
+    }
+
+    const serial = session.deviceInfo.serial;
+    const adbCmd = this.getAdbCommand();
+
+    const execAdb = (args: string[]): Promise<string> => {
+      return new Promise((resolve, reject) => {
+        execFile(adbCmd, ['-s', serial, ...args], { timeout: 10000 }, (error, stdout, stderr) => {
+          if (error) {
+            reject(new Error(stderr || error.message));
+          } else {
+            resolve(stdout.trim());
+          }
+        });
+      });
+    };
+
+    switch (setting) {
+      case 'darkMode': {
+        // Use cmd uimode for reliable dark mode switching
+        const modeArg = value === 'light' ? 'no' : value === 'dark' ? 'yes' : 'auto';
+        await execAdb(['shell', 'cmd', 'uimode', 'night', modeArg]);
+        break;
+      }
+
+      case 'navigationMode': {
+        // Disable all navigation overlays first
+        const overlays = [
+          'com.android.internal.systemui.navbar.gestural',
+          'com.android.internal.systemui.navbar.twobutton',
+        ];
+        for (const overlay of overlays) {
+          await execAdb(['shell', 'cmd', 'overlay', 'disable', '--user', 'current', overlay]).catch(
+            () => {}
+          );
+        }
+        // Three-button is the default (no overlay needed)
+        // Only enable overlay for gestural or twobutton
+        if (value === 'gestural') {
+          await execAdb([
+            'shell',
+            'cmd',
+            'overlay',
+            'enable',
+            '--user',
+            'current',
+            'com.android.internal.systemui.navbar.gestural',
+          ]);
+        } else if (value === 'twobutton') {
+          await execAdb([
+            'shell',
+            'cmd',
+            'overlay',
+            'enable',
+            '--user',
+            'current',
+            'com.android.internal.systemui.navbar.twobutton',
+          ]);
+        }
+        break;
+      }
+
+      case 'talkbackEnabled': {
+        const currentServices = await execAdb([
+          'shell',
+          'settings',
+          'get',
+          'secure',
+          'enabled_accessibility_services',
+        ]).catch(() => '');
+        const services = currentServices
+          .split(':')
+          .filter((s) => s && !s.toLowerCase().includes('talkback'));
+        if (value) {
+          services.push(DeviceService.TALKBACK_SERVICE);
+        }
+        const newServices = services.join(':') || 'null';
+        await execAdb([
+          'shell',
+          'settings',
+          'put',
+          'secure',
+          'enabled_accessibility_services',
+          newServices,
+        ]);
+        break;
+      }
+
+      case 'fontScale': {
+        const scaleValue = String(value);
+        await execAdb(['shell', 'settings', 'put', 'system', 'font_scale', scaleValue]);
+        break;
+      }
+
+      case 'displayDensity': {
+        const densityValue = String(value);
+        await execAdb(['shell', 'wm', 'density', densityValue]);
+        break;
+      }
+
+      case 'showLayoutBounds': {
+        const boolValue = value ? 'true' : 'false';
+        await execAdb(['shell', 'setprop', 'debug.layout', boolValue]);
+        // Trigger UI refresh by broadcasting an intent
+        await execAdb(['shell', 'service', 'call', 'activity', '1599295570']).catch(() => {});
+        break;
+      }
+
+      case 'orientation': {
+        // accelerometer_rotation: 1 = auto-rotate enabled, 0 = disabled
+        // user_rotation: 0 = portrait, 1 = landscape
+        if (value === 'auto') {
+          // Enable auto-rotate
+          await execAdb(['shell', 'settings', 'put', 'system', 'accelerometer_rotation', '1']);
+        } else {
+          // Set target rotation FIRST, then disable auto-rotate
+          // This prevents the brief flash to wrong orientation
+          const rotation = value === 'landscape' ? '1' : '0';
+          await execAdb(['shell', 'settings', 'put', 'system', 'user_rotation', rotation]);
+          await execAdb(['shell', 'settings', 'put', 'system', 'accelerometer_rotation', '0']);
+        }
+        break;
+      }
+    }
+  }
+
   // ==================== Session Management ====================
 
   /**
@@ -1685,7 +2048,7 @@ export class DeviceService {
     this.stopDeviceInfoRefresh();
 
     // Clear all devices from AppState
-    this.appState.clearAllDevices();
+    this.appState.dispatch({ type: ActionType.CLEAR_ALL_DEVICES });
   }
 
   /**
@@ -1708,7 +2071,7 @@ export class DeviceService {
 
     // Remove the failed session
     this.sessions.delete(deviceId);
-    this.appState.removeDevice(deviceId);
+    this.appState.dispatch({ type: ActionType.REMOVE_DEVICE, payload: { deviceId } });
 
     // Remove from known devices so auto-connect can pick it up again
     this.knownDeviceSerials.delete(deviceSerial);
@@ -1729,7 +2092,10 @@ export class DeviceService {
     if (this.appState.isMonitoring()) {
       return;
     }
-    this.appState.setMonitoring(true);
+    this.appState.dispatch({
+      type: ActionType.SET_MONITORING,
+      payload: { isMonitoring: true },
+    });
 
     // Initialize known devices with currently connected sessions
     this.knownDeviceSerials.clear();
@@ -1882,6 +2248,9 @@ export class DeviceService {
       if (this.isWifiDevice(device.serial)) {
         continue;
       }
+      if (this.appState.isBlockedAutoConnectDevice(device.serial)) {
+        continue;
+      }
 
       if (!this.knownDeviceSerials.has(device.serial) && !this.isDeviceConnected(device.serial)) {
         // Get device model name
@@ -1900,16 +2269,21 @@ export class DeviceService {
           // Keep serial as name
         }
 
-        this.statusCallback('', vscode.l10n.t('Connecting to {0}...', device.name));
+        // Always mark as seen to avoid repeated checks for the same plug event
+        this.knownDeviceSerials.add(device.serial);
 
-        try {
-          if (!this.appState.isMonitoring()) {
-            return;
+        // Only auto-connect if allowed (user has connected once before)
+        if (this.appState.isAllowedAutoConnectDevice(device.serial)) {
+          this.statusCallback('', vscode.l10n.t('Connecting to {0}...', device.name));
+
+          try {
+            if (!this.appState.isMonitoring()) {
+              return;
+            }
+            await this.addDevice(device);
+          } catch {
+            // Failed to connect
           }
-          await this.addDevice(device);
-          this.knownDeviceSerials.add(device.serial);
-        } catch {
-          // Failed to connect
         }
       }
     }
@@ -1926,7 +2300,10 @@ export class DeviceService {
    * Stop monitoring for new devices
    */
   stopDeviceMonitoring(): void {
-    this.appState.setMonitoring(false);
+    this.appState.dispatch({
+      type: ActionType.SET_MONITORING,
+      payload: { isMonitoring: false },
+    });
     if (this.trackDevicesRestartTimeout) {
       clearTimeout(this.trackDevicesRestartTimeout);
       this.trackDevicesRestartTimeout = null;

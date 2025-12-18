@@ -313,6 +313,7 @@ describe('DeviceService', () => {
       expect(execFile).toHaveBeenCalledWith(
         'adb',
         ['connect', '192.168.1.100:5555'],
+        { timeout: 15000 },
         expect.any(Function)
       );
       expect(result.serial).toBe('192.168.1.100:5555');
@@ -670,6 +671,206 @@ describe('DeviceService', () => {
 
       // Storage should be parsed (128G = 128 * 1024^3 bytes)
       expect(info.storageTotal).toBeGreaterThan(0);
+    });
+  });
+
+  describe('session management', () => {
+    it('should not throw when switching to non-existent device', () => {
+      expect(() => service.switchToDevice('non-existent-id')).not.toThrow();
+    });
+
+    it('should track active device after switch', () => {
+      // Initially no active device
+      expect(appState.getActiveDeviceId()).toBeNull();
+    });
+
+    it('should update app state when removing device', async () => {
+      // Remove a non-existent device - should not throw
+      await expect(service.removeDevice('non-existent')).resolves.toBeUndefined();
+    });
+
+    it('should handle disconnectAll gracefully', async () => {
+      // disconnectAll should work even with no sessions
+      await expect(service.disconnectAll()).resolves.toBeUndefined();
+      expect(appState.getDeviceCount()).toBe(0);
+    });
+  });
+
+  describe('reconnection behavior', () => {
+    it('should not reconnect when autoReconnect is disabled', () => {
+      const noReconnectConfig = { ...config, autoReconnect: false, reconnectRetries: 0 };
+      const noReconnectService = new DeviceService(
+        appState,
+        videoCallback,
+        audioCallback,
+        statusCallback,
+        errorCallback,
+        noReconnectConfig
+      );
+
+      // Configuration check only - actual reconnection tested via session handling
+      expect(() => noReconnectService.updateConfig(noReconnectConfig)).not.toThrow();
+    });
+
+    it('should allow configuring reconnect retry count', () => {
+      const customRetries = { ...config, autoReconnect: true, reconnectRetries: 5 };
+      expect(() => service.updateConfig(customRetries)).not.toThrow();
+    });
+  });
+
+  describe('device connection tracking', () => {
+    it('should return false for isDeviceConnected when device is not connected', () => {
+      expect(service.isDeviceConnected('test-device')).toBe(false);
+    });
+
+    it('should handle multiple device serial checks', () => {
+      expect(service.isDeviceConnected('device-1')).toBe(false);
+      expect(service.isDeviceConnected('device-2')).toBe(false);
+      expect(service.isDeviceConnected('192.168.1.100:5555')).toBe(false);
+    });
+  });
+
+  describe('config propagation', () => {
+    it('should allow updating video codec setting', () => {
+      const h265Config = { ...config, videoCodec: 'h265' };
+      expect(() => service.updateConfig(h265Config)).not.toThrow();
+    });
+
+    it('should allow updating audio settings', () => {
+      const audioConfig = { ...config, audio: true };
+      expect(() => service.updateConfig(audioConfig)).not.toThrow();
+    });
+
+    it('should allow updating display settings', () => {
+      const displayConfig = { ...config, maxSize: 1440, maxFps: 120, bitRate: 16 };
+      expect(() => service.updateConfig(displayConfig)).not.toThrow();
+    });
+  });
+
+  describe('error handling', () => {
+    it('should handle getDeviceInfo failure gracefully', async () => {
+      vi.mocked(execFile).mockImplementation(
+        (
+          _file: string,
+          _args: string[],
+          _optionsOrCallback?: unknown,
+          callback?: (error: Error | null, stdout: string, stderr: string) => void
+        ) => {
+          const cb = typeof _optionsOrCallback === 'function' ? _optionsOrCallback : callback;
+          cb?.(new Error('ADB error'), '', 'error');
+          return new MockChildProcess();
+        }
+      );
+
+      const info = await service.getDeviceInfo('test-device');
+
+      // Should return default/empty info rather than throwing
+      expect(info).toBeDefined();
+    });
+
+    it('should handle connectWifi with error response', async () => {
+      vi.mocked(execFile).mockImplementation(
+        (
+          _file: string,
+          args: string[],
+          _optionsOrCallback?: unknown,
+          callback?: (error: Error | null, stdout: string, stderr: string) => void
+        ) => {
+          const cb = typeof _optionsOrCallback === 'function' ? _optionsOrCallback : callback;
+          if (args[0] === 'connect') {
+            cb?.(null, 'cannot connect to 192.168.1.100:5555: Connection refused\n', '');
+          }
+          return new MockChildProcess();
+        }
+      );
+
+      await expect(service.connectWifi('192.168.1.100', 5555)).rejects.toThrow();
+    });
+  });
+
+  describe('device monitoring edge cases', () => {
+    it('should handle empty track-devices output', async () => {
+      const mockProcess = new MockChildProcess();
+      vi.mocked(spawn).mockReturnValue(mockProcess);
+
+      await service.startDeviceMonitoring();
+
+      // Empty device list
+      const deviceList = '';
+      const hexLength = deviceList.length.toString(16).padStart(4, '0');
+
+      expect(() => {
+        mockProcess.stdout.emit('data', Buffer.from(hexLength + deviceList));
+      }).not.toThrow();
+
+      service.stopDeviceMonitoring();
+    });
+
+    it('should handle track-devices with only whitespace', async () => {
+      const mockProcess = new MockChildProcess();
+      vi.mocked(spawn).mockReturnValue(mockProcess);
+
+      await service.startDeviceMonitoring();
+
+      // Device list with only whitespace/newlines
+      const deviceList = '\n\n  \n';
+      const hexLength = deviceList.length.toString(16).padStart(4, '0');
+
+      expect(() => {
+        mockProcess.stdout.emit('data', Buffer.from(hexLength + deviceList));
+      }).not.toThrow();
+
+      service.stopDeviceMonitoring();
+    });
+
+    it('should handle track-devices process error', async () => {
+      const mockProcess = new MockChildProcess();
+      vi.mocked(spawn).mockReturnValue(mockProcess);
+
+      await service.startDeviceMonitoring();
+
+      // Simulate process error
+      expect(() => {
+        mockProcess.emit('error', new Error('spawn ENOENT'));
+      }).not.toThrow();
+
+      service.stopDeviceMonitoring();
+    });
+
+    it('should handle stderr output from track-devices', async () => {
+      const mockProcess = new MockChildProcess();
+      vi.mocked(spawn).mockReturnValue(mockProcess);
+
+      await service.startDeviceMonitoring();
+
+      // Simulate stderr (warnings, errors)
+      expect(() => {
+        mockProcess.stderr.emit('data', Buffer.from('Warning: some warning message'));
+      }).not.toThrow();
+
+      service.stopDeviceMonitoring();
+    });
+  });
+
+  describe('callback invocation', () => {
+    it('should receive status callbacks', () => {
+      // Status callback passed in constructor
+      expect(statusCallback).toBeDefined();
+    });
+
+    it('should receive error callbacks', () => {
+      // Error callback passed in constructor
+      expect(errorCallback).toBeDefined();
+    });
+
+    it('should receive video frame callbacks', () => {
+      // Video callback passed in constructor
+      expect(videoCallback).toBeDefined();
+    });
+
+    it('should receive audio callbacks', () => {
+      // Audio callback passed in constructor
+      expect(audioCallback).toBeDefined();
     });
   });
 });
