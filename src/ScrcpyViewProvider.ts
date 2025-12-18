@@ -116,7 +116,8 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
           if (
             e.affectsConfiguration('scrcpy.showStats') ||
             e.affectsConfiguration('scrcpy.showExtendedStats') ||
-            e.affectsConfiguration('scrcpy.audio')
+            e.affectsConfiguration('scrcpy.audio') ||
+            e.affectsConfiguration('scrcpy.showTouchRipples')
           ) {
             this._sendSettings();
           }
@@ -246,6 +247,7 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
         showStats: config.get<boolean>('showStats', false),
         showExtendedStats: config.get<boolean>('showExtendedStats', false),
         audioEnabled: config.get<boolean>('audio', true),
+        showTouchRipples: config.get<boolean>('showTouchRipples', false),
       },
     });
   }

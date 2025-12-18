@@ -33,6 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Click outside to close** - Clicking anywhere outside Control Center closes it
 - **Dynamic scroll fade** - Top fade effect only appears when scrolled down
 - Localization strings for new settings groups and controls
+- **Touch ripple visualization** - Show animated ripple circles at touch points when enabled via `scrcpy.showTouchRipples` setting (useful for screen recordings and demos)
 
 ### Fixed
 

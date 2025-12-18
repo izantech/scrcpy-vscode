@@ -49,6 +49,7 @@
   "config.scrcpy.audioSource.playback-capture": "Internal playback capture - Captures internal audio without affecting device playback. Similar to output, but may work better in some scenarios where audio routing is complex.",
   "config.scrcpy.showStats": "Show FPS and frame count statistics overlay",
   "config.scrcpy.showExtendedStats": "Show extended statistics (bitrate, dropped frames) in the stats overlay",
+  "config.scrcpy.showTouchRipples": "Show ripple animations at touch points. Useful for screen recordings and demos.",
   "config.scrcpy.scrollSensitivity": "Mouse wheel scroll sensitivity (0.1-5.0, default: 1.0)",
   "config.scrcpy.keyboardMode": "Keyboard input mode for typing and special keys",
   "config.scrcpy.keyboardMode.inject": "inject - Text injection mode (default, works on all Android versions)",

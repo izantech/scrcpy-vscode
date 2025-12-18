@@ -3,6 +3,7 @@ import { AudioRenderer } from './AudioRenderer';
 import { InputHandler } from './InputHandler';
 import { KeyboardHandler } from './KeyboardHandler';
 import { RecordingManager } from './RecordingManager';
+import { TouchVisualizer } from './TouchVisualizer';
 
 // VS Code API interface
 interface VSCodeAPI {
@@ -140,6 +141,7 @@ interface AppStateSnapshot {
     showStats: boolean;
     showExtendedStats: boolean;
     audioEnabled: boolean;
+    showTouchRipples: boolean;
   };
   toolStatus: {
     adbAvailable: boolean;
@@ -161,6 +163,7 @@ interface DeviceSessionUI {
   inputHandler: InputHandler;
   keyboardHandler: KeyboardHandler;
   recordingManager: RecordingManager;
+  touchVisualizer: TouchVisualizer;
   tabElement: HTMLElement;
   connectionState: ConnectionState;
 }
@@ -202,6 +205,7 @@ const sessions = new Map<string, DeviceSessionUI>();
 let activeDeviceId: string | null = null;
 let showStats = false;
 let showExtendedStats = false;
+let showTouchRipples = false;
 let isMuted = false;
 let screenshotBtn: HTMLElement | null = null;
 let recordBtn: HTMLElement | null = null;
@@ -674,6 +678,13 @@ function handleStateSnapshot(state: AppStateSnapshot): void {
     }
   }
 
+  if (state.settings.showTouchRipples !== showTouchRipples) {
+    showTouchRipples = state.settings.showTouchRipples;
+    sessions.forEach((session) => {
+      session.touchVisualizer.setEnabled(showTouchRipples);
+    });
+  }
+
   if (state.settings.audioEnabled !== !isMuted) {
     updateAudioState(state.settings.audioEnabled);
   }
@@ -1002,6 +1013,10 @@ function createDeviceSession(
     }
   );
 
+  // Create touch visualizer for ripple animations
+  const touchVisualizer = new TouchVisualizer(canvasContainer);
+  touchVisualizer.setEnabled(showTouchRipples);
+
   // Create input handler
   const inputHandler = new InputHandler(
     canvas,
@@ -1016,6 +1031,15 @@ function createDeviceSession(
           screenWidth: canvas.width,
           screenHeight: canvas.height,
         });
+
+        // Show touch ripple animation
+        if (action === 'down') {
+          touchVisualizer.showRipple(0, x, y);
+        } else if (action === 'move') {
+          touchVisualizer.moveRipple(0, x, y);
+        } else if (action === 'up') {
+          touchVisualizer.hideRipple(0);
+        }
       }
     },
     (x, y, deltaX, deltaY) => {
@@ -1045,6 +1069,18 @@ function createDeviceSession(
           screenWidth: canvas.width,
           screenHeight: canvas.height,
         });
+
+        // Show multi-touch ripple animations
+        if (action === 'down') {
+          touchVisualizer.showRipple(1000, x1, y1);
+          touchVisualizer.showRipple(1001, x2, y2);
+        } else if (action === 'move') {
+          touchVisualizer.moveRipple(1000, x1, y1);
+          touchVisualizer.moveRipple(1001, x2, y2);
+        } else if (action === 'up') {
+          touchVisualizer.hideRipple(1000);
+          touchVisualizer.hideRipple(1001);
+        }
       }
     }
   );
@@ -1135,6 +1171,7 @@ function createDeviceSession(
     inputHandler,
     keyboardHandler,
     recordingManager,
+    touchVisualizer,
     tabElement: tab,
     connectionState: 'connecting',
   };
@@ -1158,6 +1195,7 @@ function removeDeviceSession(deviceId: string) {
   session.inputHandler.dispose();
   session.keyboardHandler.dispose();
   session.recordingManager.dispose();
+  session.touchVisualizer.dispose();
   session.canvas.remove();
   session.tabElement.remove();
 

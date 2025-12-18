@@ -59,6 +59,7 @@ export class AppStateManager {
         showStats: false,
         showExtendedStats: false,
         audioEnabled: true,
+        showTouchRipples: false,
       },
       toolStatus: {
         adbAvailable: true,

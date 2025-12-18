@@ -124,6 +124,7 @@ export interface WebviewSettings {
   showStats: boolean;
   showExtendedStats: boolean;
   audioEnabled: boolean;
+  showTouchRipples: boolean;
 }
 
 /**

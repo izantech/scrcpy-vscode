@@ -571,6 +571,38 @@ export function getHtmlForWebview(webview: vscode.Webview, extensionUri: vscode.
       50% { opacity: 0.3; }
     }
 
+    /* Touch ripple visualization */
+    .touch-ripple {
+      position: absolute;
+      width: 48px;
+      height: 48px;
+      margin-left: -24px;
+      margin-top: -24px;
+      border-radius: 50%;
+      pointer-events: none;
+      z-index: 20;
+      background: radial-gradient(circle, rgba(255,255,255,0.5) 0%, rgba(255,255,255,0.2) 50%, transparent 70%);
+      border: 2px solid rgba(255,255,255,0.6);
+    }
+
+    .touch-ripple-active {
+      animation: ripple-appear 0.15s ease-out forwards;
+    }
+
+    .touch-ripple-fading {
+      animation: ripple-disappear 0.3s ease-out forwards;
+    }
+
+    @keyframes ripple-appear {
+      from { transform: scale(0.5); opacity: 0; }
+      to { transform: scale(1); opacity: 1; }
+    }
+
+    @keyframes ripple-disappear {
+      from { transform: scale(1); opacity: 1; }
+      to { transform: scale(1.5); opacity: 0; }
+    }
+
     .control-btn.recording {
       background: #c00 !important;
       color: white !important;

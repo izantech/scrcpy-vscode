@@ -139,6 +139,7 @@ src/
     ├── KeyboardHandler.ts # Keyboard input (text injection + keycodes)
     ├── CodecUtils.ts     # Video codec detection and configuration utilities
     ├── RecordingManager.ts # Screen recording to WebM/MP4 format
+    ├── TouchVisualizer.ts # Touch ripple animations for demos/recordings
     └── WebviewTemplate.ts # HTML template generation for webview
 ```
 
@@ -353,6 +354,7 @@ test/
 │       ├── InputHandler.test.ts         # Pointer/scroll event tests
 │       ├── KeyboardHandler.test.ts      # Keyboard input tests
 │       ├── RecordingManager.test.ts     # Screen recording tests
+│       ├── TouchVisualizer.test.ts      # Touch ripple visualization tests
 │       └── VideoRenderer.test.ts        # Video decoding and resize tests
 ├── integration/
 │   ├── DeviceService.test.ts            # Device discovery, WiFi, session management tests
@@ -477,3 +479,10 @@ test/
     - Test mixed selection: select files and folders together
     - Verify files appear in `/sdcard/Download/` on device
     - Verify summary notification shows success/failure count
+20. Test touch ripple visualization:
+    - Enable `scrcpy.showTouchRipples` setting
+    - Tap on the device screen and verify white ripple appears at touch point
+    - Verify ripple fades out when finger is released
+    - Test multi-touch: use two fingers and verify two ripples appear
+    - Verify swiping does not cause lag (ripples stay at touch start point)
+    - Disable setting and verify ripples no longer appear
