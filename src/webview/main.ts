@@ -99,6 +99,8 @@ interface DeviceState {
     height: number;
   };
   videoCodec?: 'h264' | 'h265' | 'av1';
+  /** iOS only: true when device screen is off/locked */
+  isScreenOff?: boolean;
 }
 
 /**
@@ -212,6 +214,7 @@ let wdaOverlayBtn: HTMLElement;
 const sessions = new Map<string, DeviceSessionUI>();
 let activeDeviceId: string | null = null;
 let activeCapabilities: PlatformCapabilities | null = null;
+let activeDeviceScreenOff = false; // Track if active device screen is off
 let showStats = false;
 let showExtendedStats = false;
 let isMuted = false;
@@ -969,8 +972,21 @@ function handleStateSnapshot(state: AppStateSnapshot): void {
     switchToDevice(activeSession.deviceId);
   }
 
-  // 6. Handle status message
-  if (state.statusMessage) {
+  // 6. Handle status message and screen off state
+  // Screen off state (from device state) takes priority over status messages
+  const activeDeviceState = state.devices.find((d) => d.deviceId === activeDeviceId);
+
+  // Update screen off tracking
+  activeDeviceScreenOff = activeDeviceState?.isScreenOff ?? false;
+
+  if (activeDeviceScreenOff) {
+    // Device screen is off - hide canvas and show info overlay
+    const activeSession = sessions.get(activeDeviceId!);
+    if (activeSession) {
+      activeSession.canvas.classList.add('hidden');
+    }
+    showInfo('Device screen is off - wake device to resume');
+  } else if (state.statusMessage) {
     const targetDeviceId = state.statusMessage.deviceId || undefined;
     const hasSessions = sessions.size > 0;
 
@@ -1007,7 +1023,7 @@ function handleStateSnapshot(state: AppStateSnapshot): void {
       showEmptyState();
     }
   } else {
-    // Sessions exist and no status message - ensure overlay is hidden
+    // Sessions exist, screen is on, and no status message - ensure overlay is hidden
     hideStatus();
   }
 
@@ -1113,8 +1129,9 @@ function handleVideoFrame(message: {
     }
     session.videoRenderer.pushFrame(frameData, message.isConfig, message.isKeyFrame);
 
-    // Hide status and show UI once we're receiving frames for active device
-    if (message.deviceId === activeDeviceId && session.canvas.width > 0) {
+    // Show UI once we're receiving frames for active device
+    // But NOT if screen is off - that's handled by state updates
+    if (message.deviceId === activeDeviceId && session.canvas.width > 0 && !activeDeviceScreenOff) {
       session.canvas.classList.remove('hidden');
       tabBar.classList.remove('hidden');
       hideStatus();
@@ -1520,6 +1537,7 @@ function showStatus(text: string) {
   statusTextElement.textContent = text;
   statusTextElement.classList.remove('error');
   statusElement.classList.remove('hidden');
+  statusElement.classList.remove('info-overlay'); // Clear info overlay state
 
   // Show spinner
   const spinner = statusElement.querySelector('.spinner') as HTMLElement;
@@ -1535,6 +1553,10 @@ function showStatus(text: string) {
   const errorIcon = statusElement.querySelector('.error-icon') as HTMLElement;
   if (errorIcon) {
     errorIcon.style.display = 'none';
+  }
+  const infoIcon = statusElement.querySelector('.info-icon') as HTMLElement;
+  if (infoIcon) {
+    infoIcon.style.display = 'none';
   }
 
   // Remove buttons if exists
@@ -1596,6 +1618,7 @@ function showInfo(text: string) {
 function showError(text: string) {
   statusTextElement.textContent = text;
   statusTextElement.classList.add('error');
+  statusElement.classList.remove('info-overlay'); // Clear info overlay state
 
   // Hide canvases and control toolbar
   sessions.forEach((s) => s.canvas.classList.add('hidden'));
@@ -1607,6 +1630,12 @@ function showError(text: string) {
   const spinner = statusElement.querySelector('.spinner') as HTMLElement;
   if (spinner) {
     spinner.style.display = 'none';
+  }
+
+  // Hide info icon if exists
+  const infoIcon = statusElement.querySelector('.info-icon') as HTMLElement;
+  if (infoIcon) {
+    infoIcon.style.display = 'none';
   }
 
   // Show disconnected icon

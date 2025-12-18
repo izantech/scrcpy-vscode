@@ -101,6 +101,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Improved tooltip layout** - Input status (✅/❌) now displayed on bottom row with battery info; aligned icons with fixed-width column
 - **Capability-based menu visibility** - Menu items now use capability context variables (e.g., `scrcpy.supportsAppLaunch`) instead of platform checks, enabling dynamic updates when WDA connects/disconnects
 - **Fixed WDA setup iproxy lifecycle** - Setup script process now kept alive after completion so iproxy continues running for touch input
+- **iOS screen lock detection via libimobiledevice** - Replaced unreliable WDA `isLocked` polling with `ideviceinfo` lock detection
+  - Uses lockdownd error code -17 (PASSWORD_PROTECTED) to detect locked state
+  - Works independently of WDA - lock detection available even without WebDriverAgent
+  - Shows "Device screen is off - wake device to resume" overlay when device is locked
+  - Automatically hides overlay when device is unlocked
 
 ### Known Issues
 

@@ -1057,6 +1057,17 @@ export class DeviceService {
       });
     };
 
+    // Wire up iOS screen state change callback
+    if (this.isiOSConnection(connection)) {
+      connection.onScreenStateChange = (isScreenOff) => {
+        console.log(`[DeviceService] onScreenStateChange called: isScreenOff=${isScreenOff}`);
+        this.appState.dispatch({
+          type: ActionType.UPDATE_DEVICE,
+          payload: { deviceId: session.deviceId, updates: { isScreenOff } },
+        });
+      };
+    }
+
     session.connection = connection;
 
     try {

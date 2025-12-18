@@ -191,6 +191,11 @@ class IOSHelperApp: ScreenCaptureDelegate {
             do {
                 try windowCapture?.start()
                 MessageWriter.writeStatus("Capture started")
+
+                // Start stdin reader for commands (e.g., "dump" to start frame dump)
+                startStdinReader()
+
+                // Keep running until terminated
                 RunLoop.main.run()
             } catch {
                 MessageWriter.writeError("Failed to start window capture: \(error.localizedDescription)")
@@ -213,11 +218,42 @@ class IOSHelperApp: ScreenCaptureDelegate {
             try screenCapture?.start()
             MessageWriter.writeStatus("Capture started")
 
+            // Start stdin reader for commands (e.g., "dump" to start frame dump)
+            startStdinReader()
+
             // Keep running until terminated
             RunLoop.main.run()
         } catch {
             MessageWriter.writeError("Failed to start capture: \(error.localizedDescription)")
             exit(1)
+        }
+    }
+
+    /// Start reading stdin for debug commands
+    private func startStdinReader() {
+        fputs("[IOSHelperApp] Starting stdin reader for debug commands\n", stderr)
+        DispatchQueue.global(qos: .background).async { [weak self] in
+            fputs("[IOSHelperApp] Stdin reader thread started\n", stderr)
+            while let line = readLine() {
+                let command = line.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                fputs("[IOSHelperApp] Received stdin command: '\(command)'\n", stderr)
+                if command == "dump" {
+                    DispatchQueue.main.async {
+                        fputs("[IOSHelperApp] Starting frame dump...\n", stderr)
+                        // Route to whichever capture is active
+                        if let wc = self?.windowCapture {
+                            fputs("[IOSHelperApp] Routing to WindowCapture\n", stderr)
+                            wc.startFrameDump()
+                        } else if let sc = self?.screenCapture {
+                            fputs("[IOSHelperApp] Routing to ScreenCapture\n", stderr)
+                            sc.startFrameDump()
+                        } else {
+                            fputs("[IOSHelperApp] No active capture to dump frames from\n", stderr)
+                        }
+                    }
+                }
+            }
+            fputs("[IOSHelperApp] Stdin reader thread ended\n", stderr)
         }
     }
 

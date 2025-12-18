@@ -525,6 +525,40 @@ export class WDAClient {
   }
 
   /**
+   * Check if device screen is locked
+   * @returns true if device is locked, false otherwise
+   */
+  async isLocked(): Promise<boolean> {
+    const sessionId = await this.ensureSession();
+
+    const response = await this.request<{ value: boolean }>(
+      'GET',
+      `/session/${sessionId}/wda/locked`
+    );
+
+    return response.value === true;
+  }
+
+  /**
+   * Lock the device screen
+   */
+  async lock(): Promise<void> {
+    const sessionId = await this.ensureSession();
+
+    await this.request('POST', `/session/${sessionId}/wda/lock`);
+  }
+
+  /**
+   * Unlock the device screen
+   * Note: This only works if there's no passcode set or Face ID/Touch ID unlocks automatically
+   */
+  async unlock(): Promise<void> {
+    const sessionId = await this.ensureSession();
+
+    await this.request('POST', `/session/${sessionId}/wda/unlock`);
+  }
+
+  /**
    * Initialize session proactively (call after checkStatus succeeds)
    * This avoids latency on first touch
    */

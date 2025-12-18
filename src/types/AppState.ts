@@ -149,6 +149,8 @@ export interface DeviceState {
     height: number;
   };
   videoCodec?: VideoCodec;
+  /** iOS only: true when device screen is off/locked */
+  isScreenOff?: boolean;
 }
 
 /**

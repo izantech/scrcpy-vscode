@@ -70,6 +70,10 @@ export class iOSConnection implements IDeviceConnection {
   private captureStartedTime = 0;
   private screenOffNotified = false;
 
+  // WDA lock state detection (more reliable than frame timeout)
+  private lockStateTimer: ReturnType<typeof setInterval> | null = null;
+  private lastKnownLockState: boolean | null = null;
+
   // WebDriverAgent integration (Phase 8)
   private wdaClient: WDAClient | null = null;
   private wdaReady = false;
@@ -88,6 +92,8 @@ export class iOSConnection implements IDeviceConnection {
   onError?: ErrorCallback;
   onClipboardChange?: (text: string) => void;
   onCapabilitiesChanged?: (capabilities: PlatformCapabilities) => void;
+  /** Called when iOS screen state changes (locked/unlocked) */
+  onScreenStateChange?: (isScreenOff: boolean) => void;
 
   constructor(
     private targetUDID?: string,
@@ -158,7 +164,7 @@ export class iOSConnection implements IDeviceConnection {
     console.log('[iOSConnection] Running:', command, args);
 
     this.helperProcess = spawn(command, args, {
-      stdio: ['ignore', 'pipe', 'pipe'],
+      stdio: ['pipe', 'pipe', 'pipe'],
     });
 
     this.helperProcess.stdout?.on('data', (chunk: Buffer) => {
@@ -185,6 +191,16 @@ export class iOSConnection implements IDeviceConnection {
     });
 
     this._connected = true;
+
+    // Resolve real iOS UDID for ideviceinfo-based lock detection
+    // This is needed regardless of WDA status
+    void this.resolveWdaDeviceUdid().then((udid) => {
+      if (udid) {
+        console.log('[iOSConnection] Resolved iOS UDID for lock detection:', udid);
+        // Start lock state polling using ideviceinfo
+        this.startLockStatePolling();
+      }
+    });
 
     // Initialize WebDriverAgent if enabled (Phase 8)
     // Non-blocking: screen mirroring functions independently of WDA
@@ -669,11 +685,22 @@ export class iOSConnection implements IDeviceConnection {
         break;
       case MessageType.STATUS: {
         const statusText = payload.toString('utf8');
-        console.log(`[iOSConnection] STATUS message: "${statusText}"`);
-        this.onStatus?.(statusText);
-        // Start frame timeout detection when capture starts
-        if (statusText === 'Capture started') {
-          this.startFrameTimeoutDetection();
+
+        // Handle screen state changes from AVCaptureSession interruption or frozen frame detection
+        if (statusText === 'SCREEN_OFF') {
+          this.screenOffNotified = true;
+          this.onScreenStateChange?.(true);
+        } else if (statusText === 'SCREEN_ON') {
+          if (this.screenOffNotified) {
+            this.screenOffNotified = false;
+            this.onScreenStateChange?.(false);
+          }
+        } else {
+          this.onStatus?.(statusText);
+          // Start frame timeout detection when capture starts
+          if (statusText === 'Capture started') {
+            this.startFrameTimeoutDetection();
+          }
         }
         break;
       }
@@ -777,43 +804,35 @@ export class iOSConnection implements IDeviceConnection {
     this.screenOffNotified = false;
     this.lastFrameTime = 0;
 
-    console.log('[iOSConnection] Starting frame timeout detection');
-
     // Clear any existing timer
     if (this.frameTimeoutTimer) {
       clearInterval(this.frameTimeoutTimer);
     }
 
-    // Check every 2 seconds
+    // If WDA is enabled, it handles lock detection - don't use frame timeout
+    // Frame timeout is only a fallback for when WDA is disabled
+    if (this.wdaEnabled) {
+      return;
+    }
+
+    // Check every 2 seconds (only when WDA is disabled)
     this.frameTimeoutTimer = setInterval(() => {
       const now = Date.now();
 
       // Case 1: Never received any frames after capture started
       if (!this.hasReceivedFirstFrame) {
         const timeSinceCaptureStarted = now - this.captureStartedTime;
-        console.log(
-          `[iOSConnection] Frame check: no frames yet, ${timeSinceCaptureStarted}ms since capture started`
-        );
         // Wait 5 seconds before showing the message
         if (timeSinceCaptureStarted > 5000 && !this.screenOffNotified) {
           this.screenOffNotified = true;
-          this.onStatus?.('Wake your iOS device to start screen capture');
+          this.onScreenStateChange?.(true);
         }
         return;
       }
 
-      // Case 2: Was receiving frames but they stopped
-      const timeSinceLastFrame = now - this.lastFrameTime;
-      console.log(`[iOSConnection] Frame check: ${timeSinceLastFrame}ms since last frame`);
-      // If no frame for 3 seconds, device screen is likely off
-      if (timeSinceLastFrame > 3000 && !this.screenOffNotified) {
-        this.screenOffNotified = true;
-        this.onStatus?.('Device screen is off - wake device to resume');
-      } else if (timeSinceLastFrame < 1000 && this.screenOffNotified) {
-        // Frames resumed, clear the notification
-        this.screenOffNotified = false;
-        this.onStatus?.(`Streaming at ${this._deviceWidth}x${this._deviceHeight}`);
-      }
+      // Note: We don't try to detect "screen back on" from frame timing
+      // because iOS continues sending frames even when locked.
+      // Without WDA, we can't reliably detect unlock.
     }, 2000);
   }
 
@@ -829,11 +848,119 @@ export class iOSConnection implements IDeviceConnection {
     this.screenOffNotified = false;
   }
 
+  /**
+   * Start polling WDA for device lock state
+   * More reliable than frame timeout detection when WDA is available
+   */
+
+  /**
+   * Check if device is locked using ideviceinfo
+   * Returns true if locked, false if unlocked, null if cannot determine
+   *
+   * When device is locked with passcode, ideviceinfo returns error code -17
+   * (LOCKDOWN_E_PASSWORD_PROTECTED)
+   */
+  private checkLockStateViaIdeviceinfo(): Promise<boolean | null> {
+    return new Promise((resolve) => {
+      const udid = this.realUdid;
+      if (!udid) {
+        resolve(null);
+        return;
+      }
+
+      // Try to query any property - if device is locked, we get error -17
+      execFile(
+        'ideviceinfo',
+        ['-u', udid, '-k', 'DeviceName'],
+        { timeout: 3000 },
+        (error, _stdout, stderr) => {
+          if (error) {
+            // Check for password protected error (code -17)
+            const stderrStr = stderr?.toString() || '';
+            const errorMsg = error.message || '';
+            if (
+              stderrStr.includes('Password protected') ||
+              stderrStr.includes('-17') ||
+              errorMsg.includes('Password protected')
+            ) {
+              // Device is locked
+              resolve(true);
+            } else {
+              // Some other error - can't determine state
+              resolve(null);
+            }
+          } else {
+            // Command succeeded - device is unlocked
+            resolve(false);
+          }
+        }
+      );
+    });
+  }
+
+  private startLockStatePolling(): void {
+    // Clear any existing timer
+    this.stopLockStatePolling();
+
+    console.log('[iOSConnection] Starting lock state polling via ideviceinfo');
+
+    // Poll every 2 seconds
+    this.lockStateTimer = setInterval(async () => {
+      // Use ideviceinfo to detect lock state (more reliable than WDA)
+      const isLocked = await this.checkLockStateViaIdeviceinfo();
+
+      // Skip if we couldn't determine state (e.g., no UDID)
+      if (isLocked === null) {
+        return;
+      }
+
+      // Only notify on state change
+      if (isLocked !== this.lastKnownLockState) {
+        console.log(
+          `[iOSConnection] Lock state changed: ${isLocked} (was ${this.lastKnownLockState})`
+        );
+        this.lastKnownLockState = isLocked;
+        this.screenOffNotified = isLocked;
+
+        // Notify via state change callback - updates device state
+        if (this.onScreenStateChange) {
+          this.onScreenStateChange(isLocked);
+        }
+      }
+    }, 2000);
+  }
+
+  /**
+   * Stop lock state polling
+   */
+  private stopLockStatePolling(): void {
+    if (this.lockStateTimer) {
+      clearInterval(this.lockStateTimer);
+      this.lockStateTimer = null;
+    }
+    this.lastKnownLockState = null;
+  }
+
+  /**
+   * Start frame dump for debugging screen off detection
+   * Writes frames to /tmp/ios-screen-debug for 10 seconds
+   */
+  private startFrameDump(): void {
+    if (!this.helperProcess?.stdin) {
+      return;
+    }
+
+    this.helperProcess.stdin.write('dump\n');
+  }
+
   disconnect(): void {
     this._connected = false;
 
     // Stop frame timeout detection
     this.stopFrameTimeoutDetection();
+
+    // Stop WDA lock state polling
+    this.stopLockStatePolling();
 
     // Stop helper process
     if (this.helperProcess) {
@@ -935,17 +1062,28 @@ export class iOSConnection implements IDeviceConnection {
 
   /**
    * Send key event to device via WDA
-   * Supports: home (3), back (4), volume up/down (24/25), app switcher (187)
+   * Supports: home (3), back (4), volume up/down (24/25), power (26), app switcher (187)
    * @param action - 0: down, 1: up
    * @param keycode - Android keycode
    */
   sendKey(action: number, keycode: number, _metastate?: number): void {
-    if (!this.wdaClient || !this.wdaReady) {
+    // Only handle key up to avoid double-press
+    if (action !== 1) {
       return;
     }
 
-    // Only handle key up to avoid double-press
-    if (action !== 1) {
+    // POWER = 26: Lock the device via WDA if available
+    if (keycode === 26) {
+      if (this.wdaClient && this.wdaReady) {
+        this.wdaClient.lock().catch(() => {
+          // Silently ignore lock failures
+        });
+      }
+      return;
+    }
+
+    // All other buttons require WDA
+    if (!this.wdaClient || !this.wdaReady) {
       return;
     }
 

@@ -353,23 +353,19 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
           isConfig,
         });
       },
-      // Status callback
+      // Status callback (screen off is handled via device state, not status messages)
       (deviceId, status) => {
         if (this._isDisposed || !this._appState) {
           return;
         }
-        // Use 'info' type for screen-off notifications (shown as overlay on video)
-        const isScreenOffMessage =
-          status.includes('screen is off') || status.includes('Wake your iOS device');
         this._appState.dispatch({
           type: ActionType.SET_STATUS_MESSAGE,
           payload: {
-            type: isScreenOffMessage ? 'info' : 'loading',
+            type: 'loading',
             text: status,
             deviceId: deviceId || undefined,
           },
         });
-        // Note: Device contexts are updated via state subscription
       },
       // Error callback
       (deviceId, message, error) => {
