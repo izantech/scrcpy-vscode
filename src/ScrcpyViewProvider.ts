@@ -10,7 +10,7 @@ import { ToolNotFoundError, ToolErrorCode, DeviceUISettings } from './types/AppS
 
 export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'scrcpy.deviceView';
-  private static readonly DEVICE_SETTINGS_CACHE_KEY = 'deviceSettingsCache';
+  private static readonly CONTROL_CENTER_CACHE_KEY = 'controlCenterCache';
 
   private _view?: vscode.WebviewView;
   private _appState?: AppStateManager;
@@ -617,8 +617,8 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
         this._sendSettings();
         // Send cached device settings to webview
         this._view?.webview.postMessage({
-          type: 'deviceSettingsCacheLoaded',
-          cache: this.getDeviceSettingsCache(),
+          type: 'controlCenterCacheLoaded',
+          cache: this.getControlCenterCache(),
         });
         break;
 
@@ -678,17 +678,17 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
         }
         break;
 
-      case 'openDeviceSettings':
+      case 'openControlCenter':
         if (this._deviceService) {
           const deviceId = this._appState?.getActiveDeviceId();
           try {
             const settings = await this._deviceService.getDeviceUISettings();
             // Save to persistent cache
             if (deviceId) {
-              this.saveDeviceSettingsToCache(deviceId, settings);
+              this.saveControlCenterToCache(deviceId, settings);
             }
             this._view?.webview.postMessage({
-              type: 'deviceSettingsLoaded',
+              type: 'controlCenterLoaded',
               settings,
             });
           } catch (error) {
@@ -700,7 +700,7 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
         }
         break;
 
-      case 'applyDeviceSetting':
+      case 'applyControlCenterSetting':
         if (this._deviceService && message.setting && message.value !== undefined) {
           const deviceId = this._appState?.getActiveDeviceId();
           try {
@@ -1545,12 +1545,12 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
   /**
    * Get device settings cache from globalState
    */
-  private getDeviceSettingsCache(): Record<string, DeviceUISettings> {
+  private getControlCenterCache(): Record<string, DeviceUISettings> {
     if (!this._globalState) {
       return {};
     }
     return this._globalState.get<Record<string, DeviceUISettings>>(
-      ScrcpyViewProvider.DEVICE_SETTINGS_CACHE_KEY,
+      ScrcpyViewProvider.CONTROL_CENTER_CACHE_KEY,
       {}
     );
   }
@@ -1558,13 +1558,13 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
   /**
    * Save device settings to persistent cache
    */
-  private saveDeviceSettingsToCache(deviceId: string, settings: DeviceUISettings): void {
+  private saveControlCenterToCache(deviceId: string, settings: DeviceUISettings): void {
     if (!this._globalState) {
       return;
     }
-    const cache = this.getDeviceSettingsCache();
+    const cache = this.getControlCenterCache();
     cache[deviceId] = settings;
-    this._globalState.update(ScrcpyViewProvider.DEVICE_SETTINGS_CACHE_KEY, cache);
+    this._globalState.update(ScrcpyViewProvider.CONTROL_CENTER_CACHE_KEY, cache);
   }
 
   /**
@@ -1578,17 +1578,17 @@ export class ScrcpyViewProvider implements vscode.WebviewViewProvider {
     if (!this._globalState) {
       return;
     }
-    const cache = this.getDeviceSettingsCache();
+    const cache = this.getControlCenterCache();
     if (cache[deviceId]) {
       (cache[deviceId] as unknown as Record<string, unknown>)[setting] = value;
-      this._globalState.update(ScrcpyViewProvider.DEVICE_SETTINGS_CACHE_KEY, cache);
+      this._globalState.update(ScrcpyViewProvider.CONTROL_CENTER_CACHE_KEY, cache);
     }
   }
 
   /**
    * Get cached settings for a device
    */
-  public getDeviceSettingsFromCache(deviceId: string): DeviceUISettings | undefined {
-    return this.getDeviceSettingsCache()[deviceId];
+  public getControlCenterFromCache(deviceId: string): DeviceUISettings | undefined {
+    return this.getControlCenterCache()[deviceId];
   }
 }

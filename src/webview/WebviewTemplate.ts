@@ -16,7 +16,7 @@ export function getHtmlForWebview(webview: vscode.Webview, extensionUri: vscode.
   const takeScreenshot = vscode.l10n.t('Take screenshot');
   const power = vscode.l10n.t('Power');
   const startRecording = vscode.l10n.t('Start recording');
-  const deviceSettings = vscode.l10n.t('Device Settings');
+  const controlCenter = vscode.l10n.t('Control Center');
 
   // Bundle of strings for dynamic updates in main.ts
   const l10n = {
@@ -42,7 +42,7 @@ export function getHtmlForWebview(webview: vscode.Webview, extensionUri: vscode.
     install: vscode.l10n.t('Install'),
     settings: vscode.l10n.t('Settings'),
     missingDependency: vscode.l10n.t('Missing dependency'),
-    deviceSettings: vscode.l10n.t('Device Settings'),
+    controlCenter: vscode.l10n.t('Control Center'),
     darkMode: vscode.l10n.t('Dark Mode'),
     auto: vscode.l10n.t('Auto'),
     light: vscode.l10n.t('Light'),
@@ -729,8 +729,8 @@ export function getHtmlForWebview(webview: vscode.Webview, extensionUri: vscode.
       background: var(--vscode-button-hoverBackground, #1177bb);
     }
 
-    /* Device settings popup overlay */
-    .device-settings-overlay {
+    /* Control Center overlay */
+    .control-center-overlay {
       position: absolute;
       top: 0;
       left: 0;
@@ -752,12 +752,12 @@ export function getHtmlForWebview(webview: vscode.Webview, extensionUri: vscode.
       to { opacity: 1; }
     }
 
-    .device-settings-overlay.visible {
+    .control-center-overlay.visible {
       display: flex;
     }
 
     /* Floating sections container */
-    .device-settings-sections {
+    .control-center-sections {
       display: flex;
       flex-direction: column;
       gap: 10px;
@@ -773,7 +773,7 @@ export function getHtmlForWebview(webview: vscode.Webview, extensionUri: vscode.
       -webkit-mask-image: none;
     }
 
-    .device-settings-sections.scrolled {
+    .control-center-sections.scrolled {
       mask-image: linear-gradient(
         in oklch to bottom,
         oklch(0% 0 0 / 0) 0%,
@@ -792,7 +792,7 @@ export function getHtmlForWebview(webview: vscode.Webview, extensionUri: vscode.
       );
     }
 
-    .device-settings-sections::-webkit-scrollbar {
+    .control-center-sections::-webkit-scrollbar {
       display: none;
     }
 
@@ -1141,7 +1141,7 @@ export function getHtmlForWebview(webview: vscode.Webview, extensionUri: vscode.
       border-radius: 4px;
     }
 
-    /* Action button for settings popup */
+    /* Action button for Control Center */
     .settings-action-btn {
       display: flex;
       align-items: center;
@@ -1270,14 +1270,14 @@ export function getHtmlForWebview(webview: vscode.Webview, extensionUri: vscode.
         <button class="control-btn" data-keycode="187" title="${recentApps}"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="5" width="14" height="14"/></svg></button>
       </div>
       <div class="toolbar-group toolbar-right">
-        <button class="control-btn" id="device-settings-btn" title="${deviceSettings}"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M9.82,12.5C9.84,12.33 9.86,12.17 9.86,12C9.86,11.83 9.84,11.67 9.82,11.5L10.9,10.69C11,10.62 11,10.5 10.96,10.37L9.93,8.64C9.87,8.53 9.73,8.5 9.62,8.53L8.34,9.03C8.07,8.83 7.78,8.67 7.47,8.54L7.27,7.21C7.27,7.09 7.16,7 7.03,7H5C4.85,7 4.74,7.09 4.72,7.21L4.5,8.53C4.21,8.65 3.92,8.83 3.65,9L2.37,8.5C2.25,8.47 2.12,8.5 2.06,8.63L1.03,10.36C0.97,10.5 1,10.61 1.1,10.69L2.18,11.5C2.16,11.67 2.15,11.84 2.15,12C2.15,12.17 2.17,12.33 2.19,12.5L1.1,13.32C1,13.39 0.96,13.5 1.03,13.64L2.06,15.37C2.12,15.5 2.25,15.5 2.37,15.5L3.65,15C3.92,15.18 4.21,15.34 4.5,15.47L4.72,16.79C4.74,16.91 4.85,17 5,17H7.03C7.16,17 7.27,16.91 7.29,16.79L7.5,15.47C7.8,15.35 8.07,15.18 8.35,15L9.62,15.5C9.73,15.5 9.87,15.5 9.93,15.37L10.96,13.64C11,13.5 11,13.39 10.9,13.32L9.82,12.5M6,13.75A1.75,1.75 0 0,1 4.25,12A1.75,1.75 0 0,1 6,10.25A1.75,1.75 0 0,1 7.75,12A1.75,1.75 0 0,1 6,13.75M17,1H7A2,2 0 0,0 5,3V6H7V4H17V20H7V18H5V21A2,2 0 0,0 7,23H17A2,2 0 0,0 19,21V3A2,2 0 0,0 17,1Z"/></svg></button>
+        <button class="control-btn" id="control-center-btn" title="${controlCenter}"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M9.82,12.5C9.84,12.33 9.86,12.17 9.86,12C9.86,11.83 9.84,11.67 9.82,11.5L10.9,10.69C11,10.62 11,10.5 10.96,10.37L9.93,8.64C9.87,8.53 9.73,8.5 9.62,8.53L8.34,9.03C8.07,8.83 7.78,8.67 7.47,8.54L7.27,7.21C7.27,7.09 7.16,7 7.03,7H5C4.85,7 4.74,7.09 4.72,7.21L4.5,8.53C4.21,8.65 3.92,8.83 3.65,9L2.37,8.5C2.25,8.47 2.12,8.5 2.06,8.63L1.03,10.36C0.97,10.5 1,10.61 1.1,10.69L2.18,11.5C2.16,11.67 2.15,11.84 2.15,12C2.15,12.17 2.17,12.33 2.19,12.5L1.1,13.32C1,13.39 0.96,13.5 1.03,13.64L2.06,15.37C2.12,15.5 2.25,15.5 2.37,15.5L3.65,15C3.92,15.18 4.21,15.34 4.5,15.47L4.72,16.79C4.74,16.91 4.85,17 5,17H7.03C7.16,17 7.27,16.91 7.29,16.79L7.5,15.47C7.8,15.35 8.07,15.18 8.35,15L9.62,15.5C9.73,15.5 9.87,15.5 9.93,15.37L10.96,13.64C11,13.5 11,13.39 10.9,13.32L9.82,12.5M6,13.75A1.75,1.75 0 0,1 4.25,12A1.75,1.75 0 0,1 6,10.25A1.75,1.75 0 0,1 7.75,12A1.75,1.75 0 0,1 6,13.75M17,1H7A2,2 0 0,0 5,3V6H7V4H17V20H7V18H5V21A2,2 0 0,0 7,23H17A2,2 0 0,0 19,21V3A2,2 0 0,0 17,1Z"/></svg></button>
       </div>
     </div>
   </div>
 
-  <!-- Device Settings Popup Overlay -->
-  <div id="device-settings-overlay" class="device-settings-overlay">
-    <div class="device-settings-sections" id="device-settings-content">
+  <!-- Control Center Overlay -->
+  <div id="control-center-overlay" class="control-center-overlay">
+    <div class="control-center-sections" id="control-center-content">
       <!-- Floating settings sections populated dynamically -->
     </div>
   </div>

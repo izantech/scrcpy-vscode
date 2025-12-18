@@ -113,10 +113,10 @@ export type WebviewAction =
   // Dimension updates (from video parsing)
   | { type: 'dimensionsChanged'; deviceId: string; width: number; height: number }
 
-  // Device UI settings
-  | { type: 'openDeviceSettings' }
+  // Control Center
+  | { type: 'openControlCenter' }
   | {
-      type: 'applyDeviceSetting';
+      type: 'applyControlCenterSetting';
       setting: keyof DeviceUISettings;
       value: DeviceUISettings[keyof DeviceUISettings];
     };

@@ -39,7 +39,7 @@ declare global {
       install: string;
       settings: string;
       missingDependency: string;
-      deviceSettings: string;
+      controlCenter: string;
       darkMode: string;
       auto: string;
       light: string;
@@ -211,13 +211,13 @@ let recordingIndicator: HTMLElement | null = null;
 let recordingTime: HTMLElement | null = null;
 let currentScreenshotData: string | null = null;
 
-// Device settings popup
-let deviceSettingsOverlay: HTMLElement | null = null;
-let deviceSettingsContent: HTMLElement | null = null;
-let deviceSettingsBtn: HTMLElement | null = null;
-let currentDeviceSettings: DeviceUISettings | null = null;
+// Control Center
+let controlCenterOverlay: HTMLElement | null = null;
+let controlCenterContent: HTMLElement | null = null;
+let controlCenterBtn: HTMLElement | null = null;
+let currentControlCenterSettings: DeviceUISettings | null = null;
 const pendingSettingChanges = new Set<string>();
-const deviceSettingsCache = new Map<string, DeviceUISettings>();
+const controlCenterCache = new Map<string, DeviceUISettings>();
 
 // Device info tooltip
 let deviceInfoTooltip: HTMLElement | null = null;
@@ -391,23 +391,23 @@ function initialize() {
     });
   }
 
-  // Device settings popup setup
-  deviceSettingsOverlay = document.getElementById('device-settings-overlay');
-  deviceSettingsContent = document.getElementById('device-settings-content');
-  deviceSettingsBtn = document.getElementById('device-settings-btn');
+  // Control Center setup
+  controlCenterOverlay = document.getElementById('control-center-overlay');
+  controlCenterContent = document.getElementById('control-center-content');
+  controlCenterBtn = document.getElementById('control-center-btn');
 
-  if (deviceSettingsBtn) {
-    deviceSettingsBtn.addEventListener('click', () => {
-      if (deviceSettingsOverlay?.classList.contains('visible')) {
-        closeDeviceSettings();
+  if (controlCenterBtn) {
+    controlCenterBtn.addEventListener('click', () => {
+      if (controlCenterOverlay?.classList.contains('visible')) {
+        closeControlCenter();
       } else {
-        openDeviceSettings();
+        openControlCenter();
       }
     });
   }
 
   // Add scroll listener for top fade effect
-  const sectionsContainer = document.querySelector('.device-settings-sections');
+  const sectionsContainer = document.querySelector('.control-center-sections');
   if (sectionsContainer) {
     sectionsContainer.addEventListener('scroll', () => {
       if (sectionsContainer.scrollTop > 10) {
@@ -420,13 +420,13 @@ function initialize() {
 
   // Close control center when clicking outside of it
   document.addEventListener('click', (e) => {
-    if (!deviceSettingsOverlay?.classList.contains('visible')) {
+    if (!controlCenterOverlay?.classList.contains('visible')) {
       return;
     }
     const target = e.target as HTMLElement;
     // Keep open if clicking inside the settings sections or the toggle button
-    if (!target.closest('.device-settings-sections') && !target.closest('#device-settings-btn')) {
-      closeDeviceSettings();
+    if (!target.closest('.control-center-sections') && !target.closest('#control-center-btn')) {
+      closeControlCenter();
     }
   });
 
@@ -811,15 +811,15 @@ function handleMessage(event: MessageEvent) {
       handleScreenshotPreview(message);
       break;
 
-    case 'deviceSettingsLoaded':
-      handleDeviceSettingsLoaded(message.settings);
+    case 'controlCenterLoaded':
+      handleControlCenterLoaded(message.settings);
       break;
 
-    case 'deviceSettingsCacheLoaded':
+    case 'controlCenterCacheLoaded':
       // Populate cache from persisted storage
       if (message.cache) {
         for (const [deviceId, settings] of Object.entries(message.cache)) {
-          deviceSettingsCache.set(deviceId, settings as DeviceUISettings);
+          controlCenterCache.set(deviceId, settings as DeviceUISettings);
         }
       }
       break;
@@ -1725,18 +1725,18 @@ function dismissScreenshotPreview() {
   currentScreenshotData = null;
 }
 
-// ==================== Device Settings Popup ====================
+// ==================== Control Center ====================
 
 /**
- * Open device settings popup
+ * Open Control Center
  */
-function openDeviceSettings() {
-  if (!deviceSettingsOverlay || !deviceSettingsContent || !activeDeviceId) {
+function openControlCenter() {
+  if (!controlCenterOverlay || !controlCenterContent || !activeDeviceId) {
     return;
   }
 
   // Use cached settings if available, otherwise use defaults
-  const cachedSettings = deviceSettingsCache.get(activeDeviceId);
+  const cachedSettings = controlCenterCache.get(activeDeviceId);
   const initialSettings: DeviceUISettings = cachedSettings || {
     darkMode: 'auto',
     navigationMode: 'gestural',
@@ -1754,60 +1754,60 @@ function openDeviceSettings() {
   // If we have cached settings, show them enabled immediately
   // Otherwise show disabled state while fetching
   const hasCachedSettings = !!cachedSettings;
-  renderDeviceSettingsForm(initialSettings, !hasCachedSettings);
+  renderControlCenterForm(initialSettings, !hasCachedSettings);
 
   if (hasCachedSettings) {
-    currentDeviceSettings = cachedSettings;
+    currentControlCenterSettings = cachedSettings;
   }
 
   // Show overlay
-  deviceSettingsOverlay.classList.add('visible');
+  controlCenterOverlay.classList.add('visible');
 
   // Mark button as active and disable other toolbar buttons
-  deviceSettingsBtn?.classList.add('active');
+  controlCenterBtn?.classList.add('active');
   document.getElementById('control-toolbar')?.classList.add('control-center-open');
 
   // Reset scroll position and update scroll state
-  const sectionsContainer = document.querySelector('.device-settings-sections');
+  const sectionsContainer = document.querySelector('.control-center-sections');
   if (sectionsContainer) {
     sectionsContainer.scrollTop = 0;
     sectionsContainer.classList.remove('scrolled');
   }
 
   // Request fresh settings from extension
-  vscode.postMessage({ type: 'openDeviceSettings' });
+  vscode.postMessage({ type: 'openControlCenter' });
 }
 
 /**
- * Close device settings popup
+ * Close Control Center
  */
-function closeDeviceSettings() {
-  if (!deviceSettingsOverlay) {
+function closeControlCenter() {
+  if (!controlCenterOverlay) {
     return;
   }
 
-  deviceSettingsOverlay.classList.remove('visible');
-  currentDeviceSettings = null;
+  controlCenterOverlay.classList.remove('visible');
+  currentControlCenterSettings = null;
   pendingSettingChanges.clear();
 
   // Remove active state and re-enable toolbar buttons
-  deviceSettingsBtn?.classList.remove('active');
+  controlCenterBtn?.classList.remove('active');
   document.getElementById('control-toolbar')?.classList.remove('control-center-open');
 }
 
 /**
- * Handle device settings loaded from extension
+ * Handle Control Center settings loaded from extension
  */
-function handleDeviceSettingsLoaded(settings: DeviceUISettings) {
-  if (!deviceSettingsContent || !activeDeviceId) {
+function handleControlCenterLoaded(settings: DeviceUISettings) {
+  if (!controlCenterContent || !activeDeviceId) {
     return;
   }
 
   // Cache settings for this device
-  deviceSettingsCache.set(activeDeviceId, settings);
+  controlCenterCache.set(activeDeviceId, settings);
 
-  currentDeviceSettings = settings;
-  renderDeviceSettingsForm(settings, false); // false = enabled
+  currentControlCenterSettings = settings;
+  renderControlCenterForm(settings, false); // false = enabled
 }
 
 /**
@@ -1817,7 +1817,7 @@ function handleDeviceSettingApplied(setting: string, success: boolean, error?: s
   pendingSettingChanges.delete(setting);
 
   // Remove loading state from the control
-  const control = deviceSettingsContent?.querySelector(`[data-setting="${setting}"]`);
+  const control = controlCenterContent?.querySelector(`[data-setting="${setting}"]`);
   if (control) {
     control.classList.remove('loading');
   }
@@ -1863,7 +1863,7 @@ function createSettingsRow(
  */
 function getCollapsedSections(): Set<string> {
   try {
-    const stored = localStorage.getItem('deviceSettingsCollapsed');
+    const stored = localStorage.getItem('controlCenterCollapsed');
     if (stored) {
       return new Set(JSON.parse(stored));
     }
@@ -1878,7 +1878,7 @@ function getCollapsedSections(): Set<string> {
  */
 function saveCollapsedSections(collapsed: Set<string>): void {
   try {
-    localStorage.setItem('deviceSettingsCollapsed', JSON.stringify([...collapsed]));
+    localStorage.setItem('controlCenterCollapsed', JSON.stringify([...collapsed]));
   } catch {
     // Ignore storage errors
   }
@@ -1957,7 +1957,7 @@ function createSettingsGroup(groupId: string, headerText: string, headerIcon: st
 }
 
 /**
- * Create an action button for settings popup
+ * Create an action button for Control Center
  */
 function createActionButton(
   action: string,
@@ -2099,15 +2099,15 @@ function getFontScaleLabel(fontScale: number): string {
 }
 
 /**
- * Render device settings form using safe DOM methods
+ * Render Control Center form using safe DOM methods
  */
-function renderDeviceSettingsForm(settings: DeviceUISettings, disabled: boolean) {
-  if (!deviceSettingsContent) {
+function renderControlCenterForm(settings: DeviceUISettings, disabled: boolean) {
+  if (!controlCenterContent) {
     return;
   }
 
   // Clear content
-  deviceSettingsContent.textContent = '';
+  controlCenterContent.textContent = '';
 
   // Calculate display density percentage relative to default
   const densityPercent =
@@ -2208,7 +2208,7 @@ function renderDeviceSettingsForm(settings: DeviceUISettings, disabled: boolean)
     )
   );
 
-  deviceSettingsContent.appendChild(displayGroup);
+  controlCenterContent.appendChild(displayGroup);
 
   // === APPEARANCE GROUP ===
   const appearanceGroup = createSettingsGroup(
@@ -2296,7 +2296,7 @@ function renderDeviceSettingsForm(settings: DeviceUISettings, disabled: boolean)
     createSettingsRow(window.l10n.displaySize, displaySizeControl, icons.displaySize, 'icon-size')
   );
 
-  deviceSettingsContent.appendChild(appearanceGroup);
+  controlCenterContent.appendChild(appearanceGroup);
 
   // === AUDIO & VOLUME GROUP ===
   const audioGroup = createSettingsGroup('audio', window.l10n.audioVolume, groupIcons.audioVolume);
@@ -2318,7 +2318,7 @@ function renderDeviceSettingsForm(settings: DeviceUISettings, disabled: boolean)
   );
   audioGroup.appendChild(volumeButtonsRow);
 
-  deviceSettingsContent.appendChild(audioGroup);
+  controlCenterContent.appendChild(audioGroup);
 
   // === SYSTEM SHORTCUTS GROUP ===
   const systemGroup = createSettingsGroup(
@@ -2343,7 +2343,7 @@ function renderDeviceSettingsForm(settings: DeviceUISettings, disabled: boolean)
   );
   systemGroup.appendChild(systemButtonsRow);
 
-  deviceSettingsContent.appendChild(systemGroup);
+  controlCenterContent.appendChild(systemGroup);
 
   // === ACCESSIBILITY GROUP ===
   const accessibilityGroup = createSettingsGroup(
@@ -2373,7 +2373,7 @@ function renderDeviceSettingsForm(settings: DeviceUISettings, disabled: boolean)
     )
   );
 
-  deviceSettingsContent.appendChild(accessibilityGroup);
+  controlCenterContent.appendChild(accessibilityGroup);
 
   // === DEVELOPER GROUP ===
   const developerGroup = createSettingsGroup(
@@ -2397,7 +2397,7 @@ function renderDeviceSettingsForm(settings: DeviceUISettings, disabled: boolean)
     )
   );
 
-  deviceSettingsContent.appendChild(developerGroup);
+  controlCenterContent.appendChild(developerGroup);
 
   // Attach event handlers (only if not disabled)
   if (!disabled) {
@@ -2409,12 +2409,12 @@ function renderDeviceSettingsForm(settings: DeviceUISettings, disabled: boolean)
  * Attach event handlers to settings controls
  */
 function attachSettingsEventHandlers() {
-  if (!deviceSettingsContent) {
+  if (!controlCenterContent) {
     return;
   }
 
   // Cycle buttons (orientation, dark mode)
-  const cycleButtons = deviceSettingsContent.querySelectorAll('.cycle-button');
+  const cycleButtons = controlCenterContent.querySelectorAll('.cycle-button');
   cycleButtons.forEach((btn) => {
     btn.addEventListener('click', () => {
       if (btn.classList.contains('disabled')) {
@@ -2462,12 +2462,12 @@ function attachSettingsEventHandlers() {
       }
 
       // Send to extension
-      applyDeviceSetting(setting, nextOption.value, btn as HTMLElement);
+      applyControlCenterSetting(setting, nextOption.value, btn as HTMLElement);
     });
   });
 
   // Action buttons (volume, notification panel, settings panel)
-  const actionButtons = deviceSettingsContent.querySelectorAll('.settings-action-btn');
+  const actionButtons = controlCenterContent.querySelectorAll('.settings-action-btn');
   actionButtons.forEach((btn) => {
     const action = (btn as HTMLElement).dataset.action;
     if (!action) {
@@ -2547,7 +2547,7 @@ function attachSettingsEventHandlers() {
   });
 
   // Toggle switches - make entire row clickable
-  const clickableRows = deviceSettingsContent.querySelectorAll('.settings-row.clickable');
+  const clickableRows = controlCenterContent.querySelectorAll('.settings-row.clickable');
   clickableRows.forEach((row) => {
     const toggle = row.querySelector('.toggle-switch');
     if (!toggle) {
@@ -2578,14 +2578,14 @@ function attachSettingsEventHandlers() {
       }
 
       // Send to extension
-      applyDeviceSetting(setting, newValue, toggle as HTMLElement);
+      applyControlCenterSetting(setting, newValue, toggle as HTMLElement);
     };
 
     row.addEventListener('click', handleToggle);
   });
 
   // Sliders
-  const sliderControls = deviceSettingsContent.querySelectorAll('.slider-control');
+  const sliderControls = controlCenterContent.querySelectorAll('.slider-control');
   sliderControls.forEach((control) => {
     const setting = (control as HTMLElement).dataset.setting;
     const slider = control.querySelector('.settings-slider') as HTMLInputElement;
@@ -2627,12 +2627,14 @@ function attachSettingsEventHandlers() {
         } else if (setting === 'displayDensity') {
           // Convert percentage back to actual density
           const percent = parseFloat(slider.value);
-          value = Math.round((percent / 100) * (currentDeviceSettings?.defaultDensity || 420));
+          value = Math.round(
+            (percent / 100) * (currentControlCenterSettings?.defaultDensity || 420)
+          );
         } else {
           value = parseFloat(slider.value);
         }
 
-        applyDeviceSetting(setting, value, control as HTMLElement);
+        applyControlCenterSetting(setting, value, control as HTMLElement);
       }, 100);
     });
   });
@@ -2641,20 +2643,20 @@ function attachSettingsEventHandlers() {
 /**
  * Apply a device setting
  */
-function applyDeviceSetting(setting: string, value: unknown, control: HTMLElement) {
+function applyControlCenterSetting(setting: string, value: unknown, control: HTMLElement) {
   // Mark as pending and show loading state
   pendingSettingChanges.add(setting);
   control.classList.add('loading');
 
   // Update current settings and cache optimistically
-  if (currentDeviceSettings && activeDeviceId) {
-    (currentDeviceSettings as unknown as Record<string, unknown>)[setting] = value;
-    deviceSettingsCache.set(activeDeviceId, { ...currentDeviceSettings });
+  if (currentControlCenterSettings && activeDeviceId) {
+    (currentControlCenterSettings as unknown as Record<string, unknown>)[setting] = value;
+    controlCenterCache.set(activeDeviceId, { ...currentControlCenterSettings });
   }
 
   // Send to extension
   vscode.postMessage({
-    type: 'applyDeviceSetting',
+    type: 'applyControlCenterSetting',
     setting,
     value,
   });
