@@ -751,13 +751,26 @@ export function getHtmlForWebview(webview: vscode.Webview, extensionUri: vscode.
       flex-direction: column;
       gap: 10px;
       max-height: 50%;
-      max-width: 380px;
-      width: 92%;
+      width: 75%;
       overflow: auto;
       cursor: default;
       scrollbar-width: none;
       -ms-overflow-style: none;
-      padding: 2px;
+      padding: 16px 2px;
+      mask-image: linear-gradient(
+        to bottom,
+        transparent 0%,
+        black 16px,
+        black calc(100% - 16px),
+        transparent 100%
+      );
+      -webkit-mask-image: linear-gradient(
+        to bottom,
+        transparent 0%,
+        black 16px,
+        black calc(100% - 16px),
+        transparent 100%
+      );
     }
 
     .device-settings-sections::-webkit-scrollbar {
@@ -990,8 +1003,9 @@ export function getHtmlForWebview(webview: vscode.Webview, extensionUri: vscode.
       font-size: 12px;
       cursor: pointer;
       transition: all 0.15s ease;
-      min-width: 100px;
+      width: 110px;
       min-height: 36px;
+      flex-shrink: 0;
     }
 
     .cycle-button:hover:not(.disabled) {
