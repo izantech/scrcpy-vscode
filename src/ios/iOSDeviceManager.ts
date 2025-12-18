@@ -31,6 +31,16 @@ interface PermissionErrorPayload {
  * Manages iOS device discovery using the ios-helper CLI
  */
 export class iOSDeviceManager {
+  // Track if we've already shown the permission error notification this session
+  private static permissionErrorShown = false;
+
+  /**
+   * Reset the permission error shown flag (call when user explicitly retries)
+   */
+  static resetPermissionErrorFlag(): void {
+    this.permissionErrorShown = false;
+  }
+
   /**
    * Get list of connected iOS devices
    */
@@ -124,8 +134,9 @@ export class iOSDeviceManager {
             offset += 5 + length; // Move to next message
           }
 
-          // Show permission error notification if present and no devices found
-          if (permissionError && devices.length === 0) {
+          // Show permission error notification ONCE if present and no devices found
+          if (permissionError && devices.length === 0 && !this.permissionErrorShown) {
+            this.permissionErrorShown = true;
             this.showPermissionErrorNotification(permissionError);
           }
 
