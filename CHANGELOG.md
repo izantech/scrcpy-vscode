@@ -9,15 +9,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **Redesigned Device Settings popup** - Complete visual overhaul with grouped sections (Appearance, Accessibility, Developer)
+- **Redesigned Device Settings popup** - Complete visual overhaul with grouped sections (Display, Appearance, Audio & Volume, System Shortcuts, Accessibility, Developer)
 - **New setting icons** - Each setting now has a distinctive colorful gradient icon (moon for dark mode, palette for appearance group, accessibility symbols, etc.)
-- **Improved controls** - Enhanced toggle switches, segmented controls, and sliders with better visibility and smoother animations
+- **Cycle buttons** - Replaced segmented controls with cycle buttons for Orientation, Dark Mode, and Navigation Mode that cycle through options on click
+- **Improved controls** - Enhanced toggle switches and sliders with better visibility and smoother animations
 - **Clickable toggle rows** - Entire row is now clickable to toggle switches, not just the switch itself
 - **Slide-in animation** - Settings popup now animates in with a subtle bounce effect
+- **Scrollable settings** - Settings popup now has max height (50vh) with vertical scrolling for better usability
+- **Toolbar reorganization** - Power button moved to left group, Device Settings button moved to right group
 
 ### Added
 
-- Localization strings for settings group headers (Appearance, Accessibility, Developer)
+- **Display group** - New settings group with screen orientation control (Auto/Portrait/Landscape)
+- **Audio & Volume group** - Consolidated audio forwarding toggle with volume up/down buttons
+- **System Shortcuts group** - Quick access to Notification Panel and Settings Panel
+- Localization strings for new settings groups and controls
+
+### Removed
+
+- **Contextual dropdown menu** - Replaced by unified Device Settings popup with all controls
+- **Standalone rotation button** - Orientation now controlled via Display group in settings popup
 
 ## [0.1.3] - 2025-12-16
 

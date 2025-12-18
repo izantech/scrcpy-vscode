@@ -10,19 +10,12 @@ export function getHtmlForWebview(webview: vscode.Webview, extensionUri: vscode.
   // Localized strings
   const connectingToDevice = vscode.l10n.t('Connecting to device...');
   const addDevice = vscode.l10n.t('Add Device');
-  const disableAudio = vscode.l10n.t('Disable audio forwarding');
-  const volumeDown = vscode.l10n.t('Volume Down');
-  const volumeUp = vscode.l10n.t('Volume Up');
   const back = vscode.l10n.t('Back');
   const home = vscode.l10n.t('Home');
   const recentApps = vscode.l10n.t('Recent Apps');
   const takeScreenshot = vscode.l10n.t('Take screenshot');
-  const changeToLandscape = vscode.l10n.t('Change to landscape');
   const power = vscode.l10n.t('Power');
   const startRecording = vscode.l10n.t('Start recording');
-  const openNotificationPanel = vscode.l10n.t('Open notification panel');
-  const openSettingsPanel = vscode.l10n.t('Open settings panel');
-  const moreOptions = vscode.l10n.t('More options');
   const deviceSettings = vscode.l10n.t('Device Settings');
 
   // Bundle of strings for dynamic updates in main.ts
@@ -70,6 +63,20 @@ export function getHtmlForWebview(webview: vscode.Webview, extensionUri: vscode.
     default: vscode.l10n.t('Default'),
     large: vscode.l10n.t('Large'),
     largest: vscode.l10n.t('Largest'),
+    display: vscode.l10n.t('Display'),
+    orientation: vscode.l10n.t('Orientation'),
+    portrait: vscode.l10n.t('Portrait'),
+    landscape: vscode.l10n.t('Landscape'),
+    autoRotate: vscode.l10n.t('Auto'),
+    audioVolume: vscode.l10n.t('Audio & Volume'),
+    audioForwarding: vscode.l10n.t('Audio Forwarding'),
+    on: vscode.l10n.t('On'),
+    off: vscode.l10n.t('Off'),
+    volumeDown: vscode.l10n.t('Volume Down'),
+    volumeUp: vscode.l10n.t('Volume Up'),
+    systemShortcuts: vscode.l10n.t('System Shortcuts'),
+    notificationPanel: vscode.l10n.t('Notification Panel'),
+    settingsPanel: vscode.l10n.t('Settings Panel'),
   };
 
   return `<!DOCTYPE html>
@@ -215,88 +222,6 @@ export function getHtmlForWebview(webview: vscode.Webview, extensionUri: vscode.
     .tab-icon {
       flex-shrink: 0;
       opacity: 0.7;
-    }
-
-    /* Dropdown menu */
-    .dropdown {
-      position: relative;
-      display: inline-block;
-    }
-
-    .dropdown-btn {
-      min-width: 28px;
-      height: 26px;
-      padding: 4px 5px;
-      background: var(--vscode-button-secondaryBackground, #3a3d41);
-      color: var(--vscode-button-secondaryForeground, #ccc);
-      border: 1px solid var(--vscode-input-border, #3a3d41);
-      border-radius: 4px;
-      cursor: pointer;
-      font-size: 10px;
-      font-family: var(--vscode-font-family);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: background 0.1s;
-    }
-
-    .dropdown-btn:hover {
-      background: var(--vscode-button-secondaryHoverBackground, #45494e);
-    }
-
-    .dropdown-content {
-      display: none;
-      position: absolute;
-      bottom: 100%;
-      left: 0;
-      background: var(--vscode-menu-background, #252526);
-      border: 1px solid var(--vscode-menu-border, #454545);
-      border-radius: 4px;
-      min-width: 140px;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-      z-index: 100;
-      padding: 4px 0;
-      margin-bottom: 4px;
-    }
-
-    .dropdown-content.show {
-      display: block;
-    }
-
-    .dropdown-content.align-right {
-      left: auto;
-      right: 0;
-    }
-
-    .dropdown-item {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 6px 12px;
-      color: var(--vscode-menu-foreground, #ccc);
-      cursor: pointer;
-      font-size: 12px;
-      white-space: nowrap;
-      background: transparent;
-      border: none;
-      width: 100%;
-      text-align: left;
-    }
-
-    .dropdown-item:hover {
-      background: var(--vscode-menu-selectionBackground, #094771);
-      color: var(--vscode-menu-selectionForeground, #fff);
-    }
-
-    .dropdown-item svg {
-      flex-shrink: 0;
-      opacity: 0.8;
-    }
-
-    .dropdown-separator {
-      height: 1px;
-      background: var(--vscode-menu-separatorBackground, #454545);
-      margin: 4px 0;
     }
 
     .tab-close {
@@ -842,8 +767,8 @@ export function getHtmlForWebview(webview: vscode.Webview, extensionUri: vscode.
         0 8px 20px -8px rgba(0, 0, 0, 0.4);
       position: relative;
       width: 92%;
-      max-width: 360px;
-      max-height: 85vh;
+      max-width: 420px;
+      max-height: 50vh;
       overflow: hidden;
       animation: panelSlideIn 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
     }
@@ -904,6 +829,24 @@ export function getHtmlForWebview(webview: vscode.Webview, extensionUri: vscode.
       overflow-y: auto;
       overflow-x: hidden;
       flex: 1;
+      min-height: 0;
+    }
+
+    .device-settings-content::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    .device-settings-content::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    .device-settings-content::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 4px;
+    }
+
+    .device-settings-content::-webkit-scrollbar-thumb:hover {
+      background: rgba(255, 255, 255, 0.25);
     }
 
     /* Settings Groups */
@@ -968,8 +911,12 @@ export function getHtmlForWebview(webview: vscode.Webview, extensionUri: vscode.
       display: flex;
       align-items: center;
       gap: 12px;
-      flex: 1;
       min-width: 0;
+    }
+
+    .settings-row-label {
+      min-width: 60px;
+      line-height: 1.3;
     }
 
     .settings-row-icon {
@@ -1090,46 +1037,52 @@ export function getHtmlForWebview(webview: vscode.Webview, extensionUri: vscode.
       width: 24px;
     }
 
-    /* Segmented control */
-    .segmented-control {
+    /* Cycle button */
+    .cycle-button {
       display: flex;
-      background: var(--vscode-input-background, rgba(255, 255, 255, 0.12));
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 8px 14px;
+      background: var(--vscode-input-background, rgba(255, 255, 255, 0.08));
       border: 1px solid var(--vscode-widget-border, rgba(255, 255, 255, 0.1));
       border-radius: 8px;
-      overflow: hidden;
-      padding: 3px;
-      gap: 2px;
-    }
-
-    .segmented-control.loading,
-    .segmented-control.disabled {
-      opacity: 0.4;
-      pointer-events: none;
-    }
-
-    .segment-btn {
-      padding: 6px 12px;
+      color: var(--vscode-foreground, #ccc);
       font-family: var(--vscode-font-family);
-      font-size: 11px;
-      font-weight: 500;
-      background: transparent;
-      color: var(--vscode-descriptionForeground, #999);
-      border: none;
-      border-radius: 6px;
+      font-size: 12px;
       cursor: pointer;
       transition: all 0.15s ease;
-      white-space: nowrap;
+      min-width: 100px;
+      min-height: 36px;
     }
 
-    .segment-btn:hover:not(.active) {
-      background: rgba(255, 255, 255, 0.06);
-      color: var(--vscode-foreground, #ccc);
+    .cycle-button:hover:not(.disabled) {
+      background: rgba(255, 255, 255, 0.12);
+      border-color: var(--vscode-focusBorder, rgba(255, 255, 255, 0.2));
     }
 
-    .segment-btn.active {
-      background: var(--vscode-tab-activeBorderTop, #0078d4);
-      color: var(--vscode-button-foreground, white);
-      box-shadow: 0 2px 8px rgba(0, 120, 212, 0.3);
+    .cycle-button:active:not(.disabled) {
+      transform: scale(0.98);
+    }
+
+    .cycle-button.disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    .cycle-button-icon {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .cycle-button-icon svg {
+      width: 16px;
+      height: 16px;
+    }
+
+    .cycle-button-label {
+      text-align: center;
     }
 
     /* Slider with value */
@@ -1216,6 +1169,75 @@ export function getHtmlForWebview(webview: vscode.Webview, extensionUri: vscode.
       padding: 4px 8px;
       border-radius: 4px;
     }
+
+    /* Action button for settings popup */
+    .settings-action-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 8px 14px;
+      background: var(--vscode-button-secondaryBackground, rgba(255, 255, 255, 0.08));
+      color: var(--vscode-button-secondaryForeground, #ccc);
+      border: 1px solid var(--vscode-widget-border, rgba(255, 255, 255, 0.1));
+      border-radius: 8px;
+      cursor: pointer;
+      font-family: var(--vscode-font-family);
+      font-size: 12px;
+      font-weight: 500;
+      transition: all 0.15s ease;
+      flex: 1;
+      min-height: 36px;
+    }
+
+    .settings-action-btn:hover {
+      background: var(--vscode-button-secondaryHoverBackground, rgba(255, 255, 255, 0.12));
+      transform: translateY(-1px);
+    }
+
+    .settings-action-btn:active {
+      transform: translateY(0) scale(0.98);
+    }
+
+    .settings-action-btn svg {
+      width: 16px;
+      height: 16px;
+      flex-shrink: 0;
+    }
+
+    .settings-action-btn.loading {
+      opacity: 0.6;
+      pointer-events: none;
+    }
+
+    /* Button row for action buttons */
+    .settings-button-row {
+      display: flex;
+      gap: 8px;
+      padding: 10px 14px;
+    }
+
+    .settings-button-row:not(:last-child) {
+      border-bottom: 1px solid var(--vscode-widget-border, rgba(255, 255, 255, 0.04));
+    }
+
+    /* Icon styles for new groups */
+    .settings-row-icon.icon-orientation {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+
+    .settings-row-icon.icon-audio {
+      background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    }
+
+    .settings-row-icon.icon-volume {
+      background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+    }
+
+    .settings-row-icon.icon-system {
+      background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
+      color: #333;
+    }
   </style>
 </head>
 <body>
@@ -1268,35 +1290,7 @@ export function getHtmlForWebview(webview: vscode.Webview, extensionUri: vscode.
     <!-- Control toolbar - fixed at bottom -->
     <div id="control-toolbar" class="control-toolbar hidden">
       <div class="toolbar-group toolbar-left">
-        <!-- Left dropdown: Audio, Volume, Notifications, Settings -->
-        <div class="dropdown" id="left-dropdown">
-          <button class="dropdown-btn" id="left-dropdown-btn" title="${moreOptions}">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>
-          </button>
-          <div class="dropdown-content" id="left-dropdown-content">
-            <button class="dropdown-item" id="mute-btn">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M14,3.23V5.29C16.89,6.15 19,8.83 19,12C19,15.17 16.89,17.84 14,18.7V20.77C18,19.86 21,16.28 21,12C21,7.72 18,4.14 14,3.23M16.5,12C16.5,10.23 15.5,8.71 14,7.97V16C15.5,15.29 16.5,13.76 16.5,12M3,9V15H7L12,20V4L7,9H3Z"/></svg>
-              <span id="mute-btn-text">${disableAudio}</span>
-            </button>
-            <button class="dropdown-item" data-keycode="25">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M3,9H7L12,4V20L7,15H3V9M16,15H14V9H16V15Z"/></svg>
-              <span>${volumeDown}</span>
-            </button>
-            <button class="dropdown-item" data-keycode="24">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M3,9H7L12,4V20L7,15H3V9M14,11H16V9H18V11H20V13H18V15H16V13H14V11Z"/></svg>
-              <span>${volumeUp}</span>
-            </button>
-            <div class="dropdown-separator"></div>
-            <button class="dropdown-item" id="notification-panel-btn">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12,22 C13.1,22 14,21.1 14,20 L10,20 C10,21.1 10.9,22 12,22 M18,16 L18,11 C18,7.93 16.37,5.36 13.5,4.68 L13.5,4 C13.5,3.17 12.83,2.5 12,2.5 C11.17,2.5 10.5,3.17 10.5,4 L10.5,4.68 C7.64,5.36 6,7.92 6,11 L6,16 L4,18 L4,19 L20,19 L20,18 L18,16 Z"/></svg>
-              <span>${openNotificationPanel}</span>
-            </button>
-            <button class="dropdown-item" id="settings-panel-btn">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12,15.5A3.5,3.5 0 0,1 8.5,12A3.5,3.5 0 0,1 12,8.5A3.5,3.5 0 0,1 15.5,12A3.5,3.5 0 0,1 12,15.5M19.43,12.97C19.47,12.65 19.5,12.33 19.5,12C19.5,11.67 19.47,11.34 19.43,11L21.54,9.37C21.73,9.22 21.78,8.95 21.66,8.73L19.66,5.27C19.54,5.05 19.27,4.96 19.05,5.05L16.56,6.05C16.04,5.66 15.5,5.32 14.87,5.07L14.5,2.42C14.46,2.18 14.25,2 14,2H10C9.75,2 9.54,2.18 9.5,2.42L9.13,5.07C8.5,5.32 7.96,5.66 7.44,6.05L4.95,5.05C4.73,4.96 4.46,5.05 4.34,5.27L2.34,8.73C2.21,8.95 2.27,9.22 2.46,9.37L4.57,11C4.53,11.34 4.5,11.67 4.5,12C4.5,12.33 4.53,12.65 4.57,12.97L2.46,14.63C2.27,14.78 2.21,15.05 2.34,15.27L4.34,18.73C4.46,18.95 4.73,19.03 4.95,18.95L7.44,17.94C7.96,18.34 8.5,18.68 9.13,18.93L9.5,21.58C9.54,21.82 9.75,22 10,22H14C14.25,22 14.46,21.82 14.5,21.58L14.87,18.93C15.5,18.67 16.04,18.34 16.56,17.94L19.05,18.95C19.27,19.03 19.54,18.95 19.66,18.73L21.66,15.27C21.78,15.05 21.73,14.78 21.54,14.63L19.43,12.97Z"/></svg>
-              <span>${openSettingsPanel}</span>
-            </button>
-          </div>
-        </div>
+        <button class="control-btn" data-keycode="26" title="${power}"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M16.56,5.44L15.11,6.89C16.84,7.94 18,9.83 18,12A6,6 0 0,1 12,18A6,6 0 0,1 6,12C6,9.83 7.16,7.94 8.88,6.88L7.44,5.44C5.36,6.88 4,9.28 4,12A8,8 0 0,0 12,20A8,8 0 0,0 20,12C20,9.28 18.64,6.88 16.56,5.44M13,3H11V13H13"/></svg></button>
         <button class="control-btn" id="record-btn" title="${startRecording}"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M18,16L14,12.8V16H6V8H14V11.2L18,8M20,4H4A2,2 0 0,0 2,6V18A2,2 0 0,0 4,20H20A2,2 0 0,0 22,18V6C22,4.89 21.1,4 20,4Z"/></svg></button>
         <button class="control-btn" id="screenshot-btn" title="${takeScreenshot}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></button>
       </div>
@@ -1306,9 +1300,7 @@ export function getHtmlForWebview(webview: vscode.Webview, extensionUri: vscode.
         <button class="control-btn" data-keycode="187" title="${recentApps}"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="5" width="14" height="14"/></svg></button>
       </div>
       <div class="toolbar-group toolbar-right">
-        <button class="control-btn" id="rotate-btn" title="${changeToLandscape}"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M9,1H3A2,2 0 0,0 1,3V16A2,2 0 0,0 3,18H9A2,2 0 0,0 11,16V3A2,2 0 0,0 9,1M9,15H3V3H9V15M21,13H13V15H21V21H9V20H6V21A2,2 0 0,0 8,23H21A2,2 0 0,0 23,21V15A2,2 0 0,0 21,13M23,10L19,8L20.91,7.09C19.74,4.31 17,2.5 14,2.5V1A9,9 0 0,1 23,10Z"/></svg></button>
         <button class="control-btn" id="device-settings-btn" title="${deviceSettings}"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M9.82,12.5C9.84,12.33 9.86,12.17 9.86,12C9.86,11.83 9.84,11.67 9.82,11.5L10.9,10.69C11,10.62 11,10.5 10.96,10.37L9.93,8.64C9.87,8.53 9.73,8.5 9.62,8.53L8.34,9.03C8.07,8.83 7.78,8.67 7.47,8.54L7.27,7.21C7.27,7.09 7.16,7 7.03,7H5C4.85,7 4.74,7.09 4.72,7.21L4.5,8.53C4.21,8.65 3.92,8.83 3.65,9L2.37,8.5C2.25,8.47 2.12,8.5 2.06,8.63L1.03,10.36C0.97,10.5 1,10.61 1.1,10.69L2.18,11.5C2.16,11.67 2.15,11.84 2.15,12C2.15,12.17 2.17,12.33 2.19,12.5L1.1,13.32C1,13.39 0.96,13.5 1.03,13.64L2.06,15.37C2.12,15.5 2.25,15.5 2.37,15.5L3.65,15C3.92,15.18 4.21,15.34 4.5,15.47L4.72,16.79C4.74,16.91 4.85,17 5,17H7.03C7.16,17 7.27,16.91 7.29,16.79L7.5,15.47C7.8,15.35 8.07,15.18 8.35,15L9.62,15.5C9.73,15.5 9.87,15.5 9.93,15.37L10.96,13.64C11,13.5 11,13.39 10.9,13.32L9.82,12.5M6,13.75A1.75,1.75 0 0,1 4.25,12A1.75,1.75 0 0,1 6,10.25A1.75,1.75 0 0,1 7.75,12A1.75,1.75 0 0,1 6,13.75M17,1H7A2,2 0 0,0 5,3V6H7V4H17V20H7V18H5V21A2,2 0 0,0 7,23H17A2,2 0 0,0 19,21V3A2,2 0 0,0 17,1Z"/></svg></button>
-        <button class="control-btn" data-keycode="26" title="${power}"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M16.56,5.44L15.11,6.89C16.84,7.94 18,9.83 18,12A6,6 0 0,1 12,18A6,6 0 0,1 6,12C6,9.83 7.16,7.94 8.88,6.88L7.44,5.44C5.36,6.88 4,9.28 4,12A8,8 0 0,0 12,20A8,8 0 0,0 20,12C20,9.28 18.64,6.88 16.56,5.44M13,3H11V13H13"/></svg></button>
       </div>
     </div>
   </div>

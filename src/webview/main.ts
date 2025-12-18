@@ -61,6 +61,20 @@ declare global {
       default: string;
       large: string;
       largest: string;
+      display: string;
+      orientation: string;
+      portrait: string;
+      landscape: string;
+      autoRotate: string;
+      audioVolume: string;
+      audioForwarding: string;
+      on: string;
+      off: string;
+      volumeDown: string;
+      volumeUp: string;
+      systemShortcuts: string;
+      notificationPanel: string;
+      settingsPanel: string;
     };
   }
 }
@@ -78,6 +92,8 @@ interface DeviceUISettings {
   displayDensity: number;
   defaultDensity: number;
   showLayoutBounds: boolean;
+  orientation: 'portrait' | 'landscape' | 'auto';
+  audioEnabled: boolean;
 }
 
 // Tool status tracking (derived from state snapshot)
@@ -189,15 +205,10 @@ let activeDeviceId: string | null = null;
 let showStats = false;
 let showExtendedStats = false;
 let isMuted = false;
-let muteBtn: HTMLElement | null = null;
-let muteBtnText: HTMLElement | null = null;
-let leftDropdownContent: HTMLElement | null = null;
-let rotateBtn: HTMLElement | null = null;
 let screenshotBtn: HTMLElement | null = null;
 let recordBtn: HTMLElement | null = null;
 let recordingIndicator: HTMLElement | null = null;
 let recordingTime: HTMLElement | null = null;
-let isPortrait = true;
 let currentScreenshotData: string | null = null;
 
 // Device settings popup
@@ -323,72 +334,6 @@ function initialize() {
     });
   }
 
-  // Left dropdown setup
-  leftDropdownContent = document.getElementById('left-dropdown-content');
-  const leftDropdownBtn = document.getElementById('left-dropdown-btn');
-
-  if (leftDropdownBtn && leftDropdownContent) {
-    leftDropdownBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      leftDropdownContent!.classList.toggle('show');
-    });
-
-    // Close dropdown when clicking outside
-    document.addEventListener('click', () => {
-      if (leftDropdownContent) {
-        leftDropdownContent.classList.remove('show');
-      }
-    });
-
-    // Prevent dropdown closing when clicking inside
-    leftDropdownContent.addEventListener('click', (e) => {
-      e.stopPropagation();
-    });
-  }
-
-  // Mute button (now inside dropdown)
-  muteBtn = document.getElementById('mute-btn');
-  muteBtnText = document.getElementById('mute-btn-text');
-  if (muteBtn) {
-    muteBtn.addEventListener('click', () => {
-      toggleMute();
-      // Close dropdown after action
-      if (leftDropdownContent) {
-        leftDropdownContent.classList.remove('show');
-      }
-    });
-  }
-
-  // Volume buttons inside dropdown
-  if (leftDropdownContent) {
-    const volumeButtons = leftDropdownContent.querySelectorAll('.dropdown-item[data-keycode]');
-    volumeButtons.forEach((button) => {
-      const keycode = parseInt((button as HTMLElement).dataset.keycode || '0', 10);
-      if (!keycode) {
-        return;
-      }
-
-      button.addEventListener('click', () => {
-        vscode.postMessage({ type: 'keyDown', keycode });
-        setTimeout(() => {
-          vscode.postMessage({ type: 'keyUp', keycode });
-        }, 50);
-        // Close dropdown after action
-        if (leftDropdownContent) {
-          leftDropdownContent.classList.remove('show');
-        }
-      });
-    });
-  }
-
-  // Rotate button
-  rotateBtn = document.getElementById('rotate-btn');
-  if (rotateBtn) {
-    rotateBtn.addEventListener('click', () => {
-      vscode.postMessage({ type: 'rotateDevice' });
-    });
-  }
-
   // Screenshot button
   screenshotBtn = document.getElementById('screenshot-btn');
   if (screenshotBtn) {
@@ -408,30 +353,6 @@ function initialize() {
   // Recording indicator elements
   recordingIndicator = document.getElementById('recording-indicator');
   recordingTime = document.getElementById('recording-time');
-
-  // Notification panel button (now inside dropdown)
-  const notificationPanelBtn = document.getElementById('notification-panel-btn');
-  if (notificationPanelBtn) {
-    notificationPanelBtn.addEventListener('click', () => {
-      vscode.postMessage({ type: 'expandNotificationPanel' });
-      // Close dropdown after action
-      if (leftDropdownContent) {
-        leftDropdownContent.classList.remove('show');
-      }
-    });
-  }
-
-  // Settings panel button (now inside dropdown)
-  const settingsPanelBtn = document.getElementById('settings-panel-btn');
-  if (settingsPanelBtn) {
-    settingsPanelBtn.addEventListener('click', () => {
-      vscode.postMessage({ type: 'expandSettingsPanel' });
-      // Close dropdown after action
-      if (leftDropdownContent) {
-        leftDropdownContent.classList.remove('show');
-      }
-    });
-  }
 
   // Screenshot preview buttons
   if (screenshotPreviewTitle) {
@@ -543,27 +464,6 @@ function formatBitrate(bitsPerSecond: number): string {
 
   const mbps = kbps / 1000;
   return `${mbps.toFixed(1)} Mbps`;
-}
-
-/**
- * Update rotate button icon based on current orientation
- */
-function updateRotateButton(width: number, height: number): void {
-  if (!rotateBtn) {
-    return;
-  }
-
-  isPortrait = height > width;
-
-  if (isPortrait) {
-    // Show landscape icon (rotate to landscape)
-    rotateBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M9,1H3A2,2 0 0,0 1,3V16A2,2 0 0,0 3,18H9A2,2 0 0,0 11,16V3A2,2 0 0,0 9,1M9,15H3V3H9V15M21,13H13V15H21V21H9V20H6V21A2,2 0 0,0 8,23H21A2,2 0 0,0 23,21V15A2,2 0 0,0 21,13M23,10L19,8L20.91,7.09C19.74,4.31 17,2.5 14,2.5V1A9,9 0 0,1 23,10Z"/></svg>`;
-    rotateBtn.title = window.l10n.changeToLandscape;
-  } else {
-    // Show portrait icon (rotate to portrait)
-    rotateBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M9,1H3A2,2 0 0,0 1,3V16A2,2 0 0,0 3,18H4V15H3V3H9V11H11V3A2,2 0 0,0 9,1M23,21V15A2,2 0 0,0 21,13H8A2,2 0 0,0 6,15V21A2,2 0 0,0 8,23H21A2,2 0 0,0 23,21M9,21V15H21V21H9M23,10H21.5C21.5,7 19.69,4.27 16.92,3.09L16,5L14,1A9,9 0 0,1 23,10Z"/></svg>`;
-    rotateBtn.title = window.l10n.changeToPortrait;
-  }
 }
 
 /**
@@ -736,20 +636,6 @@ function updateAudioState(audioEnabled: boolean): void {
   sessions.forEach((session) => {
     session.audioRenderer.setMuted(isMuted);
   });
-
-  // Update button text and icon (now in dropdown)
-  if (muteBtn && muteBtnText) {
-    // Update SVG icon
-    const iconPath = audioEnabled
-      ? 'M14,3.23V5.29C16.89,6.15 19,8.83 19,12C19,15.17 16.89,17.84 14,18.7V20.77C18,19.86 21,16.28 21,12C21,7.72 18,4.14 14,3.23M16.5,12C16.5,10.23 15.5,8.71 14,7.97V16C15.5,15.29 16.5,13.76 16.5,12M3,9V15H7L12,20V4L7,9H3Z'
-      : 'M12,4L9.91,6.09L12,8.18M4.27,3L3,4.27L7.73,9H3V15H7L12,20V13.27L16.25,17.53C15.58,18.04 14.83,18.46 14,18.7V20.77C15.38,20.45 16.63,19.82 17.68,18.96L19.73,21L21,19.73L12,10.73M19,12C19,12.94 18.8,13.82 18.46,14.64L19.97,16.15C20.62,14.91 21,13.5 21,12C21,7.72 18,4.14 14,3.23V5.29C16.89,6.15 19,8.83 19,12M16.5,12C16.5,10.23 15.5,8.71 14,7.97V10.18L16.45,12.63C16.5,12.43 16.5,12.21 16.5,12Z';
-    const svg = muteBtn.querySelector('svg');
-    if (svg) {
-      svg.innerHTML = `<path d="${iconPath}"/>`;
-    }
-    // Update text
-    muteBtnText.textContent = audioEnabled ? window.l10n.disableAudio : window.l10n.enableAudio;
-  }
 }
 
 /**
@@ -962,11 +848,6 @@ function handleVideoFrame(message: {
   // Configure renderer with dimensions (only sent with first frame)
   if (message.width && message.height) {
     session.videoRenderer.configure(message.width, message.height);
-
-    // Update rotate button if this is the active device
-    if (message.deviceId === activeDeviceId) {
-      updateRotateButton(message.width, message.height);
-    }
   }
 
   // Push frame data
@@ -1088,10 +969,6 @@ function createDeviceSession(
       }
     },
     (width, height) => {
-      // Update rotate button when dimensions change (from SPS parsing on rotation)
-      if (deviceId === activeDeviceId) {
-        updateRotateButton(width, height);
-      }
       // Notify extension of new dimensions for touch coordinate mapping
       vscode.postMessage({
         type: 'dimensionsChanged',
@@ -1863,6 +1740,8 @@ function openDeviceSettings() {
     displayDensity: 400,
     defaultDensity: 400,
     showLayoutBounds: false,
+    orientation: 'auto',
+    audioEnabled: !isMuted,
   };
 
   // If we have cached settings, show them enabled immediately
@@ -1976,34 +1855,36 @@ function createSettingsGroup(headerText: string, headerIcon: string): HTMLElemen
 }
 
 /**
- * Create a segmented control
+ * Create an action button for settings popup
  */
-function createSegmentedControl(
-  setting: string,
-  options: { value: string; label: string }[],
-  currentValue: string,
+function createActionButton(
+  action: string,
+  iconSvg: string,
+  label: string,
   disabled: boolean
-): HTMLElement {
-  const control = document.createElement('div');
-  control.className = 'segmented-control';
-  if (disabled) {
-    control.classList.add('disabled');
+): HTMLButtonElement {
+  const btn = document.createElement('button');
+  btn.className = 'settings-action-btn';
+  btn.dataset.action = action;
+  btn.disabled = disabled;
+
+  // Create icon container
+  const iconContainer = document.createElement('span');
+  iconContainer.className = 'action-btn-icon';
+  // The icons are hardcoded SVG strings from our codebase, not user input
+  const template = document.createElement('template');
+  template.innerHTML = iconSvg.trim();
+  if (template.content.firstChild) {
+    iconContainer.appendChild(template.content.firstChild);
   }
-  control.dataset.setting = setting;
+  btn.appendChild(iconContainer);
 
-  options.forEach((option) => {
-    const btn = document.createElement('button');
-    btn.className = 'segment-btn';
-    if (option.value === currentValue) {
-      btn.classList.add('active');
-    }
-    btn.dataset.value = option.value;
-    btn.textContent = option.label;
-    btn.disabled = disabled;
-    control.appendChild(btn);
-  });
+  // Create label
+  const labelSpan = document.createElement('span');
+  labelSpan.textContent = label;
+  btn.appendChild(labelSpan);
 
-  return control;
+  return btn;
 }
 
 /**
@@ -2020,6 +1901,49 @@ function createToggleSwitch(setting: string, isActive: boolean, disabled: boolea
   }
   toggle.dataset.setting = setting;
   return toggle;
+}
+
+/**
+ * Create a cycle button that cycles through options on click
+ */
+function createCycleButton(
+  setting: string,
+  options: { value: string; label: string; icon: string }[],
+  currentValue: string,
+  disabled: boolean
+): HTMLElement {
+  const btn = document.createElement('button');
+  btn.className = 'cycle-button';
+  if (disabled) {
+    btn.classList.add('disabled');
+    btn.disabled = true;
+  }
+  btn.dataset.setting = setting;
+  btn.dataset.options = JSON.stringify(options.map((o) => o.value));
+
+  const currentIndex = options.findIndex((o) => o.value === currentValue);
+  const current = options[currentIndex >= 0 ? currentIndex : 0];
+
+  btn.dataset.currentIndex = String(currentIndex >= 0 ? currentIndex : 0);
+
+  const iconSpan = document.createElement('span');
+  iconSpan.className = 'cycle-button-icon';
+  const template = document.createElement('template');
+  template.innerHTML = current.icon.trim();
+  if (template.content.firstChild) {
+    iconSpan.appendChild(template.content.firstChild);
+  }
+  btn.appendChild(iconSpan);
+
+  const labelSpan = document.createElement('span');
+  labelSpan.className = 'cycle-button-label';
+  labelSpan.textContent = current.label;
+  btn.appendChild(labelSpan);
+
+  // Store all options data for cycling
+  btn.dataset.optionsData = JSON.stringify(options);
+
+  return btn;
 }
 
 /**
@@ -2111,12 +2035,39 @@ function renderDeviceSettingsForm(settings: DeviceUISettings, disabled: boolean)
     // Layout bounds - grid layout
     layoutBounds:
       '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M3,3H9V9H3V3M3,15H9V21H3V15M15,3H21V9H15V3M15,15H21V21H15V15M5,5V7H7V5H5M5,17V19H7V17H5M17,5V7H19V5H17M17,17V19H19V17H17M11,5H13V9H11V5M11,11H13V13H11V11M11,15H13V19H11V15M5,11H9V13H5V11M15,11H19V13H15V11Z"/></svg>',
+    // Orientation - screen rotation
+    orientation:
+      '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7.34,6.41L0.86,12.9L7.35,19.38L13.84,12.9L7.34,6.41M3.69,12.9L7.35,9.24L11,12.9L7.34,16.56L3.69,12.9M19.36,6.64C17.61,4.88 15.3,4 13,4V0.76L8.76,5L13,9.24V6C14.79,6 16.58,6.68 17.95,8.05C20.68,10.78 20.68,15.22 17.95,17.95C16.58,19.32 14.79,20 13,20C12.03,20 11.06,19.79 10.16,19.39L8.67,20.88C10,21.62 11.5,22 13,22C15.3,22 17.61,21.12 19.36,19.36C22.88,15.85 22.88,10.15 19.36,6.64Z"/></svg>',
+    // Audio - speaker
+    audio:
+      '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M14,3.23V5.29C16.89,6.15 19,8.83 19,12C19,15.17 16.89,17.84 14,18.7V20.77C18,19.86 21,16.28 21,12C21,7.72 18,4.14 14,3.23M16.5,12C16.5,10.23 15.5,8.71 14,7.97V16C15.5,15.29 16.5,13.76 16.5,12M3,9V15H7L12,20V4L7,9H3Z"/></svg>',
+    // Volume down
+    volumeDown:
+      '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M3,9H7L12,4V20L7,15H3V9M16,15H14V9H16V15Z"/></svg>',
+    // Volume up
+    volumeUp:
+      '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M3,9H7L12,4V20L7,15H3V9M14,11H16V9H18V11H20V13H18V15H16V13H14V11Z"/></svg>',
+    // Notification bell
+    notification:
+      '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12,22C13.1,22 14,21.1 14,20H10C10,21.1 10.9,22 12,22M18,16V11C18,7.93 16.37,5.36 13.5,4.68V4C13.5,3.17 12.83,2.5 12,2.5C11.17,2.5 10.5,3.17 10.5,4V4.68C7.64,5.36 6,7.92 6,11V16L4,18V19H20V18L18,16Z"/></svg>',
+    // Settings gear
+    settingsGear:
+      '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12,15.5A3.5,3.5 0 0,1 8.5,12A3.5,3.5 0 0,1 12,8.5A3.5,3.5 0 0,1 15.5,12A3.5,3.5 0 0,1 12,15.5M19.43,12.97C19.47,12.65 19.5,12.33 19.5,12C19.5,11.67 19.47,11.34 19.43,11L21.54,9.37C21.73,9.22 21.78,8.95 21.66,8.73L19.66,5.27C19.54,5.05 19.27,4.96 19.05,5.05L16.56,6.05C16.04,5.66 15.5,5.32 14.87,5.07L14.5,2.42C14.46,2.18 14.25,2 14,2H10C9.75,2 9.54,2.18 9.5,2.42L9.13,5.07C8.5,5.32 7.96,5.66 7.44,6.05L4.95,5.05C4.73,4.96 4.46,5.05 4.34,5.27L2.34,8.73C2.21,8.95 2.27,9.22 2.46,9.37L4.57,11C4.53,11.34 4.5,11.67 4.5,12C4.5,12.33 4.53,12.65 4.57,12.97L2.46,14.63C2.27,14.78 2.21,15.05 2.34,15.27L4.34,18.73C4.46,18.95 4.73,19.03 4.95,18.95L7.44,17.94C7.96,18.34 8.5,18.68 9.13,18.93L9.5,21.58C9.54,21.82 9.75,22 10,22H14C14.25,22 14.46,21.82 14.5,21.58L14.87,18.93C15.5,18.67 16.04,18.34 16.56,17.94L19.05,18.95C19.27,19.03 19.54,18.95 19.66,18.73L21.66,15.27C21.78,15.05 21.73,14.78 21.54,14.63L19.43,12.97Z"/></svg>',
   };
 
   const groupIcons = {
+    // Display - screen
+    display:
+      '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M21,16H3V4H21M21,2H3C1.89,2 1,2.89 1,4V16A2,2 0 0,0 3,18H10V20H8V22H16V20H14V18H21A2,2 0 0,0 23,16V4C23,2.89 22.1,2 21,2Z"/></svg>',
     // Appearance - palette/theme
     appearance:
       '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.5,12A1.5,1.5 0 0,1 16,10.5A1.5,1.5 0 0,1 17.5,9A1.5,1.5 0 0,1 19,10.5A1.5,1.5 0 0,1 17.5,12M14.5,8A1.5,1.5 0 0,1 13,6.5A1.5,1.5 0 0,1 14.5,5A1.5,1.5 0 0,1 16,6.5A1.5,1.5 0 0,1 14.5,8M9.5,8A1.5,1.5 0 0,1 8,6.5A1.5,1.5 0 0,1 9.5,5A1.5,1.5 0 0,1 11,6.5A1.5,1.5 0 0,1 9.5,8M6.5,12A1.5,1.5 0 0,1 5,10.5A1.5,1.5 0 0,1 6.5,9A1.5,1.5 0 0,1 8,10.5A1.5,1.5 0 0,1 6.5,12M12,3A9,9 0 0,0 3,12A9,9 0 0,0 12,21A1.5,1.5 0 0,0 13.5,19.5C13.5,19.11 13.35,18.76 13.11,18.5C12.88,18.23 12.73,17.88 12.73,17.5A1.5,1.5 0 0,1 14.23,16H16A5,5 0 0,0 21,11C21,6.58 16.97,3 12,3Z"/></svg>',
+    // Audio - speaker
+    audioVolume:
+      '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M14,3.23V5.29C16.89,6.15 19,8.83 19,12C19,15.17 16.89,17.84 14,18.7V20.77C18,19.86 21,16.28 21,12C21,7.72 18,4.14 14,3.23M16.5,12C16.5,10.23 15.5,8.71 14,7.97V16C15.5,15.29 16.5,13.76 16.5,12M3,9V15H7L12,20V4L7,9H3Z"/></svg>',
+    // System shortcuts - settings/panels
+    systemShortcuts:
+      '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M3,4H21V8H3V4M3,10H21V14H3V10M3,16H21V20H3V16Z"/></svg>',
     // Accessibility - universal symbol
     accessibility:
       '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12,2A2,2 0 0,1 14,4A2,2 0 0,1 12,6A2,2 0 0,1 10,4A2,2 0 0,1 12,2M21,9H15V22H13V16H11V22H9V9H3V7H21V9Z"/></svg>',
@@ -2125,16 +2076,54 @@ function renderDeviceSettingsForm(settings: DeviceUISettings, disabled: boolean)
       '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8,3A2,2 0 0,0 6,5V9A2,2 0 0,1 4,11H3V13H4A2,2 0 0,1 6,15V19A2,2 0 0,0 8,21H10V19H8V14A2,2 0 0,0 6,12A2,2 0 0,0 8,10V5H10V3M16,3A2,2 0 0,1 18,5V9A2,2 0 0,0 20,11H21V13H20A2,2 0 0,0 18,15V19A2,2 0 0,1 16,21H14V19H16V14A2,2 0 0,1 18,12A2,2 0 0,1 16,10V5H14V3H16Z"/></svg>',
   };
 
+  // === DISPLAY GROUP ===
+  const displayGroup = createSettingsGroup(window.l10n.display, groupIcons.display);
+
+  // Screen Orientation
+  const orientationIcons = {
+    auto: '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12,5C16.97,5 21,7.69 21,11C21,12.68 19.96,14.2 18.29,15.29C19.36,14.42 20,13.32 20,12.13C20,9.29 16.42,7 12,7V10L8,6L12,2V5M12,19C7.03,19 3,16.31 3,13C3,11.32 4.04,9.8 5.71,8.71C4.64,9.58 4,10.68 4,11.88C4,14.71 7.58,17 12,17V14L16,18L12,22V19Z"/></svg>',
+    portrait:
+      '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M16,1H8A3,3 0 0,0 5,4V20A3,3 0 0,0 8,23H16A3,3 0 0,0 19,20V4A3,3 0 0,0 16,1M16,20H8V4H16V20Z"/></svg>',
+    landscape:
+      '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M1,8V16A3,3 0 0,0 4,19H20A3,3 0 0,0 23,16V8A3,3 0 0,0 20,5H4A3,3 0 0,0 1,8M4,8H20V16H4V8Z"/></svg>',
+  };
+  const orientationControl = createCycleButton(
+    'orientation',
+    [
+      { value: 'auto', label: window.l10n.autoRotate, icon: orientationIcons.auto },
+      { value: 'portrait', label: window.l10n.portrait, icon: orientationIcons.portrait },
+      { value: 'landscape', label: window.l10n.landscape, icon: orientationIcons.landscape },
+    ],
+    settings.orientation || 'auto',
+    disabled
+  );
+  displayGroup.appendChild(
+    createSettingsRow(
+      window.l10n.orientation,
+      orientationControl,
+      icons.orientation,
+      'icon-orientation'
+    )
+  );
+
+  deviceSettingsContent.appendChild(displayGroup);
+
   // === APPEARANCE GROUP ===
   const appearanceGroup = createSettingsGroup(window.l10n.appearance, groupIcons.appearance);
 
   // Dark Mode
-  const darkModeControl = createSegmentedControl(
+  const darkModeIcons = {
+    auto: '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12,5C16.97,5 21,7.69 21,11C21,12.68 19.96,14.2 18.29,15.29C19.36,14.42 20,13.32 20,12.13C20,9.29 16.42,7 12,7V10L8,6L12,2V5M12,19C7.03,19 3,16.31 3,13C3,11.32 4.04,9.8 5.71,8.71C4.64,9.58 4,10.68 4,11.88C4,14.71 7.58,17 12,17V14L16,18L12,22V19Z"/></svg>',
+    light:
+      '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12,7A5,5 0 0,1 17,12A5,5 0 0,1 12,17A5,5 0 0,1 7,12A5,5 0 0,1 12,7M12,9A3,3 0 0,0 9,12A3,3 0 0,0 12,15A3,3 0 0,0 15,12A3,3 0 0,0 12,9M12,2L14.39,5.42C13.65,5.15 12.84,5 12,5C11.16,5 10.35,5.15 9.61,5.42L12,2M3.34,7L7.5,6.65C6.9,7.16 6.36,7.78 5.94,8.5C5.5,9.24 5.25,10 5.11,10.79L3.34,7M3.36,17L5.12,13.23C5.26,14 5.53,14.78 5.95,15.5C6.37,16.24 6.91,16.86 7.5,17.37L3.36,17M21,16.97L16.5,17.35C17.1,16.85 17.64,16.22 18.06,15.5C18.5,14.76 18.73,14 18.87,13.21L21,16.97M21,7L18.89,10.79C18.75,10 18.5,9.24 18.06,8.5C17.64,7.78 17.1,7.15 16.5,6.64L21,7M12,22L9.59,18.56C10.33,18.83 11.14,19 12,19C12.82,19 13.63,18.83 14.37,18.56L12,22Z"/></svg>',
+    dark: '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M17.75,4.09L15.22,6.03L16.13,9.09L13.5,7.28L10.87,9.09L11.78,6.03L9.25,4.09L12.44,4L13.5,1L14.56,4L17.75,4.09M21.25,11L19.61,12.25L20.2,14.23L18.5,13.06L16.8,14.23L17.39,12.25L15.75,11L17.81,10.95L18.5,9L19.19,10.95L21.25,11M18.97,15.95C19.8,15.87 20.69,17.05 20.16,17.8C19.84,18.25 19.5,18.67 19.08,19.07C15.17,23 8.84,23 4.94,19.07C1.03,15.17 1.03,8.83 4.94,4.93C5.34,4.53 5.76,4.17 6.21,3.85C6.96,3.32 8.14,4.21 8.06,5.04C7.79,7.9 8.75,10.87 10.95,13.06C13.14,15.26 16.1,16.22 18.97,15.95Z"/></svg>',
+  };
+  const darkModeControl = createCycleButton(
     'darkMode',
     [
-      { value: 'auto', label: window.l10n.auto },
-      { value: 'light', label: window.l10n.light },
-      { value: 'dark', label: window.l10n.dark },
+      { value: 'auto', label: window.l10n.auto, icon: darkModeIcons.auto },
+      { value: 'light', label: window.l10n.light, icon: darkModeIcons.light },
+      { value: 'dark', label: window.l10n.dark, icon: darkModeIcons.dark },
     ],
     settings.darkMode,
     disabled
@@ -2144,14 +2133,26 @@ function renderDeviceSettingsForm(settings: DeviceUISettings, disabled: boolean)
   );
 
   // Navigation Mode - only show available modes
+  const navIcons = {
+    threebutton:
+      '<svg viewBox="0 -960 960 960" width="16" height="16" fill="currentColor"><path d="M360-280h160q33 0 56.5-23.5T600-360v-60q0-26-17-43t-43-17q26 0 43-17t17-43v-60q0-33-23.5-56.5T520-680H360v80h160v80h-80v80h80v80H360v80ZM200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h560q33 0 56.5 23.5T840-760v560q0 33-23.5 56.5T760-120H200Zm0-80h560v-560H200v560Zm0-560v560-560Z"/></svg>',
+    gestural:
+      '<svg viewBox="0 -960 960 960" width="16" height="16" fill="currentColor"><path d="M245-400q-51-64-78-141t-27-159q0-27 3-54t9-54l-70 70-42-42 140-140 140 140-42 42-65-64q-7 25-10 50.5t-3 51.5q0 70 22.5 135.5T288-443l-43 43Zm413 273q-23 8-46.5 7.5T566-131L304-253l18-40q10-20 28-32.5t40-14.5l68-5-112-307q-6-16 1-30.5t23-20.5q16-6 30.5 1t20.5 23l148 407-100 7 131 61q7 3 15 3.5t15-1.5l157-57q31-11 45-41.5t3-61.5l-55-150q-6-16 1-30.5t23-20.5q16-6 30.5 1t20.5 23l55 150q23 63-4.5 122.5T815-184l-157 57Zm-90-265-54-151q-6-16 1-30.5t23-20.5q16-6 30.5 1t20.5 23l55 150-76 28Zm113-41-41-113q-6-16 1-30.5t23-20.5q16-6 30.5 1t20.5 23l41 112-75 28Zm8 78Z"/></svg>',
+    twobutton:
+      '<svg viewBox="0 -960 960 960" width="16" height="16" fill="currentColor"><path d="M360-280h240v-80H440v-80h80q33 0 56.5-23.5T600-520v-80q0-33-23.5-56.5T520-680H360v80h160v80h-80q-33 0-56.5 23.5T360-440v160ZM200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h560q33 0 56.5 23.5T840-760v560q0 33-23.5 56.5T760-120H200Zm0-80h560v-560H200v560Zm0-560v560-560Z"/></svg>',
+  };
   const allNavOptions = [
-    { value: 'threebutton', label: window.l10n.threeButton },
-    { value: 'gestural', label: window.l10n.gestural },
-    { value: 'twobutton', label: window.l10n.twoButton },
+    { value: 'threebutton', label: window.l10n.threeButton, icon: navIcons.threebutton },
+    { value: 'gestural', label: window.l10n.gestural, icon: navIcons.gestural },
+    { value: 'twobutton', label: window.l10n.twoButton, icon: navIcons.twobutton },
   ];
   const availableModes = settings.availableNavigationModes || ['threebutton', 'gestural'];
-  const navOptions = allNavOptions.filter((opt) => availableModes.includes(opt.value as never));
-  const navModeControl = createSegmentedControl(
+  const navOptions = allNavOptions.filter((opt) => availableModes.includes(opt.value as never)) as {
+    value: string;
+    label: string;
+    icon: string;
+  }[];
+  const navModeControl = createCycleButton(
     'navigationMode',
     navOptions,
     settings.navigationMode,
@@ -2190,6 +2191,49 @@ function renderDeviceSettingsForm(settings: DeviceUISettings, disabled: boolean)
   );
 
   deviceSettingsContent.appendChild(appearanceGroup);
+
+  // === AUDIO & VOLUME GROUP ===
+  const audioGroup = createSettingsGroup(window.l10n.audioVolume, groupIcons.audioVolume);
+
+  // Audio Forwarding
+  const audioToggle = createToggleSwitch('audioEnabled', settings.audioEnabled, disabled);
+  audioGroup.appendChild(
+    createSettingsRow(window.l10n.audioForwarding, audioToggle, icons.audio, 'icon-audio')
+  );
+
+  // Volume buttons row
+  const volumeButtonsRow = document.createElement('div');
+  volumeButtonsRow.className = 'settings-button-row';
+  volumeButtonsRow.appendChild(
+    createActionButton('volumeDown', icons.volumeDown, window.l10n.volumeDown, disabled)
+  );
+  volumeButtonsRow.appendChild(
+    createActionButton('volumeUp', icons.volumeUp, window.l10n.volumeUp, disabled)
+  );
+  audioGroup.appendChild(volumeButtonsRow);
+
+  deviceSettingsContent.appendChild(audioGroup);
+
+  // === SYSTEM SHORTCUTS GROUP ===
+  const systemGroup = createSettingsGroup(window.l10n.systemShortcuts, groupIcons.systemShortcuts);
+
+  // System shortcut buttons row
+  const systemButtonsRow = document.createElement('div');
+  systemButtonsRow.className = 'settings-button-row';
+  systemButtonsRow.appendChild(
+    createActionButton(
+      'notificationPanel',
+      icons.notification,
+      window.l10n.notificationPanel,
+      disabled
+    )
+  );
+  systemButtonsRow.appendChild(
+    createActionButton('settingsPanel', icons.settingsGear, window.l10n.settingsPanel, disabled)
+  );
+  systemGroup.appendChild(systemButtonsRow);
+
+  deviceSettingsContent.appendChild(systemGroup);
 
   // === ACCESSIBILITY GROUP ===
   const accessibilityGroup = createSettingsGroup(
@@ -2254,31 +2298,132 @@ function attachSettingsEventHandlers() {
     return;
   }
 
-  // Segmented controls (dark mode, navigation mode)
-  const segmentedControls = deviceSettingsContent.querySelectorAll('.segmented-control');
-  segmentedControls.forEach((control) => {
-    const setting = (control as HTMLElement).dataset.setting;
-    const buttons = control.querySelectorAll('.segment-btn');
+  // Cycle buttons (orientation, dark mode)
+  const cycleButtons = deviceSettingsContent.querySelectorAll('.cycle-button');
+  cycleButtons.forEach((btn) => {
+    btn.addEventListener('click', () => {
+      if (btn.classList.contains('disabled')) {
+        return;
+      }
 
-    buttons.forEach((btn) => {
-      btn.addEventListener('click', () => {
-        if (control.classList.contains('loading')) {
-          return;
+      const setting = (btn as HTMLElement).dataset.setting;
+      const optionsData = (btn as HTMLElement).dataset.optionsData;
+      const currentIndex = parseInt((btn as HTMLElement).dataset.currentIndex || '0', 10);
+
+      if (!setting || !optionsData) {
+        return;
+      }
+
+      const options = JSON.parse(optionsData) as { value: string; label: string; icon: string }[];
+      const nextIndex = (currentIndex + 1) % options.length;
+      const nextOption = options[nextIndex];
+
+      // Update button UI
+      (btn as HTMLElement).dataset.currentIndex = String(nextIndex);
+      const iconSpan = btn.querySelector('.cycle-button-icon');
+      const labelSpan = btn.querySelector('.cycle-button-label');
+
+      if (iconSpan) {
+        const template = document.createElement('template');
+        template.innerHTML = nextOption.icon.trim();
+        iconSpan.innerHTML = '';
+        if (template.content.firstChild) {
+          iconSpan.appendChild(template.content.firstChild);
         }
+      }
+      if (labelSpan) {
+        labelSpan.textContent = nextOption.label;
+      }
 
-        const value = (btn as HTMLElement).dataset.value;
-        if (!setting || !value) {
-          return;
-        }
+      // Handle special cases
+      if (setting === 'orientation') {
+        vscode.postMessage({ type: 'rotateDevice' });
+        return;
+      }
 
-        // Update UI immediately
-        buttons.forEach((b) => b.classList.remove('active'));
-        btn.classList.add('active');
-
-        // Send to extension
-        applyDeviceSetting(setting, value, control as HTMLElement);
-      });
+      // Send to extension
+      applyDeviceSetting(setting, nextOption.value, btn as HTMLElement);
     });
+  });
+
+  // Action buttons (volume, notification panel, settings panel)
+  const actionButtons = deviceSettingsContent.querySelectorAll('.settings-action-btn');
+  actionButtons.forEach((btn) => {
+    const action = (btn as HTMLElement).dataset.action;
+    if (!action) {
+      return;
+    }
+
+    // Volume buttons use pointerdown/pointerup for repeat behavior
+    if (action === 'volumeDown' || action === 'volumeUp') {
+      const keycode = action === 'volumeDown' ? 25 : 24; // KEYCODE_VOLUME_DOWN=25, KEYCODE_VOLUME_UP=24
+      const repeatDelay = 400;
+      const repeatInterval = 100;
+      let repeatTimeout: ReturnType<typeof setTimeout> | null = null;
+      let repeatIntervalId: ReturnType<typeof setInterval> | null = null;
+
+      const stopRepeat = () => {
+        if (repeatTimeout) {
+          clearTimeout(repeatTimeout);
+          repeatTimeout = null;
+        }
+        if (repeatIntervalId) {
+          clearInterval(repeatIntervalId);
+          repeatIntervalId = null;
+        }
+      };
+
+      btn.addEventListener('pointerdown', (e) => {
+        const event = e as PointerEvent;
+        vscode.postMessage({ type: 'keyDown', keycode });
+        try {
+          (btn as HTMLElement).setPointerCapture(event.pointerId);
+        } catch {
+          // Ignore errors from setting capture
+        }
+
+        repeatTimeout = setTimeout(() => {
+          repeatIntervalId = setInterval(() => {
+            vscode.postMessage({ type: 'keyDown', keycode });
+          }, repeatInterval);
+        }, repeatDelay);
+      });
+
+      btn.addEventListener('pointerup', (e) => {
+        const event = e as PointerEvent;
+        stopRepeat();
+        vscode.postMessage({ type: 'keyUp', keycode });
+        try {
+          (btn as HTMLElement).releasePointerCapture(event.pointerId);
+        } catch {
+          // Ignore errors from releasing capture
+        }
+      });
+
+      btn.addEventListener('pointercancel', (e) => {
+        const event = e as PointerEvent;
+        stopRepeat();
+        vscode.postMessage({ type: 'keyUp', keycode });
+        try {
+          (btn as HTMLElement).releasePointerCapture(event.pointerId);
+        } catch {
+          // Ignore errors from releasing capture
+        }
+      });
+
+      btn.addEventListener('pointerleave', () => {
+        stopRepeat();
+      });
+    } else {
+      // Other action buttons use simple click
+      btn.addEventListener('click', () => {
+        if (action === 'notificationPanel') {
+          vscode.postMessage({ type: 'expandNotificationPanel' });
+        } else if (action === 'settingsPanel') {
+          vscode.postMessage({ type: 'expandSettingsPanel' });
+        }
+      });
+    }
   });
 
   // Toggle switches - make entire row clickable
@@ -2305,6 +2450,12 @@ function attachSettingsEventHandlers() {
       // Toggle UI immediately
       const newValue = !toggle.classList.contains('active');
       toggle.classList.toggle('active', newValue);
+
+      // Handle audioEnabled specially
+      if (setting === 'audioEnabled') {
+        toggleMute();
+        return;
+      }
 
       // Send to extension
       applyDeviceSetting(setting, newValue, toggle as HTMLElement);
