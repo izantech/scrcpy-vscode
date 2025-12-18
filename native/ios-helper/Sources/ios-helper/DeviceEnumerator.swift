@@ -460,8 +460,9 @@ class DeviceEnumerator {
 
         // Some macOS versions take a while to surface the iPhone screen capture device after enabling.
         // Poll a few times to give the DAL time to register devices.
-        let maxAttempts = 6
-        let attemptDelay: TimeInterval = 0.5
+        // On macOS 26/iOS 26, the device can take 10+ seconds to appear sometimes.
+        let maxAttempts = 12
+        let attemptDelay: TimeInterval = 1.0
 
         for attempt in 0..<maxAttempts {
             if attempt > 0 {
