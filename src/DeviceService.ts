@@ -1274,10 +1274,11 @@ export class DeviceService {
           // Enable auto-rotate
           await execAdb(['shell', 'settings', 'put', 'system', 'accelerometer_rotation', '1']);
         } else {
-          // Disable auto-rotate and set specific orientation
-          await execAdb(['shell', 'settings', 'put', 'system', 'accelerometer_rotation', '0']);
+          // Set target rotation FIRST, then disable auto-rotate
+          // This prevents the brief flash to wrong orientation
           const rotation = value === 'landscape' ? '1' : '0';
           await execAdb(['shell', 'settings', 'put', 'system', 'user_rotation', rotation]);
+          await execAdb(['shell', 'settings', 'put', 'system', 'accelerometer_rotation', '0']);
         }
         break;
       }
