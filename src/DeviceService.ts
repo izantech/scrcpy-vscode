@@ -1061,6 +1061,8 @@ export class DeviceService {
       fontScaleResult,
       densityResult,
       layoutBoundsResult,
+      autoRotateResult,
+      userRotationResult,
     ] = await Promise.all([
       execAdb(['shell', 'cmd', 'uimode', 'night']).catch(() => ''),
       execAdb(['shell', 'cmd', 'overlay', 'list']).catch(() => ''),
@@ -1070,6 +1072,8 @@ export class DeviceService {
       execAdb(['shell', 'settings', 'get', 'system', 'font_scale']).catch(() => '1.0'),
       execAdb(['shell', 'wm', 'density']).catch(() => ''),
       execAdb(['shell', 'getprop', 'debug.layout']).catch(() => ''),
+      execAdb(['shell', 'settings', 'get', 'system', 'accelerometer_rotation']).catch(() => '1'),
+      execAdb(['shell', 'settings', 'get', 'system', 'user_rotation']).catch(() => '0'),
     ]);
 
     // Parse dark mode from "cmd uimode night" output (e.g., "Night mode: yes")
@@ -1118,6 +1122,20 @@ export class DeviceService {
     // Parse layout bounds
     const showLayoutBounds = layoutBoundsResult === 'true';
 
+    // Parse orientation
+    // accelerometer_rotation: 1 = auto-rotate enabled, 0 = disabled
+    // user_rotation: 0 = portrait, 1 = landscape, 2 = reverse portrait, 3 = reverse landscape
+    type Orientation = 'auto' | 'portrait' | 'landscape';
+    let orientation: Orientation = 'auto';
+    const autoRotate = autoRotateResult.trim() === '1';
+    if (autoRotate) {
+      orientation = 'auto';
+    } else {
+      const userRotation = parseInt(userRotationResult.trim(), 10) || 0;
+      // 0 or 2 = portrait variants, 1 or 3 = landscape variants
+      orientation = userRotation === 1 || userRotation === 3 ? 'landscape' : 'portrait';
+    }
+
     return {
       darkMode,
       navigationMode,
@@ -1127,6 +1145,7 @@ export class DeviceService {
       displayDensity,
       defaultDensity,
       showLayoutBounds,
+      orientation,
     };
   }
 
@@ -1245,6 +1264,21 @@ export class DeviceService {
         await execAdb(['shell', 'setprop', 'debug.layout', boolValue]);
         // Trigger UI refresh by broadcasting an intent
         await execAdb(['shell', 'service', 'call', 'activity', '1599295570']).catch(() => {});
+        break;
+      }
+
+      case 'orientation': {
+        // accelerometer_rotation: 1 = auto-rotate enabled, 0 = disabled
+        // user_rotation: 0 = portrait, 1 = landscape
+        if (value === 'auto') {
+          // Enable auto-rotate
+          await execAdb(['shell', 'settings', 'put', 'system', 'accelerometer_rotation', '1']);
+        } else {
+          // Disable auto-rotate and set specific orientation
+          await execAdb(['shell', 'settings', 'put', 'system', 'accelerometer_rotation', '0']);
+          const rotation = value === 'landscape' ? '1' : '0';
+          await execAdb(['shell', 'settings', 'put', 'system', 'user_rotation', rotation]);
+        }
         break;
       }
     }

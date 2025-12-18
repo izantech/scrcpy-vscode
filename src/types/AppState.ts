@@ -75,6 +75,11 @@ export type NavigationMode = 'gestural' | 'threebutton' | 'twobutton';
 /**
  * Device UI settings that can be modified via ADB
  */
+/**
+ * Screen orientation mode
+ */
+export type Orientation = 'auto' | 'portrait' | 'landscape';
+
 export interface DeviceUISettings {
   darkMode: DarkMode;
   navigationMode: NavigationMode;
@@ -84,6 +89,7 @@ export interface DeviceUISettings {
   displayDensity: number;
   defaultDensity: number;
   showLayoutBounds: boolean;
+  orientation: Orientation;
 }
 
 /**

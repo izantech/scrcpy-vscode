@@ -2429,15 +2429,10 @@ function attachSettingsEventHandlers() {
         labelSpan.textContent = nextOption.label;
       }
 
-      // Handle special cases
-      if (setting === 'orientation') {
-        // Clear canvas immediately to avoid showing stale frame during rotation
-        if (activeDeviceId) {
-          const session = sessions.get(activeDeviceId);
-          session?.videoRenderer.clear();
-        }
-        vscode.postMessage({ type: 'rotateDevice' });
-        return;
+      // Clear canvas for orientation changes to avoid showing stale frame
+      if (setting === 'orientation' && activeDeviceId) {
+        const session = sessions.get(activeDeviceId);
+        session?.videoRenderer.clear();
       }
 
       // Send to extension
