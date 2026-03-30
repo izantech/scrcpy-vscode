@@ -273,6 +273,36 @@ The main scrcpy repository is at `/Users/izan/Dev/Projects/scrcpy/`. Key referen
 - `app/src/decoder.c` - Video decoding (FFmpeg)
 - `app/src/packet_merger.h` - Config packet merging
 
+## Theming (Glass-morphism)
+
+The webview UI uses a token-based glass-morphism design system defined in `WebviewTemplate.ts`. Dark mode is the default; light mode overrides are scoped under `body.vscode-light` selectors. VS Code adds the `vscode-light` or `vscode-dark` class to the webview `<body>` based on the active editor theme — no JavaScript required.
+
+### Glass tokens (`:root`)
+
+| Token                   | Dark value                    | Light value              | Usage                               |
+| ----------------------- | ----------------------------- | ------------------------ | ----------------------------------- |
+| `--glass-bg`            | `rgba(30,30,30,0.72)`         | `rgba(255,255,255,0.72)` | Primary translucent background      |
+| `--glass-bg-dark`       | `rgba(20,20,20,0.85)`         | `rgba(240,240,240,0.85)` | Denser background (toolbar, modals) |
+| `--glass-border`        | `rgba(255,255,255,0.08)`      | `rgba(0,0,0,0.08)`       | Subtle divider borders              |
+| `--glass-border-light`  | `rgba(255,255,255,0.12)`      | `rgba(0,0,0,0.12)`       | More visible borders                |
+| `--glass-blur`          | `24px`                        | (same)                   | Backdrop blur radius                |
+| `--glass-shadow`        | `0 8px 32px rgba(0,0,0,0.4)`  | `…rgba(0,0,0,0.12)`      | Primary drop shadow                 |
+| `--glass-shadow-subtle` | `0 4px 16px rgba(0,0,0,0.25)` | `…rgba(0,0,0,0.08)`      | Subtle drop shadow                  |
+| `--overlay-bg`          | `rgba(0,0,0,0.5)`             | `rgba(0,0,0,0.25)`       | Modal overlay backdrop              |
+
+Additional design tokens (`--radius-*`, `--transition-*`) are not theme-dependent.
+
+### Adding theme-aware styles
+
+1. Use glass tokens in your CSS rule (preferred — automatic light/dark support):
+   ```css
+   .my-element {
+     background: var(--glass-bg);
+     border: 1px solid var(--glass-border-light);
+   }
+   ```
+2. If you need hardcoded `rgba(255,255,255,...)` values (dark-mode white tints), add a light-mode override with the inverted `rgba(0,0,0,...)` value using a `body.vscode-light .my-element` selector at the end of the CSS in `WebviewTemplate.ts` (after all dark-mode rules, so it wins by source order).
+
 ## Common Tasks
 
 ### Adding a new setting

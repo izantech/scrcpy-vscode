@@ -1,0 +1,118 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+cd "$ROOT_DIR"
+
+log() {
+  printf '[dev] %s\n' "$*"
+}
+
+die() {
+  printf '[dev] ERROR: %s\n' "$*" >&2
+  exit 1
+}
+
+usage() {
+  cat <<'USAGE'
+Usage: ./dev <command>
+
+Commands:
+  build      Compile extension and webview (webpack)
+  watch      Start webpack in watch mode for development
+  run        Launch VS Code Extension Development Host
+  test       Run tests (vitest)
+  test-watch Run tests in watch mode
+  coverage   Run tests with coverage report
+  lint       Run ESLint on TypeScript files
+  format     Format all files with Prettier
+  check      Run lint + format check + compile + tests
+  package    Build production package (.vsix)
+  release    Trigger deploy workflow on GitHub Actions
+  help       Show this help
+USAGE
+}
+
+build() {
+  log "Compiling extension..."
+  npm run compile
+}
+
+watch() {
+  log "Starting watch mode..."
+  npm run watch
+}
+
+run_ext() {
+  build
+  log "Launching Extension Development Host..."
+  code --extensionDevelopmentPath="$ROOT_DIR"
+}
+
+test_run() {
+  log "Running tests..."
+  npm test
+}
+
+test_watch() {
+  log "Running tests in watch mode..."
+  npm run test:watch
+}
+
+coverage() {
+  log "Running tests with coverage..."
+  npm run test:coverage
+}
+
+lint() {
+  log "Running ESLint..."
+  npm run lint
+}
+
+format() {
+  log "Formatting files..."
+  npm run format
+}
+
+check() {
+  log "Running full check..."
+  npm run lint
+  npm run format:check
+  npm run compile
+  npm test
+  log "All checks passed!"
+}
+
+package() {
+  log "Building production package..."
+  npm run package
+}
+
+release() {
+  npm run release
+}
+
+main() {
+  local cmd="${1:-help}"
+
+  case "$cmd" in
+    build)    build ;;
+    watch)    watch ;;
+    run)      run_ext ;;
+    test)     test_run ;;
+    test-watch) test_watch ;;
+    coverage) coverage ;;
+    lint)     lint ;;
+    format)   format ;;
+    check)    check ;;
+    package)  package ;;
+    release)  release ;;
+    help|-h|--help) usage ;;
+    *)
+      usage
+      die "Unknown command: $cmd"
+      ;;
+  esac
+}
+
+main "$@"

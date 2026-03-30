@@ -1416,6 +1416,110 @@ export function getHtmlForWebview(webview: vscode.Webview, extensionUri: vscode.
         transition: none;
       }
     }
+
+    body.vscode-light {
+      --glass-bg: rgba(255, 255, 255, 0.72);
+      --glass-bg-dark: rgba(240, 240, 240, 0.85);
+      --glass-border: rgba(0, 0, 0, 0.08);
+      --glass-border-light: rgba(0, 0, 0, 0.12);
+      --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+      --glass-shadow-subtle: 0 4px 16px rgba(0, 0, 0, 0.08);
+      --overlay-bg: rgba(0, 0, 0, 0.25);
+    }
+
+    body.vscode-light .control-toolbar {
+      border-top-color: var(--vscode-widget-border, rgba(0, 0, 0, 0.1));
+    }
+
+    body.vscode-light .status .spinner {
+      border-color: rgba(0, 0, 0, 0.12);
+    }
+
+    body.vscode-light .recording-indicator {
+      border-color: rgba(0, 0, 0, 0.12);
+    }
+
+    body.vscode-light .reconnect-btn:hover {
+      background: rgba(0, 0, 0, 0.08);
+      border-color: rgba(0, 0, 0, 0.15);
+    }
+
+    body.vscode-light .screenshot-preview-btn.secondary:hover {
+      background: rgba(0, 0, 0, 0.08);
+    }
+
+    body.vscode-light .screenshot-preview-close {
+      background: rgba(0, 0, 0, 0.06);
+    }
+
+    body.vscode-light .screenshot-preview-close:hover {
+      background: rgba(0, 0, 0, 0.1);
+    }
+
+    body.vscode-light .screenshot-preview-btn {
+      border-color: rgba(0, 0, 0, 0.12);
+    }
+
+    body.vscode-light .reconnect-btn.primary {
+      border-color: rgba(0, 0, 0, 0.12);
+    }
+
+    body.vscode-light .settings-row:not(:last-child) {
+      border-bottom: 1px solid rgba(0, 0, 0, 0.15);
+    }
+
+    body.vscode-light .settings-row.clickable:hover {
+      background: rgba(0, 0, 0, 0.03);
+    }
+
+    body.vscode-light .settings-row.clickable:active {
+      background: rgba(0, 0, 0, 0.05);
+    }
+
+    body.vscode-light .toggle-switch {
+      background: rgba(0, 0, 0, 0.12);
+      border-color: rgba(0, 0, 0, 0.12);
+    }
+
+    body.vscode-light .cycle-button {
+      background: rgba(0, 0, 0, 0.08);
+      border-color: rgba(0, 0, 0, 0.12);
+    }
+
+    body.vscode-light .cycle-button:hover:not(.disabled) {
+      background: rgba(0, 0, 0, 0.12);
+      border-color: rgba(0, 0, 0, 0.18);
+    }
+
+    body.vscode-light .settings-slider {
+      background: rgba(0, 0, 0, 0.15);
+      border-color: rgba(0, 0, 0, 0.12);
+    }
+
+    body.vscode-light .slider-value {
+      background: rgba(0, 0, 0, 0.06);
+    }
+
+    body.vscode-light .settings-action-btn {
+      background: rgba(0, 0, 0, 0.08);
+      border-color: rgba(0, 0, 0, 0.12);
+    }
+
+    body.vscode-light .settings-action-btn:hover {
+      background: rgba(0, 0, 0, 0.12);
+    }
+
+    body.vscode-light .settings-button-row:not(:last-child) {
+      border-bottom: 1px solid rgba(0, 0, 0, 0.15);
+    }
+
+    body.vscode-light .settings-group-header .chevron {
+      opacity: 0.85;
+    }
+
+    body.vscode-light .settings-group-header:hover .chevron {
+      opacity: 1;
+    }
   </style>
 </head>
 <body>
